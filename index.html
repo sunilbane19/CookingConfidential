@@ -14,7 +14,7 @@
     </a>
     <div class="top-actions">
       <span id="userBadge" class="user-badge"></span>
-      <button class="icon-button" id="addRecipeBtn" aria-label="Add recipe">＋</button>
+      <button class="icon-button" id="importBtn" aria-label="Import recipes">⇧</button><button class="icon-button" id="addRecipeBtn" aria-label="Add recipe">＋</button>
     </div>
   </header>
 
@@ -45,7 +45,17 @@
       </nav>
       <section id="content" class="content"></section>
     </div>
-  </main>
+  <dialog id="importDialog"><div class="dialog-card">
+<button class="close" id="closeImport" aria-label="Close">×</button>
+<p class="eyebrow">IMPORT INBOX</p><h2>Bring recipes into your collection</h2>
+<p class="dialog-copy">Choose several files from your phone or desktop, or paste a social recipe URL. Originals are kept privately; nothing is published.</p>
+<div class="import-options">
+<label class="upload-zone" for="fileInput"><span class="upload-icon">＋</span><strong>Select files</strong><small>PDF · Word · scans · images · multiple files</small><input id="fileInput" type="file" multiple accept=".pdf,.doc,.docx,.txt,image/*"></label>
+<div class="url-import"><label>Social recipe URL<input id="sourceUrl" type="url" placeholder="Paste an Instagram / Facebook / Reel URL"></label><button class="secondary" id="addUrlBtn">Add URL to inbox</button></div>
+</div>
+<div id="importQueue" class="import-queue"></div>
+</div></dialog>
+</main>
 
   <dialog id="recipeDialog">
     <form method="dialog" class="dialog-card" id="recipeForm">
