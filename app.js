@@ -1,40 +1,143 @@
-const recipes=[
- {id:1,name:"Chicken Chettinad",cuisine:"South Indian",course:"Main course",ingredients:["chicken","coconut","curry leaves","fennel","black pepper"],rating:5,note:"My preferred version — less chilli than the original."},
- {id:2,name:"Lamb Biryani",cuisine:"Hyderabadi",course:"Main course",ingredients:["lamb","basmati rice","saffron","mint","yoghurt"],rating:5,note:"Great for a dinner party; can be prepared ahead."},
- {id:3,name:"Prawn Moilee",cuisine:"Kerala",course:"Main course",ingredients:["prawns","coconut milk","ginger","green chilli","curry leaves"],rating:4,note:"Light, fragrant and quick."},
- {id:4,name:"Paneer Tikka",cuisine:"North Indian",course:"Starter",ingredients:["paneer","yoghurt","capsicum","garam masala"],rating:4,note:"Useful make-ahead starter."},
- {id:5,name:"Roasted Eggplant",cuisine:"Mediterranean",course:"Side",ingredients:["eggplant","tomato","garlic","olive oil"],rating:5,note:"Excellent alongside grilled meat."},
- {id:6,name:"Gulab Jamun",cuisine:"Indian",course:"Dessert",ingredients:["khoya","flour","sugar","cardamom","rose water"],rating:5,note:"A family favourite."}
-];
-let menus=[
- {name:"Diwali Dinner — 2024",guests:14,items:["Chicken Chettinad","Paneer Tikka","Lamb Biryani","Gulab Jamun"]},
- {name:"Sunday Lunch — 2024",guests:8,items:["Prawn Moilee","Roasted Eggplant","Gulab Jamun"]},
- {name:"Birthday Dinner — 2023",guests:10,items:["Paneer Tikka","Lamb Biryani","Roasted Eggplant"]}
-];
-let view="recipes";
-const content=document.querySelector("#content"), search=document.querySelector("#searchInput");
-function recipeCard(r){return `<article class="card" data-id="${r.id}"><div class="card-image">🍽</div><div class="card-body"><span class="tag">${r.cuisine}</span><h3>${r.name}</h3><div class="meta">${r.course} · ${"★".repeat(r.rating)}</div></div></article>`}
-function render(){
- const q=search.value.trim().toLowerCase();
- if(view==="menus") return renderMenus(q);
- let list=recipes.filter(r=>view==="favourites"?r.rating>=5:true).filter(r=>(r.name+" "+r.cuisine+" "+r.course+" "+r.ingredients.join(" ")).toLowerCase().includes(q));
- content.innerHTML=`<div class="section-head"><h2>${view==="favourites"?"Favourites":"Your recipes"}</h2><span class="count">${list.length} recipes</span></div>${list.length?`<div class="grid">${list.map(recipeCard).join("")}</div>`:'<div class="empty">No recipes found. Try another ingredient, cuisine or dish.</div>'}`;
- content.querySelectorAll(".card").forEach(c=>c.onclick=()=>showRecipe(+c.dataset.id));
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+const SUPABASE_URL = 'https://yiwmtfbqbynimqvwxosu.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
+const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+
+const content = document.querySelector('#content');
+const search = document.querySelector('#searchInput');
+const loginPanel = document.querySelector('#loginPanel');
+const appPanel = document.querySelector('#appPanel');
+const userBadge = document.querySelector('#userBadge');
+const loginForm = document.querySelector('#loginForm');
+const loginMessage = document.querySelector('#loginMessage');
+const recipeDialog = document.querySelector('#recipeDialog');
+const menuDialog = document.querySelector('#menuDialog');
+const detailDialog = document.querySelector('#detailDialog');
+
+let recipes = [], menus = [], view = 'recipes';
+
+const esc = (s='') => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const stars = n => n ? '★'.repeat(n) : '';
+const ingredientsText = r => Array.isArray(r.ingredients) ? r.ingredients.map(x => typeof x === 'string' ? x : [x.quantity,x.unit,x.name].filter(Boolean).join(' ')) : [];
+
+async function loadData() {
+  const [{data:r,error:re},{data:m,error:me}] = await Promise.all([
+    supabase.from('cc_recipes').select('*').order('updated_at',{ascending:false}),
+    supabase.from('cc_menus').select('*').order('menu_date',{ascending:false,nullsFirst:false}).order('created_at',{ascending:false})
+  ]);
+  if (re || me) throw new Error((re||me).message);
+  recipes = r || []; menus = m || [];
+  render();
 }
-function renderMenus(q){
- const list=menus.filter(m=>(m.name+" "+m.items.join(" ")).toLowerCase().includes(q));
- content.innerHTML=`<div class="section-head"><h2>Your menus</h2><span class="count">${list.length} menus</span></div><button class="primary" id="newMenuBtn">＋ New menu</button><div style="margin-top:18px">${list.map((m,i)=>`<article class="menu-card"><span class="tag">Hosted · ${m.guests} guests</span><h3>${m.name}</h3><div class="menu-items">${m.items.join(" · ")}</div><button class="tab" onclick="copyMenu(${i})">Copy & modify</button></article>`).join("")}</div>`;
- document.querySelector("#newMenuBtn").onclick=()=>alert("Menu editor is the next V1 build step.");
+
+function recipeCard(r) {
+  return `<article class="card" data-id="${r.id}">
+    <div class="card-image">🍽</div><div class="card-body">
+      <span class="tag">${esc(r.cuisine||'Uncategorised')}</span>
+      <h3>${esc(r.name)}</h3>
+      <div class="meta">${esc(r.course||'Recipe')} · ${stars(r.rating)}</div>
+    </div></article>`;
 }
-function showRecipe(id){
- const r=recipes.find(x=>x.id===id);
- document.querySelector("#detailContent").innerHTML=`<button class="close" onclick="detailDialog.close()">×</button><span class="tag">${r.cuisine} · ${r.course}</span><h2 class="detail-title">${r.name}</h2><div class="meta">${"★".repeat(r.rating)}</div><div class="detail-section"><h4>Ingredients</h4><ul>${r.ingredients.map(i=>`<li>${i}</li>`).join("")}</ul></div><div class="detail-section"><h4>My notes</h4><p>${r.note}</p></div>`;
- detailDialog.showModal();
+
+function render() {
+  const q = search.value.trim().toLowerCase();
+  if (view === 'menus') return renderMenus(q);
+  let list = recipes.filter(r => view !== 'favourites' || r.is_favourite)
+    .filter(r => (r.name+' '+(r.cuisine||'')+' '+(r.country||'')+' '+(r.region||'')+' '+(r.course||'')+' '+ingredientsText(r).join(' ')+' '+(r.personal_notes||'')).toLowerCase().includes(q));
+  content.innerHTML = `<div class="section-head"><h2>${view==='favourites'?'Favourites':'Your recipes'}</h2><span class="count">${list.length} recipes</span></div>
+    ${list.length ? '<div class="grid">'+list.map(recipeCard).join('')+'</div>' : '<div class="empty">No recipes found. Try another ingredient, cuisine or dish.</div>'}`;
+  content.querySelectorAll('.card').forEach(c => c.onclick = () => showRecipe(+c.dataset.id));
 }
-function copyMenu(i){const copy={...menus[i],name:menus[i].name+" — Copy",items:[...menus[i].items]};menus.push(copy);view="menus";render();}
-document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));t.classList.add("active");view=t.dataset.view;render()});
+
+function renderMenus(q) {
+  const list = menus.filter(m => (m.name+' '+(m.occasion||'')+' '+(m.notes||'')).toLowerCase().includes(q));
+  content.innerHTML = `<div class="section-head"><h2>Your menus</h2><span class="count">${list.length} menus</span></div>
+    <button class="primary" id="newMenuBtn">＋ New menu</button>
+    <div style="margin-top:18px">${list.length ? list.map(m => `<article class="menu-card">
+      <span class="tag">${m.guest_count ? m.guest_count+' guests' : 'Menu'} ${m.menu_date ? '· '+esc(m.menu_date) : ''}</span>
+      <h3>${esc(m.name)}</h3><div class="menu-items">${esc(m.occasion||'')}</div>
+      <button class="tab copy-menu" data-id="${m.id}">Copy & modify</button>
+    </article>`).join('') : '<div class="empty">No menus yet. Create one from a blank page.</div>'}</div>`;
+  document.querySelector('#newMenuBtn').onclick = () => menuDialog.showModal();
+  content.querySelectorAll('.copy-menu').forEach(b => b.onclick = () => copyMenu(+b.dataset.id));
+}
+
+async function showRecipe(id) {
+  const r = recipes.find(x => x.id === id); if (!r) return;
+  detailDialog.querySelector('#detailContent').innerHTML = `<button class="close" onclick="detailDialog.close()">×</button>
+    <span class="tag">${esc(r.cuisine||'')} · ${esc(r.course||'Recipe')}</span><h2 class="detail-title">${esc(r.name)}</h2>
+    <div class="meta">${stars(r.rating)}</div>
+    <div class="detail-section"><h4>Ingredients</h4><ul>${ingredientsText(r).map(i=>'<li>'+esc(i)+'</li>').join('')}</ul></div>
+    <div class="detail-section"><h4>Method</h4><p>${esc(r.method||'')}</p></div>
+    ${r.personal_notes ? '<div class="detail-section"><h4>My notes</h4><p>'+esc(r.personal_notes)+'</p></div>' : ''}
+    ${r.source_url ? '<div class="detail-section"><h4>Source</h4><p><a href="'+esc(r.source_url)+'" target="_blank" rel="noopener">'+esc(r.source_title||r.source_url)+'</a></p></div>' : ''}
+    <div class="detail-actions"><button class="secondary" id="favBtn">${r.is_favourite?'★ Remove favourite':'☆ Add to favourites'}</button></div>`;
+  detailDialog.showModal();
+  document.querySelector('#favBtn').onclick = async () => {
+    const {error}=await supabase.from('cc_recipes').update({is_favourite:!r.is_favourite}).eq('id',r.id);
+    if(error) return alert(error.message); r.is_favourite=!r.is_favourite; detailDialog.close(); render();
+  };
+}
+
+async function copyMenu(id) {
+  const m = menus.find(x=>x.id===id); if(!m) return;
+  const {data:{user}}=await supabase.auth.getUser(); if(!user) return;
+  const {data,error}=await supabase.from('cc_menus').insert({name:m.name+' — Copy',menu_date:null,occasion:m.occasion,guest_count:m.guest_count,notes:m.notes,visibility:'private',created_by:user.id}).select().single();
+  if(error) return alert(error.message);
+  const items = await supabase.from('cc_menu_items').select('*').eq('menu_id',m.id).order('sort_order');
+  if(items.error) return alert(items.error.message);
+  if(items.data?.length) {
+    const rows=items.data.map(x=>({menu_id:data.id,recipe_id:x.recipe_id,section:x.section,sort_order:x.sort_order,custom_label:x.custom_label}));
+    const ins=await supabase.from('cc_menu_items').insert(rows); if(ins.error) return alert(ins.error.message);
+  }
+  await loadData();
+  alert('Menu copied. You can now edit the new version without changing the original.');
+}
+
+loginForm.onsubmit = async e => {
+  e.preventDefault();
+  loginMessage.textContent='Sending sign-in link…';
+  const email=document.querySelector('#emailInput').value.trim();
+  const {error}=await supabase.auth.signInWithOtp({email,options:{emailRedirectTo:location.href}});
+  loginMessage.textContent=error ? error.message : 'Check your email for the sign-in link.';
+};
+
+document.querySelector('#recipeForm').onsubmit = async e => {
+  e.preventDefault();
+  const f=new FormData(e.target), {data:{user}}=await supabase.auth.getUser();
+  if(!user) return;
+  const ingredients=String(f.get('ingredients')).split('\n').map(x=>x.trim()).filter(Boolean);
+  const {error}=await supabase.from('cc_recipes').insert({
+    name:f.get('name'), cuisine:f.get('cuisine')||null, course:f.get('course')||null,
+    ingredients, method:f.get('method')||null, personal_notes:f.get('notes')||null,
+    created_by:user.id, visibility:'private'
+  });
+  if(error) return alert(error.message);
+  recipeDialog.close(); e.target.reset(); await loadData();
+};
+
+document.querySelector('#menuForm').onsubmit = async e => {
+  e.preventDefault();
+  const f=new FormData(e.target), {data:{user}}=await supabase.auth.getUser();
+  if(!user) return;
+  const {error}=await supabase.from('cc_menus').insert({
+    name:f.get('name'), menu_date:f.get('date')||null, guest_count:f.get('guests')?Number(f.get('guests')):null,
+    occasion:f.get('occasion')||null, notes:f.get('notes')||null, visibility:'private', created_by:user.id
+  });
+  if(error) return alert(error.message);
+  menuDialog.close(); e.target.reset(); await loadData(); view='menus';
+};
+
+document.querySelector('#addRecipeBtn').onclick=()=>recipeDialog.showModal();
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));t.classList.add('active');view=t.dataset.view;render()});
 search.oninput=render;
-const recipeDialog=document.querySelector("#recipeDialog"),detailDialog=document.querySelector("#detailDialog");
-document.querySelector("#addRecipeBtn").onclick=()=>recipeDialog.showModal();
-document.querySelector("#recipeForm").onsubmit=e=>{e.preventDefault();const f=new FormData(e.target);recipes.unshift({id:Date.now(),name:f.get("name"),cuisine:f.get("cuisine")||"Uncategorised",course:"Recipe",ingredients:String(f.get("ingredients")).split("\n").filter(Boolean),rating:0,note:f.get("method")||""});recipeDialog.close();e.target.reset();view="recipes";render();};
-render();
+
+async function boot() {
+  const {data:{session}}=await supabase.auth.getSession();
+  if(!session) { loginPanel.hidden=false; appPanel.hidden=true; return; }
+  loginPanel.hidden=true; appPanel.hidden=false; userBadge.textContent=session.user.email||'Signed in';
+  try { await loadData(); } catch(e) { content.innerHTML='<div class="empty">'+esc(e.message)+'</div>'; }
+}
+supabase.auth.onAuthStateChange((_event,session)=>{ if(session) boot(); });
+boot();
