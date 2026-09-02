@@ -157,7 +157,7 @@ async function uploadAllImports(){
    if(up.error){item.status='Failed';item.error=up.error.message;continue;}
   }
   const ins=await supabase.from('cc_import_items').insert({import_id:importRow.data.id,file_name:item.file_name,file_path:path?'originals/'+path:null,mime_type:item.mime_type,source_url:item.source_url||null,created_by:user.id});
-  item.status=ins.error?'Failed':'Uploaded';
+  if(!ins.error){ const fx=await supabase.functions.invoke('cc-import-extract',{body:{import_item_id:ins.data?.[0]?.id}}); item.status=fx.error?'Uploaded — review pending':'Queued for extraction'; } else item.status='Failed';
   if(ins.error)item.error=ins.error.message;
   renderImportQueue();
  }
