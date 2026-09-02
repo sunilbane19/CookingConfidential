@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f6f1e8">
+  <title>Cooking Confidential</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#" aria-label="Cooking Confidential home">
+      <span class="brand-mark">CC</span>
+      <span><strong>Cooking</strong> Confidential</span>
+    </a>
+    <button class="icon-button" id="addRecipeBtn" aria-label="Add recipe">＋</button>
+  </header>
+
+  <main>
+    <section class="hero">
+      <p class="eyebrow">YOUR KITCHEN NOTEBOOK</p>
+      <h1>Good food.<br><em>Well remembered.</em></h1>
+      <p class="hero-copy">Your recipes, menus and discoveries — all in one private place.</p>
+      <div class="search-wrap">
+        <span>⌕</span>
+        <input id="searchInput" type="search" placeholder="Search recipes, ingredients, cuisines..." autocomplete="off">
+      </div>
+    </section>
+
+    <nav class="tabs" aria-label="Library sections">
+      <button class="tab active" data-view="recipes">Recipes</button>
+      <button class="tab" data-view="menus">Menus</button>
+      <button class="tab" data-view="favourites">Favourites</button>
+    </nav>
+
+    <section id="content" class="content"></section>
+  </main>
+
+  <dialog id="recipeDialog">
+    <form method="dialog" class="dialog-card" id="recipeForm">
+      <button class="close" value="cancel" aria-label="Close">×</button>
+      <p class="eyebrow">ADD TO YOUR COLLECTION</p>
+      <h2>New recipe</h2>
+      <label>Recipe name<input name="name" required placeholder="e.g. Lamb Biryani"></label>
+      <label>Cuisine<input name="cuisine" placeholder="e.g. Indian · Hyderabad"></label>
+      <label>Ingredients<textarea name="ingredients" rows="4" placeholder="One ingredient per line"></textarea></label>
+      <label>Method<textarea name="method" rows="5" placeholder="Add your method or notes"></textarea></label>
+      <button class="primary" value="default">Save recipe</button>
+    </form>
+  </dialog>
+
+  <dialog id="detailDialog">
+    <div class="dialog-card" id="detailContent"></div>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>
