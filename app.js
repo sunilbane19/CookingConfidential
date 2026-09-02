@@ -14,6 +14,9 @@ const loginMessage = document.querySelector('#loginMessage');
 const recipeDialog = document.querySelector('#recipeDialog');
 const menuDialog = document.querySelector('#menuDialog');
 const detailDialog = document.querySelector('#detailDialog');
+const importDialog = document.querySelector('#importDialog');
+const importQueue = document.querySelector('#importQueue');
+let importItems = [];
 
 let recipes = [], menus = [], view = 'recipes';
 
@@ -130,6 +133,36 @@ document.querySelector('#menuForm').onsubmit = async e => {
 };
 
 document.querySelector('#addRecipeBtn').onclick=()=>recipeDialog.showModal();
+document.querySelector('#importBtn').onclick=()=>importDialog.showModal();
+document.querySelector('#closeImport').onclick=()=>importDialog.close();
+document.querySelector('#fileInput').onchange=e=>queueFiles([...e.target.files]);
+document.querySelector('#addUrlBtn').onclick=()=>{const input=document.querySelector('#sourceUrl');const url=input.value.trim();if(!url)return;addImportItem({source_url:url,file_name:url.split('/').pop()||url,mime_type:'text/url'});input.value='';};
+function addImportItem(item){item.localId=crypto.randomUUID();item.status='Queued';importItems.push(item);renderImportQueue();}
+function queueFiles(files){files.forEach(file=>addImportItem({file,file_name:file.name,mime_type:file.type||'application/octet-stream',size:file.size}));}
+function renderImportQueue(){
+ importQueue.innerHTML=importItems.length ? '<div class="queue-head"><strong>'+importItems.length+' items</strong><button class="secondary" id="uploadAll">Upload all</button></div>'+importItems.map(x=>'<div class="queue-item"><div><strong>'+esc(x.file_name)+'</strong><small>'+esc(x.mime_type||'')+(x.size?' · '+Math.round(x.size/1024)+' KB':'')+'</small></div><span>'+esc(x.status)+'</span></div>').join('') : '<div class="empty compact">Your import queue is empty.</div>';
+ const b=document.querySelector('#uploadAll'); if(b)b.onclick=uploadAllImports;
+}
+async function uploadAllImports(){
+ const {data:{user}}=await supabase.auth.getUser(); if(!user)return;
+ for(const item of importItems){
+  if(item.status!=='Queued')continue;
+  item.status='Uploading…';renderImportQueue();
+  const importRow=await supabase.from('cc_imports').insert({source_type:item.source_url?'social_url':'file',source_url:item.source_url||null,original_file_path:null,created_by:user.id}).select().single();
+  if(importRow.error){item.status='Failed';item.error=importRow.error.message;continue;}
+  let path=null;
+  if(item.file){
+   path=user.id+'/'+Date.now()+'-'+item.file.name.replace(/[^a-zA-Z0-9._-]/g,'_');
+   const up=await supabase.storage.from('cooking-confidential').upload('originals/'+path,item.file,{upsert:false});
+   if(up.error){item.status='Failed';item.error=up.error.message;continue;}
+  }
+  const ins=await supabase.from('cc_import_items').insert({import_id:importRow.data.id,file_name:item.file_name,file_path:path?'originals/'+path:null,mime_type:item.mime_type,source_url:item.source_url||null,created_by:user.id});
+  item.status=ins.error?'Failed':'Uploaded';
+  if(ins.error)item.error=ins.error.message;
+  renderImportQueue();
+ }
+}
+
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));t.classList.add('active');view=t.dataset.view;render()});
 search.oninput=render;
 
