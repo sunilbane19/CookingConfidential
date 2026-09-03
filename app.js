@@ -176,7 +176,8 @@ async function reviewImport(id){
  };
 }
 
- importQueue.innerHTML=importItems.length ? '<div class="queue-head"><strong>'+importItems.length+' items</strong><button class="secondary" id="uploadAll">Upload all</button></div>'+importItems.map(x=>'<div class="queue-item"><div><strong>'+esc(x.file_name)+'</strong><small>'+esc(x.mime_type||'')+(x.size?' · '+Math.round(x.size/1024)+' KB':'')+'</small></div><span>'+esc(x.status)+'</span></div>').join('') : '<div class="empty compact">Your import queue is empty.</div>';
+function renderImportQueue(){
+ importQueue.innerHTML=importItems.length ? '<div class="queue-head"><strong>'+importItems.length+' selected</strong><button class="secondary" id="uploadAll">Upload all</button></div>'+importItems.map(x=>'<div class="queue-item"><div><strong>'+esc(x.file_name)+'</strong><small>'+esc(x.mime_type||'')+(x.size?' · '+Math.round(x.size/1024)+' KB':'')+'</small></div><span>'+esc(x.status)+'</span></div>').join('') : '<div class="empty compact">Select files or add a URL to begin.</div>';
  const b=document.querySelector('#uploadAll'); if(b)b.onclick=uploadAllImports;
 }
 async function uploadAllImports(){
