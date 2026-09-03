@@ -133,7 +133,7 @@ document.querySelector('#menuForm').onsubmit = async e => {
 };
 
 document.querySelector('#addRecipeBtn').onclick=()=>recipeDialog.showModal();
-document.querySelector('#importBtn').onclick=()=>importDialog.showModal();
+document.querySelector('#importBtn').onclick=()=>{importDialog.showModal();openImportReview();};
 document.querySelector('#closeImport').onclick=()=>importDialog.close();
 document.querySelector('#fileInput').onchange=e=>queueFiles([...e.target.files]);
 document.querySelector('#addUrlBtn').onclick=()=>{const input=document.querySelector('#sourceUrl');const url=input.value.trim();if(!url)return;addImportItem({source_url:url,file_name:url.split('/').pop()||url,mime_type:'text/url'});input.value='';};
@@ -192,7 +192,7 @@ async function uploadAllImports(){
    const up=await supabase.storage.from('cooking-confidential').upload('originals/'+path,item.file,{upsert:false});
    if(up.error){item.status='Failed';item.error=up.error.message;continue;}
   }
-  const ins=await supabase.from('cc_import_items').insert({import_id:importRow.data.id,file_name:item.file_name,file_path:path?'originals/'+path:null,mime_type:item.mime_type,source_url:item.source_url||null,created_by:user.id});
+  const ins=await supabase.from('cc_import_items').insert({import_id:importRow.data.id,file_name:item.file_name,file_path:path?'originals/'+path:null,mime_type:item.mime_type,source_url:item.source_url||null,created_by:user.id}).select().single();
   if(!ins.error){ const itemId=ins.data?.id || ins.data?.[0]?.id; const fx=itemId?await supabase.functions.invoke('cc-import-extract',{body:{import_item_id:itemId}}):{error:null}; item.status=fx.error?'Uploaded — review pending':'Queued for extraction'; item.import_item_id=itemId; } else item.status='Failed';
   if(ins.error)item.error=ins.error.message;
   renderImportQueue();
