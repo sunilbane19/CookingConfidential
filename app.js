@@ -150,8 +150,30 @@ async function openImportReview(){
 }
 async function reviewImport(id){
  const {data:x,error}=await supabase.from('cc_import_items').select('*').eq('id',id).single(); if(error)return alert(error.message);
- detailDialog.querySelector('#detailContent').innerHTML='<button class="close" onclick="detailDialog.close()">×</button><p class="eyebrow">IMPORT REVIEW</p><h2 class="detail-title">'+esc(x.file_name||x.source_url||'Imported recipe')+'</h2><p class="meta">Status: '+esc(x.extraction_status||'pending')+'</p><div class="detail-section"><h4>Source</h4><p>'+esc(x.source_url||x.file_path||'Uploaded file')+'</p></div><div class="detail-section"><h4>Next step</h4><p>The source is safely stored. Recipe extraction will populate the editable fields here.</p></div>';
+ let recipe={name:x.file_name?.replace(/\\.[^.]+$/,'')||'Imported recipe',ingredients:[],method:'',cuisine:x.inferred_cuisine||'',course:x.inferred_course||'',servings:''};
+ if(x.extraction_status==='ready' && x.extracted_text){
+   try{const j=JSON.parse(x.extracted_text);recipe={...recipe,name:j.name||recipe.name,ingredients:j.recipeIngredient||[],method:Array.isArray(j.recipeInstructions)?j.recipeInstructions.map(v=>typeof v==='string'?v:v.text||v.name||'').join('\\n'):j.recipeInstructions||'',cuisine:j.recipeCuisine||recipe.cuisine,course:j.recipeCategory||recipe.course,servings:j.recipeYield||''};}catch{}
+ }
+ const ing=Array.isArray(recipe.ingredients)?recipe.ingredients.join('\\n'):recipe.ingredients||'';
+ detailDialog.querySelector('#detailContent').innerHTML=`<button class="close" onclick="detailDialog.close()">×</button>
+ <p class="eyebrow">REVIEW IMPORT</p><h2>Check the recipe before saving</h2>
+ <form id="importReviewForm">
+ <label>Recipe name<input name="name" required value="${esc(recipe.name)}"></label>
+ <div class="two-col"><label>Cuisine<input name="cuisine" value="${esc(recipe.cuisine)}"></label><label>Course<input name="course" value="${esc(recipe.course)}"></label></div>
+ <label>Servings<input name="servings" value="${esc(recipe.servings)}"></label>
+ <label>Ingredients<textarea name="ingredients" rows="8">${esc(ing)}</textarea></label>
+ <label>Method<textarea name="method" rows="9">${esc(recipe.method)}</textarea></label>
+ <div class="detail-actions"><button class="primary">Save to recipes</button></div>
+ </form>`;
  detailDialog.showModal();
+ document.querySelector('#importReviewForm').onsubmit=async e=>{
+   e.preventDefault();const f=new FormData(e.target),{data:{user}}=await supabase.auth.getUser();if(!user)return;
+   const ingredients=String(f.get('ingredients')).split('\\n').map(v=>v.trim()).filter(Boolean);
+   const {data:r,error:re}=await supabase.from('cc_recipes').insert({name:f.get('name'),cuisine:f.get('cuisine')||null,course:f.get('course')||null,servings:f.get('servings')||null,ingredients,method:f.get('method')||null,source_type:x.source_url?'social':'file',source_url:x.source_url||null,source_title:x.source_title||x.file_name||null,created_by:user.id,visibility:'private'}).select().single();
+   if(re)return alert(re.message);
+   await supabase.from('cc_import_items').update({review_status:'approved',extraction_status:'ready'}).eq('id',id);
+   detailDialog.close();await loadData();
+ };
 }
 
  importQueue.innerHTML=importItems.length ? '<div class="queue-head"><strong>'+importItems.length+' items</strong><button class="secondary" id="uploadAll">Upload all</button></div>'+importItems.map(x=>'<div class="queue-item"><div><strong>'+esc(x.file_name)+'</strong><small>'+esc(x.mime_type||'')+(x.size?' · '+Math.round(x.size/1024)+' KB':'')+'</small></div><span>'+esc(x.status)+'</span></div>').join('') : '<div class="empty compact">Your import queue is empty.</div>';
