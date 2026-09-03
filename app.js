@@ -139,7 +139,21 @@ document.querySelector('#fileInput').onchange=e=>queueFiles([...e.target.files])
 document.querySelector('#addUrlBtn').onclick=()=>{const input=document.querySelector('#sourceUrl');const url=input.value.trim();if(!url)return;addImportItem({source_url:url,file_name:url.split('/').pop()||url,mime_type:'text/url'});input.value='';};
 function addImportItem(item){item.localId=crypto.randomUUID();item.status='Queued';importItems.push(item);renderImportQueue();}
 function queueFiles(files){files.forEach(file=>addImportItem({file,file_name:file.name,mime_type:file.type||'application/octet-stream',size:file.size}));}
-function renderImportQueue(){
+async function openImportReview(){
+ const {data:{user}}=await supabase.auth.getUser(); if(!user)return;
+ const {data,error}=await supabase.from('cc_import_items').select('*').eq('created_by',user.id).order('created_at',{ascending:false}).limit(50);
+ if(error)return alert(error.message);
+ const rows=data||[];
+ importQueue.innerHTML=(rows.length?'<div class="queue-head"><strong>Import Inbox</strong><span>'+rows.length+' items</span></div>':'<div class="empty compact">No imports yet.</div>')+
+ rows.map(x=>'<article class="review-item"><div><strong>'+esc(x.file_name||x.source_url||'Import')+'</strong><small>'+esc(x.extraction_status||'pending')+' · '+esc(x.review_status||'pending')+'</small></div><button class="secondary review-btn" data-id="'+x.id+'">Review</button></article>').join('');
+ importQueue.querySelectorAll('.review-btn').forEach(b=>b.onclick=()=>reviewImport(Number(b.dataset.id)));
+}
+async function reviewImport(id){
+ const {data:x,error}=await supabase.from('cc_import_items').select('*').eq('id',id).single(); if(error)return alert(error.message);
+ detailDialog.querySelector('#detailContent').innerHTML='<button class="close" onclick="detailDialog.close()">×</button><p class="eyebrow">IMPORT REVIEW</p><h2 class="detail-title">'+esc(x.file_name||x.source_url||'Imported recipe')+'</h2><p class="meta">Status: '+esc(x.extraction_status||'pending')+'</p><div class="detail-section"><h4>Source</h4><p>'+esc(x.source_url||x.file_path||'Uploaded file')+'</p></div><div class="detail-section"><h4>Next step</h4><p>The source is safely stored. Recipe extraction will populate the editable fields here.</p></div>';
+ detailDialog.showModal();
+}
+
  importQueue.innerHTML=importItems.length ? '<div class="queue-head"><strong>'+importItems.length+' items</strong><button class="secondary" id="uploadAll">Upload all</button></div>'+importItems.map(x=>'<div class="queue-item"><div><strong>'+esc(x.file_name)+'</strong><small>'+esc(x.mime_type||'')+(x.size?' · '+Math.round(x.size/1024)+' KB':'')+'</small></div><span>'+esc(x.status)+'</span></div>').join('') : '<div class="empty compact">Your import queue is empty.</div>';
  const b=document.querySelector('#uploadAll'); if(b)b.onclick=uploadAllImports;
 }
@@ -157,7 +171,7 @@ async function uploadAllImports(){
    if(up.error){item.status='Failed';item.error=up.error.message;continue;}
   }
   const ins=await supabase.from('cc_import_items').insert({import_id:importRow.data.id,file_name:item.file_name,file_path:path?'originals/'+path:null,mime_type:item.mime_type,source_url:item.source_url||null,created_by:user.id});
-  if(!ins.error){ const fx=await supabase.functions.invoke('cc-import-extract',{body:{import_item_id:ins.data?.[0]?.id}}); item.status=fx.error?'Uploaded — review pending':'Queued for extraction'; } else item.status='Failed';
+  if(!ins.error){ const itemId=ins.data?.id || ins.data?.[0]?.id; const fx=itemId?await supabase.functions.invoke('cc-import-extract',{body:{import_item_id:itemId}}):{error:null}; item.status=fx.error?'Uploaded — review pending':'Queued for extraction'; item.import_item_id=itemId; } else item.status='Failed';
   if(ins.error)item.error=ins.error.message;
   renderImportQueue();
  }
