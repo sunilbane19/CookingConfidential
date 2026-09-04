@@ -20,7 +20,7 @@ let importItems = [];
 
 let recipes = [], menus = [], view = 'recipes';
 
-const esc = (s='') => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const esc = (s='') => String(s).replace(/[&<>\"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));
 const stars = n => n ? '★'.repeat(n) : '';
 const ingredientsText = r => Array.isArray(r.ingredients) ? r.ingredients.map(x => typeof x === 'string' ? x : [x.quantity,x.unit,x.name].filter(Boolean).join(' ')) : [];
 
@@ -100,10 +100,20 @@ async function copyMenu(id) {
 
 loginForm.onsubmit = async e => {
   e.preventDefault();
-  loginMessage.textContent='Sending sign-in link…';
+  const button = loginForm.querySelector('button[type="submit"]');
+  if (button?.disabled) return;
   const email=document.querySelector('#emailInput').value.trim();
+  button.disabled = true;
+  button.textContent = 'Sending…';
+  loginMessage.textContent='Sending sign-in link…';
   const {error}=await supabase.auth.signInWithOtp({email,options:{emailRedirectTo:location.href}});
-  loginMessage.textContent=error ? error.message : 'Check your email for the sign-in link.';
+  if (error) {
+    loginMessage.textContent = error.message;
+    button.disabled = false;
+    button.textContent = 'Send me a sign-in link';
+  } else {
+    loginMessage.textContent = 'Check your email for the sign-in link.';
+  }
 };
 
 document.querySelector('#recipeForm').onsubmit = async e => {
@@ -150,11 +160,11 @@ async function openImportReview(){
 }
 async function reviewImport(id){
  const {data:x,error}=await supabase.from('cc_import_items').select('*').eq('id',id).single(); if(error)return alert(error.message);
- let recipe={name:x.file_name?.replace(/\\.[^.]+$/,'')||'Imported recipe',ingredients:[],method:'',cuisine:x.inferred_cuisine||'',course:x.inferred_course||'',servings:''};
+ let recipe={name:x.file_name?.replace(/\.[^.]+$/,'')||'Imported recipe',ingredients:[],method:'',cuisine:x.inferred_cuisine||'',course:x.inferred_course||'',servings:''};
  if(x.extraction_status==='ready' && x.extracted_text){
-   try{const j=JSON.parse(x.extracted_text);recipe={...recipe,name:j.name||recipe.name,ingredients:j.recipeIngredient||[],method:Array.isArray(j.recipeInstructions)?j.recipeInstructions.map(v=>typeof v==='string'?v:v.text||v.name||'').join('\\n'):j.recipeInstructions||'',cuisine:j.recipeCuisine||recipe.cuisine,course:j.recipeCategory||recipe.course,servings:j.recipeYield||''};}catch{}
+   try{const j=JSON.parse(x.extracted_text);recipe={...recipe,name:j.name||recipe.name,ingredients:j.recipeIngredient||[],method:Array.isArray(j.recipeInstructions)?j.recipeInstructions.map(v=>typeof v==='string'?v:v.text||v.name||'').join('\n'):j.recipeInstructions||'',cuisine:j.recipeCuisine||recipe.cuisine,course:j.recipeCategory||recipe.course,servings:j.recipeYield||''};}catch{}
  }
- const ing=Array.isArray(recipe.ingredients)?recipe.ingredients.join('\\n'):recipe.ingredients||'';
+ const ing=Array.isArray(recipe.ingredients)?recipe.ingredients.join('\n'):recipe.ingredients||'';
  detailDialog.querySelector('#detailContent').innerHTML=`<button class="close" onclick="detailDialog.close()">×</button>
  <p class="eyebrow">REVIEW IMPORT</p><h2>Check the recipe before saving</h2>
  <form id="importReviewForm">
@@ -168,7 +178,7 @@ async function reviewImport(id){
  detailDialog.showModal();
  document.querySelector('#importReviewForm').onsubmit=async e=>{
    e.preventDefault();const f=new FormData(e.target),{data:{user}}=await supabase.auth.getUser();if(!user)return;
-   const ingredients=String(f.get('ingredients')).split('\\n').map(v=>v.trim()).filter(Boolean);
+   const ingredients=String(f.get('ingredients')).split('\n').map(v=>v.trim()).filter(Boolean);
    const {data:r,error:re}=await supabase.from('cc_recipes').insert({name:f.get('name'),cuisine:f.get('cuisine')||null,course:f.get('course')||null,servings:f.get('servings')||null,ingredients,method:f.get('method')||null,source_type:x.source_url?'social':'file',source_url:x.source_url||null,source_title:x.source_title||x.file_name||null,created_by:user.id,visibility:'private'}).select().single();
    if(re)return alert(re.message);
    await supabase.from('cc_import_items').update({review_status:'approved',extraction_status:'ready'}).eq('id',id);
