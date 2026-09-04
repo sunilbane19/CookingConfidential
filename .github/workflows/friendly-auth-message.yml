@@ -1,0 +1,44 @@
+name: Friendly auth message
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/friendly-auth-message.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Update auth error message
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('app.js')
+          s = p.read_text()
+          old = """  if (error) {\n    loginMessage.textContent = error.message;\n    button.disabled = false;\n    button.textContent = 'Send me a sign-in link';\n  } else {"""
+          new = """  if (error) {\n    const message = String(error.message || '').toLowerCase();\n    loginMessage.textContent = message.includes('rate limit')\n      ? 'Please wait about 60 seconds before requesting another sign-in link.'\n      : 'We could not send the sign-in link right now. Please try again in a moment.';\n    button.disabled = false;\n    button.textContent = 'Send me a sign-in link';\n  } else {"""
+          if old not in s:
+              raise SystemExit('Expected login error block not found')
+          p.write_text(s.replace(old, new, 1))
+          PY
+
+      - name: Commit and push app change
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app.js
+          git commit -m 'fix: show friendly sign-in rate-limit message'
+          git push
+
+      - name: Remove one-time workflow
+        run: |
+          git rm .github/workflows/friendly-auth-message.yml
+          git commit -m 'chore: remove one-time auth message workflow'
+          git push
