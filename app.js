@@ -100,8 +100,8 @@ async function copyMenu(id) {
 
 loginForm.onsubmit = async e => {
   e.preventDefault();
-  const button = loginForm.querySelector('button[type="submit"]');
-  if (button?.disabled) return;
+  const button = loginForm.querySelector('button');
+  if (!button || button.disabled) return;
   const email=document.querySelector('#emailInput').value.trim();
   button.disabled = true;
   button.textContent = 'Sending…';
