@@ -25,7 +25,7 @@
       <p>Sign in with your email to access your personal recipe and menu library.</p>
       <form id="loginForm" class="login-form">
         <input id="emailInput" type="email" required placeholder="Your email address" autocomplete="email">
-        <button class="primary">Send me a sign-in link</button>
+        <button type="submit" class="primary">Send me a sign-in link</button>
       </form>
       <p id="loginMessage" class="small-note"></p>
     </section>
@@ -43,52 +43,50 @@
         <button class="tab" data-view="menus">Menus</button>
         <button class="tab" data-view="favourites">Favourites</button>
       </nav>
-      <section id="content" class="content"></section>
+
+      <section id="content"></section>
     </div>
-  <dialog id="importDialog"><div class="dialog-card">
-<button class="close" id="closeImport" aria-label="Close">×</button>
-<p class="eyebrow">IMPORT INBOX</p><h2>Bring recipes into your collection</h2>
-<p class="dialog-copy">Choose several files from your phone or desktop, or paste a social recipe URL. Originals are kept privately; nothing is published.</p>
-<div class="import-options">
-<label class="upload-zone" for="fileInput"><span class="upload-icon">＋</span><strong>Select files</strong><small>PDF · Word · scans · images · multiple files</small><input id="fileInput" type="file" multiple accept=".pdf,.doc,.docx,.txt,image/*"></label>
-<div class="url-import"><label>Social recipe URL<input id="sourceUrl" type="url" placeholder="Paste an Instagram / Facebook / Reel URL"></label><button class="secondary" id="addUrlBtn">Add URL to inbox</button></div>
-</div>
-<div id="importQueue" class="import-queue"></div>
-</div></dialog>
-</main>
+  </main>
 
   <dialog id="recipeDialog">
     <form method="dialog" class="dialog-card" id="recipeForm">
-      <button class="close" value="cancel" aria-label="Close">×</button>
-      <p class="eyebrow">ADD TO YOUR COLLECTION</p><h2>New recipe</h2>
-      <label>Recipe name<input name="name" required placeholder="e.g. Lamb Biryani"></label>
-      <div class="two-col">
-        <label>Cuisine<input name="cuisine" placeholder="Indian · Hyderabad"></label>
-        <label>Course<input name="course" placeholder="Main course"></label>
-      </div>
-      <label>Ingredients<textarea name="ingredients" rows="5" placeholder="One ingredient per line"></textarea></label>
-      <label>Method<textarea name="method" rows="6" placeholder="Add the cooking method"></textarea></label>
-      <label>Personal notes<textarea name="notes" rows="3" placeholder="Your changes, tips or memories"></textarea></label>
-      <button class="primary" value="default">Save recipe</button>
+      <button class="close" value="cancel">×</button>
+      <p class="eyebrow">NEW RECIPE</p><h2>Add a recipe</h2>
+      <label>Recipe name<input name="name" required></label>
+      <div class="two-col"><label>Cuisine<input name="cuisine"></label><label>Course<input name="course"></label></div>
+      <label>Ingredients<textarea name="ingredients" rows="7" placeholder="One ingredient per line"></textarea></label>
+      <label>Method<textarea name="method" rows="8"></textarea></label>
+      <label>My notes<textarea name="notes" rows="4"></textarea></label>
+      <div class="dialog-actions"><button class="secondary" value="cancel">Cancel</button><button class="primary" type="submit">Save recipe</button></div>
     </form>
   </dialog>
 
   <dialog id="menuDialog">
     <form method="dialog" class="dialog-card" id="menuForm">
-      <button class="close" value="cancel" aria-label="Close">×</button>
-      <p class="eyebrow">YOUR NEXT TABLE</p><h2>New menu</h2>
-      <label>Menu name<input name="name" required placeholder="e.g. Sunday lunch"></label>
-      <div class="two-col">
-        <label>Date<input name="date" type="date"></label>
-        <label>Guests<input name="guests" type="number" min="1" placeholder="8"></label>
-      </div>
-      <label>Occasion<input name="occasion" placeholder="Dinner party · Family · Festive"></label>
-      <label>Notes<textarea name="notes" rows="3"></textarea></label>
-      <button class="primary" value="default">Create menu</button>
+      <button class="close" value="cancel">×</button>
+      <p class="eyebrow">NEW MENU</p><h2>Create a menu</h2>
+      <label>Menu name<input name="name" required></label>
+      <div class="two-col"><label>Date<input type="date" name="date"></label><label>Guests<input type="number" min="1" name="guests"></label></div>
+      <label>Occasion<input name="occasion"></label>
+      <label>Notes<textarea name="notes" rows="5"></textarea></label>
+      <div class="dialog-actions"><button class="secondary" value="cancel">Cancel</button><button class="primary" type="submit">Create menu</button></div>
     </form>
   </dialog>
 
-  <dialog id="detailDialog"><div class="dialog-card" id="detailContent"></div></dialog>
-  <script type="module" src="app.js"></script>
+  <dialog id="detailDialog"><div id="detailContent" class="dialog-card"></div></dialog>
+
+  <dialog id="importDialog">
+    <div class="dialog-card">
+      <button class="close" id="closeImport">×</button>
+      <p class="eyebrow">IMPORT RECIPES</p><h2>Bring recipes into your kitchen</h2>
+      <p class="small-note">Select recipe files or paste a recipe URL. Imported recipes are reviewed before they are saved.</p>
+      <label>Recipe files<input id="fileInput" type="file" multiple accept=".pdf,.doc,.docx,.txt,image/*"></label>
+      <label>Recipe URL<input id="sourceUrl" type="url" placeholder="https://..."></label>
+      <button class="secondary" id="addUrlBtn">Add URL</button>
+      <div id="importQueue" class="import-queue"></div>
+    </div>
+  </dialog>
+
+  <script type="module" src="app.js?v=1.2.1"></script>
 </body>
 </html>
