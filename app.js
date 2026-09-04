@@ -108,7 +108,10 @@ loginForm.onsubmit = async e => {
   loginMessage.textContent='Sending sign-in link…';
   const {error}=await supabase.auth.signInWithOtp({email,options:{emailRedirectTo:location.href}});
   if (error) {
-    loginMessage.textContent = error.message;
+    const message = String(error.message || '').toLowerCase();
+    loginMessage.textContent = message.includes('rate limit')
+      ? 'Please wait about 60 seconds before requesting another sign-in link.'
+      : 'We could not send the sign-in link right now. Please try again in a moment.';
     button.disabled = false;
     button.textContent = 'Send me a sign-in link';
   } else {
