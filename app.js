@@ -2,6 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const SUPABASE_URL = 'https://yiwmtfbqbynimqvwxosu.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
+const APP_URL = 'https://sunilbane19.github.io/CookingConfidential/';
 const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
 const content = document.querySelector('#content');
@@ -106,7 +107,7 @@ loginForm.onsubmit = async e => {
   button.disabled = true;
   button.textContent = 'Sending…';
   loginMessage.textContent='Sending sign-in link…';
-  const {error}=await supabase.auth.signInWithOtp({email,options:{emailRedirectTo:location.href}});
+  const {error}=await supabase.auth.signInWithOtp({email,options:{emailRedirectTo:APP_URL}});
   if (error) {
     const message = String(error.message || '').toLowerCase();
     loginMessage.textContent = message.includes('rate limit')
