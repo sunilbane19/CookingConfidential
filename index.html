@@ -88,5 +88,17 @@
   </dialog>
 
   <script type="module" src="app.js?v=1.2.1"></script>
+  <script>
+    // If the magic-link opens in another tab/window, refresh this tab when the user returns.
+    // The refreshed app will see the Supabase session and show the recipe library.
+    let ccWasHidden = false;
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') {
+        ccWasHidden = true;
+      } else if (ccWasHidden) {
+        window.location.reload();
+      }
+    });
+  </script>
 </body>
 </html>
