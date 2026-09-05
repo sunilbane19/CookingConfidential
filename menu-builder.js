@@ -9,7 +9,6 @@ function ensureBuilderStyles(){
  const s=document.createElement('style');s.id='ccMenuBuilderStyles';s.textContent=`
  .cc-menu-actions{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 18px}
  .cc-menu-builder{max-width:760px}
- .cc-menu-builder .dialog-card{max-height:88vh;overflow:auto}
  .cc-menu-intro{font:14px/1.5 Arial;color:var(--muted);margin-bottom:18px}
  .cc-menu-picker{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#fff}
  .cc-menu-picker-head{padding:12px 14px;border-bottom:1px solid var(--line);font:600 12px Arial;color:var(--muted);display:flex;justify-content:space-between}
@@ -18,7 +17,6 @@ function ensureBuilderStyles(){
  .cc-menu-recipe input{width:20px;height:20px;accent-color:var(--accent);flex:none}
  .cc-menu-recipe strong{display:block;color:var(--ink)}
  .cc-menu-recipe small{display:block;color:var(--muted);margin-top:3px}
- .cc-menu-selected{margin-top:14px;font:12px Arial;color:var(--muted)}
  .cc-menu-builder .detail-actions{margin-top:20px}
  @media(max-width:760px){.cc-menu-actions{display:grid;grid-template-columns:1fr}.cc-menu-actions button{width:100%}}
  `;document.head.appendChild(s);
@@ -38,7 +36,7 @@ function addMenuButton(){
 
 function renderBuilder(){
  const d=document.querySelector('#detailDialog');
- d.querySelector('#detailContent').innerHTML=`<button class="close" type="button" id="ccMenuClose">×</button><div class="cc-menu-builder dialog-card"><p class="eyebrow">CREATE MENU</p><h2>Build a menu from your recipes</h2><p class="cc-menu-intro">Choose recipes already in your private library. The menu stores references to the recipes, so your recipe records are never duplicated.</p><form id="ccMenuBuilderForm"><label>Menu name<input name="name" required placeholder="e.g. Sunday lunch"></label><div class="two-col"><label>Date<input type="date" name="date"></label><label>Guests<input type="number" min="1" name="guests"></label></div><label>Occasion<input name="occasion" placeholder="Lunch, dinner, family gathering…"></label><label>Notes<textarea name="notes" rows="3"></textarea></label><div class="cc-menu-picker"><div class="cc-menu-picker-head"><span>Recipes in your library</span><span id="ccRecipeCount">0 selected</span></div><div id="ccRecipeList"></div></div><div class="detail-actions"><button class="secondary" type="button" id="ccMenuCancel">Cancel</button><button class="primary" type="submit">Create menu</button></div></form></div>`;
+ d.querySelector('#detailContent').innerHTML=`<button class="close" type="button" id="ccMenuClose" aria-label="Close">×</button><p class="eyebrow">CREATE MENU</p><h2>Build a menu from your recipes</h2><p class="cc-menu-intro">Choose recipes already in your private library. The menu stores references to the recipes, so your recipe records are never duplicated.</p><form id="ccMenuBuilderForm"><label>Menu name<input name="name" required placeholder="e.g. Sunday lunch"></label><div class="two-col"><label>Date<input type="date" name="date"></label><label>Guests<input type="number" min="1" name="guests"></label></div><label>Occasion<input name="occasion" placeholder="Lunch, dinner, family gathering…"></label><label>Notes<textarea name="notes" rows="3"></textarea></label><div class="cc-menu-picker"><div class="cc-menu-picker-head"><span>Recipes in your library</span><span id="ccRecipeCount">0 selected</span></div><div id="ccRecipeList"></div></div><div class="detail-actions"><button class="secondary" type="button" id="ccMenuCancel">Cancel</button><button class="primary" type="submit">Create menu</button></div></form>`;
  d.showModal();
  document.querySelector('#ccMenuClose').onclick=()=>d.close();document.querySelector('#ccMenuCancel').onclick=()=>d.close();
  const list=document.querySelector('#ccRecipeList');
@@ -68,6 +66,19 @@ async function saveBuiltMenu(e){
  e.target.reset();document.querySelector('#detailDialog').close();alert('Menu created from your selected recipes.');window.location.reload();
 }
 
+function repairDialogButtons(){
+ const recipe=document.querySelector('#recipeDialog');
+ const menu=document.querySelector('#menuDialog');
+ [recipe,menu].forEach(d=>{
+   if(!d)return;
+   const close=d.querySelector('.close');
+   if(close){close.type='button';close.onclick=e=>{e.preventDefault();e.stopPropagation();d.close();};}
+   const cancel=d.querySelector('.dialog-actions button.secondary');
+   if(cancel){cancel.type='button';cancel.onclick=e=>{e.preventDefault();e.stopPropagation();d.close();};}
+ });
+}
+
 ensureBuilderStyles();
-const observer=new MutationObserver(()=>addMenuButton());observer.observe(document.body,{subtree:true,childList:true});
+const observer=new MutationObserver(()=>{addMenuButton();repairDialogButtons();});observer.observe(document.body,{subtree:true,childList:true});
 addMenuButton();
+repairDialogButtons();
