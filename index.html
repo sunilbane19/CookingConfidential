@@ -89,6 +89,15 @@
 
   <script type="module" src="app.js?v=1.2.1"></script>
   <script>
+    // Review opens a second modal. Close the import modal during capture so the
+    // review dialog can be opened cleanly on browsers that allow only one modal.
+    document.addEventListener('click', (event) => {
+      if (event.target.closest('.review-btn')) {
+        const importDialog = document.querySelector('#importDialog');
+        if (importDialog?.open) importDialog.close();
+      }
+    }, true);
+
     // If the magic-link opens in another tab/window, refresh this tab when the user returns.
     // The refreshed app will see the Supabase session and show the recipe library.
     let ccWasHidden = false;
