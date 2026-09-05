@@ -88,9 +88,11 @@
   </dialog>
 
   <script type="module" src="app.js?v=1.2.1"></script>
+  <script type="module" src="import-review-fix.js?v=1.2.2"></script>
   <script>
     // Review opens a second modal. Close the import modal during capture so the
     // review dialog can be opened cleanly on browsers that allow only one modal.
+    // The import-review-fix module handles pending extraction before rendering.
     document.addEventListener('click', (event) => {
       if (event.target.closest('.review-btn')) {
         const importDialog = document.querySelector('#importDialog');
