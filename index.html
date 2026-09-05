@@ -17,99 +17,28 @@
       <button class="icon-button" id="importBtn" aria-label="Import recipes">⇧</button><button class="icon-button" id="addRecipeBtn" aria-label="Add recipe">＋</button>
     </div>
   </header>
-
   <main>
     <section id="loginPanel" class="login-panel" hidden>
-      <p class="eyebrow">YOUR PRIVATE KITCHEN</p>
-      <h1>Good food.<br><em>Well remembered.</em></h1>
+      <p class="eyebrow">YOUR PRIVATE KITCHEN</p><h1>Good food.<br><em>Well remembered.</em></h1>
       <p>Sign in with your email to access your personal recipe and menu library.</p>
-      <form id="loginForm" class="login-form">
-        <input id="emailInput" type="email" required placeholder="Your email address" autocomplete="email">
-        <button type="submit" class="primary">Send me a sign-in link</button>
-      </form>
+      <form id="loginForm" class="login-form"><input id="emailInput" type="email" required placeholder="Your email address" autocomplete="email"><button type="submit" class="primary">Send me a sign-in link</button></form>
       <p id="loginMessage" class="small-note"></p>
     </section>
-
     <div id="appPanel" hidden>
-      <section class="hero">
-        <p class="eyebrow">YOUR KITCHEN NOTEBOOK</p>
-        <h1>Good food.<br><em>Well remembered.</em></h1>
-        <p class="hero-copy">Your recipes, menus and discoveries — all in one private place.</p>
-        <div class="search-wrap"><span>⌕</span><input id="searchInput" type="search" placeholder="Search recipes, ingredients, cuisines..." autocomplete="off"></div>
-      </section>
-
-      <nav class="tabs" aria-label="Library sections">
-        <button class="tab active" data-view="recipes">Recipes</button>
-        <button class="tab" data-view="menus">Menus</button>
-        <button class="tab" data-view="favourites">Favourites</button>
-      </nav>
-
+      <section class="hero"><p class="eyebrow">YOUR KITCHEN NOTEBOOK</p><h1>Good food.<br><em>Well remembered.</em></h1><p class="hero-copy">Your recipes, menus and discoveries — all in one private place.</p><div class="search-wrap"><span>⌕</span><input id="searchInput" type="search" placeholder="Search recipes, ingredients, cuisines..." autocomplete="off"></div></section>
+      <nav class="tabs" aria-label="Library sections"><button class="tab active" data-view="recipes">Recipes</button><button class="tab" data-view="menus">Menus</button><button class="tab" data-view="favourites">Favourites</button></nav>
       <section id="content"></section>
     </div>
   </main>
-
-  <dialog id="recipeDialog">
-    <form method="dialog" class="dialog-card" id="recipeForm">
-      <button class="close" value="cancel">×</button>
-      <p class="eyebrow">NEW RECIPE</p><h2>Add a recipe</h2>
-      <label>Recipe name<input name="name" required></label>
-      <div class="two-col"><label>Cuisine<input name="cuisine"></label><label>Course<input name="course"></label></div>
-      <label>Ingredients<textarea name="ingredients" rows="7" placeholder="One ingredient per line"></textarea></label>
-      <label>Method<textarea name="method" rows="8"></textarea></label>
-      <label>My notes<textarea name="notes" rows="4"></textarea></label>
-      <div class="dialog-actions"><button class="secondary" value="cancel">Cancel</button><button class="primary" type="submit">Save recipe</button></div>
-    </form>
-  </dialog>
-
-  <dialog id="menuDialog">
-    <form method="dialog" class="dialog-card" id="menuForm">
-      <button class="close" value="cancel">×</button>
-      <p class="eyebrow">NEW MENU</p><h2>Create a menu</h2>
-      <label>Menu name<input name="name" required></label>
-      <div class="two-col"><label>Date<input type="date" name="date"></label><label>Guests<input type="number" min="1" name="guests"></label></div>
-      <label>Occasion<input name="occasion"></label>
-      <label>Notes<textarea name="notes" rows="5"></textarea></label>
-      <div class="dialog-actions"><button class="secondary" value="cancel">Cancel</button><button class="primary" type="submit">Create menu</button></div>
-    </form>
-  </dialog>
-
+  <dialog id="recipeDialog"><form method="dialog" class="dialog-card" id="recipeForm"><button class="close" value="cancel">×</button><p class="eyebrow">NEW RECIPE</p><h2>Add a recipe</h2><label>Recipe name<input name="name" required></label><div class="two-col"><label>Cuisine<input name="cuisine"></label><label>Course<input name="course"></label></div><label>Ingredients<textarea name="ingredients" rows="7" placeholder="One ingredient per line"></textarea></label><label>Method<textarea name="method" rows="8"></textarea></label><label>My notes<textarea name="notes" rows="4"></textarea></label><div class="dialog-actions"><button class="secondary" value="cancel">Cancel</button><button class="primary" type="submit">Save recipe</button></div></form></dialog>
+  <dialog id="menuDialog"><form method="dialog" class="dialog-card" id="menuForm"><button class="close" value="cancel">×</button><p class="eyebrow">NEW MENU</p><h2>Create a menu</h2><label>Menu name<input name="name" required></label><div class="two-col"><label>Date<input type="date" name="date"></label><label>Guests<input type="number" min="1" name="guests"></label></div><label>Occasion<input name="occasion"></label><label>Notes<textarea name="notes" rows="5"></textarea></label><div class="dialog-actions"><button class="secondary" value="cancel">Cancel</button><button class="primary" type="submit">Create menu</button></div></form></dialog>
   <dialog id="detailDialog"><div id="detailContent" class="dialog-card"></div></dialog>
-
-  <dialog id="importDialog">
-    <div class="dialog-card">
-      <button class="close" id="closeImport">×</button>
-      <p class="eyebrow">IMPORT RECIPES</p><h2>Bring recipes into your kitchen</h2>
-      <p class="small-note">Select recipe files or paste a recipe URL. Imported recipes are reviewed before they are saved.</p>
-      <label>Recipe files<input id="fileInput" type="file" multiple accept=".pdf,.doc,.docx,.txt,image/*"></label>
-      <label>Recipe URL<input id="sourceUrl" type="url" placeholder="https://..."></label>
-      <button class="secondary" id="addUrlBtn">Add URL</button>
-      <div id="importQueue" class="import-queue"></div>
-    </div>
-  </dialog>
-
+  <dialog id="importDialog"><div class="dialog-card"><button class="close" id="closeImport">×</button><p class="eyebrow">IMPORT RECIPES</p><h2>Bring recipes into your kitchen</h2><p class="small-note">Select recipe files or paste a recipe URL. Imported recipes are reviewed before they are saved.</p><label>Recipe files<input id="fileInput" type="file" multiple accept=".pdf,.doc,.docx,.txt,image/*"></label><label>Recipe URL<input id="sourceUrl" type="url" placeholder="https://..."></label><button class="secondary" id="addUrlBtn">Add URL</button><div id="importQueue" class="import-queue"></div></div></dialog>
   <script type="module" src="app.js?v=1.2.1"></script>
-  <script type="module" src="import-review-fix.js?v=1.2.2"></script>
+  <script type="module" src="import-review-fix.js?v=1.2.3"></script>
   <script>
-    // Review opens a second modal. Close the import modal during capture so the
-    // review dialog can be opened cleanly on browsers that allow only one modal.
-    // The import-review-fix module handles pending extraction before rendering.
-    document.addEventListener('click', (event) => {
-      if (event.target.closest('.review-btn')) {
-        const importDialog = document.querySelector('#importDialog');
-        if (importDialog?.open) importDialog.close();
-      }
-    }, true);
-
-    // If the magic-link opens in another tab/window, refresh this tab when the user returns.
-    // The refreshed app will see the Supabase session and show the recipe library.
-    let ccWasHidden = false;
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'hidden') {
-        ccWasHidden = true;
-      } else if (ccWasHidden) {
-        window.location.reload();
-      }
-    });
+    document.addEventListener('click',(event)=>{if(event.target.closest('.review-btn')){const importDialog=document.querySelector('#importDialog');if(importDialog?.open)importDialog.close();}},true);
+    let ccWasHidden=false;document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')ccWasHidden=true;else if(ccWasHidden)window.location.reload();});
   </script>
 </body>
 </html>
