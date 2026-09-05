@@ -61,6 +61,7 @@ function showReview(x,id){
   else if(selectedCourse){ category.value='__custom__'; custom.value=selectedCourse; custom.style.display='block'; }
   category.addEventListener('change',()=>{ custom.style.display=category.value==='__custom__'?'block':'none'; if(category.value!=='__custom__')custom.value=''; });
   document.querySelector('#ccCancelReview').onclick=()=>detailDialog.close();
+  form.addEventListener('keydown',e=>{if(e.key==='Enter' && e.target.tagName!=='TEXTAREA'){e.preventDefault();e.stopPropagation();}});
 
   form.onsubmit=async e=>{
     e.preventDefault();
