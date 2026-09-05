@@ -33,3 +33,34 @@ async function reviewImportFixed(id){
 }
 
 document.addEventListener('click',event=>{const button=event.target.closest('.review-btn');if(!button)return;event.preventDefault();event.stopImmediatePropagation();reviewImportFixed(Number(button.dataset.id));},true);
+
+// The main app currently contains the legacy GitHub Pages redirect value.
+// Override its login handler here so magic links from the live custom domain
+// always return to Cooking Confidential at cookingconfidential.in.
+const loginForm = document.querySelector('#loginForm');
+const loginMessage = document.querySelector('#loginMessage');
+if (loginForm) {
+  loginForm.onsubmit = async e => {
+    e.preventDefault();
+    const button = loginForm.querySelector('button');
+    if (!button || button.disabled) return;
+    const email = document.querySelector('#emailInput').value.trim();
+    button.disabled = true;
+    button.textContent = 'Sending…';
+    if (loginMessage) loginMessage.textContent = 'Sending sign-in link…';
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: 'https://cookingconfidential.in/' }
+    });
+    if (error) {
+      const message = String(error.message || '').toLowerCase();
+      if (loginMessage) loginMessage.textContent = message.includes('rate limit')
+        ? 'Please wait about 60 seconds before requesting another sign-in link.'
+        : 'We could not send the sign-in link right now. Please try again in a moment.';
+      button.disabled = false;
+      button.textContent = 'Send me a sign-in link';
+    } else if (loginMessage) {
+      loginMessage.textContent = 'Check your email for the sign-in link.';
+    }
+  };
+}
