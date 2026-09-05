@@ -21,7 +21,7 @@
   <dialog id="detailDialog"><div id="detailContent" class="dialog-card"></div></dialog>
   <dialog id="importDialog"><div class="dialog-card"><button class="close" id="closeImport">×</button><p class="eyebrow">IMPORT RECIPES</p><h2>Bring recipes into your kitchen</h2><p class="small-note">Select recipe files or paste a recipe URL. Imported recipes are reviewed before they are saved.</p><label>Recipe files<input id="fileInput" type="file" multiple accept=".pdf,.doc,.docx,.txt,image/*"></label><label>Recipe URL<input id="sourceUrl" type="url" placeholder="https://..."></label><button class="secondary" id="addUrlBtn">Add URL</button><div id="importQueue" class="import-queue"></div></div></dialog>
   <script type="module" src="app.js?v=1.2.1"></script>
-  <script type="module" src="import-review-fix.js?v=1.2.6"></script>
+  <script type="module" src="import-review-fix.js?v=1.2.7"></script>
   <script>document.addEventListener('click',(event)=>{if(event.target.closest('.review-btn')){const importDialog=document.querySelector('#importDialog');if(importDialog?.open)importDialog.close();}},true);let ccWasHidden=false;document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')ccWasHidden=true;else if(ccWasHidden)window.location.reload();});</script>
 </body>
 </html>
