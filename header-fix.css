@@ -1,0 +1,23 @@
+/* Keep the Cooking Confidential header visible on mobile and desktop. */
+.topbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  z-index: 1000;
+}
+
+/* Reserve space for the fixed header so the hero never starts underneath it. */
+main {
+  padding-top: 70px;
+}
+
+/* Keep the header visible even when the page is restored at a previous scroll position. */
+html, body {
+  scroll-padding-top: 70px;
+}
+
+@media (max-width: 760px) {
+  main { padding-top: 70px; }
+}
