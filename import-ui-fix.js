@@ -71,21 +71,6 @@
     updateProgress();
   }
 
-  // Give immediate feedback when Upload all is pressed, before the upload loop begins.
-  document.addEventListener('click',event=>{
-    const button=event.target.closest('#uploadAll');
-    if(!button) return;
-    button.disabled=true;
-    button.textContent='Uploading…';
-    const box=progressBox();
-    if(box){
-      box.hidden=false;
-      const target=box.querySelector('.cc-import-progress-text');
-      if(target) target.textContent='Upload in progress — your recipe is being uploaded and extracted. Please keep this window open.';
-    }
-    setTimeout(()=>{button.disabled=false;button.textContent='Upload all';},30000);
-  },true);
-
   installStyles();
   const bodyObserver=new MutationObserver(()=>{installStyles();observeQueue();updateProgress();});
   bodyObserver.observe(document.body,{subtree:true,childList:true,characterData:true});
