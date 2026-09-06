@@ -14,95 +14,97 @@ const types=['Dish','Dip','Dressing','Sauce','Chutney','Marinade','Rub','Paste',
 const SECTION=/^(ingredients?|ingredient list|method|directions?|instructions?|preparation|steps?|servings?|notes?|tips?|storage|serving suggestions?|recipe)$/i;
 const GENERIC=/^(recipe|recipes|ingredients?|method|directions?|instructions?|preparation|steps?|contents?|index|introduction|notes?|tips?|storage|serving suggestions?|long-term preservation methods?)$/i;
 
-function titleCaseScore(s){const w=s.trim().split(/\s+/);return w.length>=1&&w.length<=8 && s.length>=3&&s.length<=70 && !GENERIC.test(s) && !/^step\s*\d+/i.test(s) && w.filter(x=>/^[A-Z][A-Za-z'&-]*$/.test(x)).length>=Math.max(1,Math.ceil(w.length*.35));}
+function titleCaseScore(s){const w=s.trim().split(/\s+/);return w.length>=1&&w.length<=8&&s.length>=3&&s.length<=70&&!GENERIC.test(s)&&!/^step\s*\d+/i.test(s)&&w.filter(x=>/^[A-Z][A-Za-z'&-]*$/.test(x)).length>=Math.max(1,Math.ceil(w.length*.35));}
 function makeRecipe(name){return {name:clean(name)||'Imported recipe',description:'',cuisine:'',course:'',recipe_type:'Dish',servings:'',ingredients:[],method:[],notes:[]};}
-function parseIngredientRows(rows){return rows.slice(1).map(r=>{const a=r.map(clean).filter(Boolean); if(a.length>=3)return `${a[0]} — ${a[2]}${a[1]&&a[1]!==a[0]?' — '+a[1]:''}`; return a.join(' — ');}).filter(Boolean);}
+function parseIngredientRows(rows){return rows.slice(1).map(r=>{const a=r.map(clean).filter(Boolean);if(a.length>=3)return `${a[0]} — ${a[2]}${a[1]&&a[1]!==a[0]?' — '+a[1]:''}`;return a.join(' — ');}).filter(Boolean);}
 function htmlTables(doc){return [...doc.querySelectorAll('table')].map(t=>[...t.rows].map(r=>[...r.cells].map(c=>clean(c.textContent)))).filter(x=>x.length);}
 function htmlBlocks(doc){return [...doc.querySelectorAll('h1,h2,h3,h4,h5,h6,p,li')].map(e=>clean(e.textContent)).filter(Boolean);}
 function tableKind(rows){const h=(rows[0]||[]).join(' ').toLowerCase();if(/ingredient|quantity|amount|ratio|purpose/.test(h))return'ingredients';if(/method|step|direction|instruction/.test(h)&&!/shelf life|best used|storage/.test(h))return'method';if(/temperature|shelf life|best used|storage/.test(h))return'notes';return'';}
 function parseDocxMulti(html,file){
- const doc=new DOMParser().parseFromString(html,'text/html'); const blocks=htmlBlocks(doc); const tables=htmlTables(doc);
- const recipeHeads=blocks.filter(titleCaseScore);
- const hasMultiple=recipeHeads.length>1;
- if(!hasMultiple){
-   const r=makeRecipe(blocks[0]||file.replace(/\.[^.]+$/,''));
-   const it=tables.find(t=>tableKind(t)==='ingredients'); const mt=tables.find(t=>tableKind(t)==='method'); const nt=tables.filter(t=>tableKind(t)==='notes');
-   r.ingredients=it?parseIngredientRows(it):[]; r.method=mt?mt.slice(1).map(r=>r.filter(Boolean).join(' — ')).filter(Boolean):blocks.filter(x=>/^step\s*\d+/i.test(x)); r.notes=nt.flatMap(t=>t.slice(1).map(r=>r.filter(Boolean).join(' — '))).filter(Boolean); return [r];
- }
+ const doc=new DOMParser().parseFromString(html,'text/html');const blocks=htmlBlocks(doc),tables=htmlTables(doc);
+ const heads=blocks.filter(titleCaseScore);const hasMultiple=heads.length>1;
+ if(!hasMultiple){const r=makeRecipe(blocks[0]||file.replace(/\.[^.]+$/,''));const it=tables.find(t=>tableKind(t)==='ingredients');const mt=tables.find(t=>tableKind(t)==='method');const nt=tables.filter(t=>tableKind(t)==='notes');r.ingredients=it?parseIngredientRows(it):[];r.method=mt?mt.slice(1).map(a=>a.filter(Boolean).join(' — ')).filter(Boolean):blocks.filter(x=>/^step\s*\d+/i.test(x));r.notes=nt.flatMap(t=>t.slice(1).map(a=>a.filter(Boolean).join(' — '))).filter(Boolean);return[r];}
  const out=[];
- for(let i=0;i<recipeHeads.length;i++){
-   const name=recipeHeads[i], start=blocks.indexOf(name), end=i+1<recipeHeads.length?blocks.indexOf(recipeHeads[i+1]):blocks.length;
-   const section=blocks.slice(start+1,end); const r=makeRecipe(name);
-   const ih=section.findIndex(x=>/^ingredients?$/i.test(x)); const mh=section.findIndex(x=>/^(method|directions?|instructions?|preparation|steps?)$/i.test(x));
-   if(ih>=0)r.ingredients=section.slice(ih+1,mh>ih?mh:section.length).filter(x=>!SECTION.test(x));
-   if(mh>=0)r.method=section.slice(mh+1).filter(x=>!/^notes?|storage|serving suggestions?/i.test(x));
-   out.push(r);
+ for(let i=0;i<heads.length;i++){
+  const name=heads[i],start=blocks.indexOf(name),end=i+1<heads.length?blocks.indexOf(heads[i+1]):blocks.length,section=blocks.slice(start+1,end),r=makeRecipe(name);
+  const ih=section.findIndex(x=>/^ingredients?$/i.test(x));const mh=section.findIndex(x=>/^(method|directions?|instructions?|preparation|steps?)$/i.test(x));
+  if(ih>=0)r.ingredients=section.slice(ih+1,mh>ih?mh:section.length).filter(x=>!SECTION.test(x));
+  if(mh>=0)r.method=section.slice(mh+1).filter(x=>!/^notes?|storage|serving suggestions?/i.test(x));
+  out.push(r);
  }
  return out.length?out:[makeRecipe(file.replace(/\.[^.]+$/,''))];
 }
-function ocrLineCandidates(words){
- const valid=words.filter(w=>w.text?.trim()&&w.confidence>=35); if(!valid.length)return[];
- const medianH=valid.map(w=>w.bbox.y1-w.bbox.y0).sort((a,b)=>a-b)[Math.floor(valid.length/2)]||20;
- const sorted=[...valid].sort((a,b)=>a.bbox.y0-b.bbox.y0||a.bbox.x0-b.bbox.x0); const out=[];
- for(const w of sorted){let l=out.find(x=>Math.abs(x.y-(w.bbox.y0+w.bbox.y1)/2)<Math.max(10,medianH*.65)); if(!l){l={y:(w.bbox.y0+w.bbox.y1)/2,words:[]};out.push(l);}l.words.push(w);}
- return out.map(l=>{l.words.sort((a,b)=>a.bbox.x0-b.bbox.x0);return {...l,text:clean(l.words.map(w=>w.text).join(' ')),x0:Math.min(...l.words.map(w=>w.bbox.x0)),x1:Math.max(...l.words.map(w=>w.bbox.x1)),height:Math.max(...l.words.map(w=>w.bbox.y1-w.bbox.y0))};}).filter(l=>l.text.length>1);
-}
-function splitImageRecipes(result){
- const words=result.data.words||[]; const lineData=ocrLineCandidates(words); if(!lineData.length)return[];
- const medH=lineData.map(l=>l.height).sort((a,b)=>a-b)[Math.floor(lineData.length/2)]||20;
- const candidates=lineData.filter(l=>l.height>=medH*1.35&&l.text.length<=70&&titleCaseScore(l.text));
- if(candidates.length<2){const r=makeRecipe(lineData[0]?.text||'Imported image');r.ingredients=lineData.slice(1).map(l=>l.text);return[r];}
- const recipes=candidates.map(c=>({centerX:(c.x0+c.x1)/2,centerY:c.y,text:c.text}));
- const xs=[...new Set(recipes.map(r=>Math.round(r.centerX/25)*25))].sort((a,b)=>a-b);
- // Assign each OCR line to the nearest title in two dimensions, weighted by vertical distance within the same visual band.
- const out=recipes.map(t=>makeRecipe(t.text));
- for(const l of lineData){
-   if(recipes.some(t=>t.text===l.text&&Math.abs(t.centerY-l.y)<15))continue;
-   let best=-1,score=Infinity;
-   recipes.forEach((t,i)=>{const dx=Math.abs(((l.x0+l.x1)/2)-t.centerX);const dy=Math.abs(l.y-t.centerY);const s=dx+dy*.75;if(s<score){score=s;best=i;}});
-   if(best>=0)out[best].ingredients.push(l.text);
+
+// OCR is first attempted on the complete image. Lines are reconstructed from word boxes so
+// titles such as "Soy Garlic" or "Carne Asada" remain together.
+function ocrLines(words){
+ const valid=words.filter(w=>w.text?.trim()&&Number(w.confidence||0)>=25);if(!valid.length)return[];
+ const medH=valid.map(w=>w.bbox.y1-w.bbox.y0).sort((a,b)=>a-b)[Math.floor(valid.length/2)]||20;const rows=[];
+ for(const w of [...valid].sort((a,b)=>a.bbox.y0-b.bbox.y0||a.bbox.x0-b.bbox.x0)){
+  const cy=(w.bbox.y0+w.bbox.y1)/2;let row=rows.find(r=>Math.abs(r.cy-cy)<Math.max(8,medH*.55));
+  if(!row){row={cy,words:[]};rows.push(row);}row.words.push(w);
  }
- return out.filter(r=>r.ingredients.length>=2);
+ return rows.map(r=>{r.words.sort((a,b)=>a.bbox.x0-b.bbox.x0);return {text:clean(r.words.map(w=>w.text).join(' ')),x0:Math.min(...r.words.map(w=>w.bbox.x0)),x1:Math.max(...r.words.map(w=>w.bbox.x1)),y0:Math.min(...r.words.map(w=>w.bbox.y0)),y1:Math.max(...r.words.map(w=>w.bbox.y1)),height:Math.max(...r.words.map(w=>w.bbox.y1-w.bbox.y0))};}).filter(r=>r.text.length>1);
+}
+function titleCandidate(l,medH){const t=clean(l.text);if(l.height<medH*1.25||t.length>55||!titleCaseScore(t))return false;return (t.match(/[A-Za-z]/g)||[]).length>=3;}
+function buildFromLines(lines){
+ if(!lines.length)return[];const medH=lines.map(l=>l.height).sort((a,b)=>a-b)[Math.floor(lines.length/2)]||20;
+ const candidates=lines.filter(l=>titleCandidate(l,medH));
+ const good=candidates.filter(t=>lines.filter(l=>l.y0>t.y1+4&&l.y0<t.y1+Math.max(120,medH*18)&&Math.abs((l.x0+l.x1)/2-(t.x0+t.x1)/2)<Math.max(170,(t.x1-t.x0)*2.5)).length>=2);
+ if(good.length<2)return[];
+ const out=good.map(t=>({title:t,recipe:makeRecipe(t.text)}));
+ for(const l of lines){
+  if(out.some(o=>o.title===l))continue;
+  let best=null,bestScore=Infinity;
+  out.forEach(o=>{const t=o.title,dx=Math.abs((l.x0+l.x1)/2-(t.x0+t.x1)/2),dy=l.y0-t.y1;if(dy<0) return;const score=dx+dy*.55;if(score<bestScore&&dy<Math.max(220,medH*24)){best=o;bestScore=score;}});
+  if(best)best.recipe.ingredients.push(l.text);
+ }
+ return out.map(o=>o.recipe).filter(r=>r.ingredients.length>=2);
+}
+function dedupeRecipes(recipes){const seen=new Set();return recipes.filter(r=>{const k=clean(r.name).toLowerCase().replace(/[^a-z0-9]+/g,' ');if(!k||seen.has(k))return false;seen.add(k);return true;});}
+async function recognizeTile(worker,bitmap,x,y,w,h){
+ const canvas=document.createElement('canvas');canvas.width=Math.round(w*2);canvas.height=Math.round(h*2);const ctx=canvas.getContext('2d');ctx.drawImage(bitmap,x,y,w,h,0,0,canvas.width,canvas.height);return worker.recognize(canvas);
 }
 async function ocrImage(blob,status){
- status('Reading image…'); const worker=await createWorker('eng',1,{logger:m=>{if(m.status==='recognizing text')status(`Reading image… ${Math.round((m.progress||0)*100)}%`);}});
- try{const result=await worker.recognize(blob);return splitImageRecipes(result);}finally{await worker.terminate();}
-}
-async function loadOriginal(x){
- const {data:u,error}=await sb.storage.from('cooking-confidential').createSignedUrl(x.file_path,600);if(error||!u?.signedUrl)throw Error(error?.message||'Could not read the original file.');
- const r=await fetch(u.signedUrl);if(!r.ok)throw Error('Could not load the original file.');return r.blob();
-}
-async function extract(id){
- dialog.querySelector('#detailContent').innerHTML='<div class="dialog-card"><p class="eyebrow">EXTRACTING</p><h2>Preparing recipes…</h2><p class="small-note" id="multiStatus">Reading the original file.</p></div>';dialog.showModal();
- const status=t=>{const e=document.querySelector('#multiStatus');if(e)e.textContent=t;};
- const {data:x,error}=await sb.from('cc_import_items').select('*').eq('id',id).single();if(error||!x)return fail(error?.message||'Import item not found.');
+ status('Reading image…');const worker=await createWorker('eng',1,{logger:m=>{if(m.status==='recognizing text')status(`Reading image… ${Math.round((m.progress||0)*100)}%`);}});
  try{
-  const blob=await loadOriginal(x);let recipes=[];
-  if(/\.(png|jpe?g|webp)$/i.test(x.file_name||'')||String(x.mime_type||'').startsWith('image/')) recipes=await ocrImage(blob,status);
+  const full=await worker.recognize(blob);let recipes=buildFromLines(ocrLines(full.data.words||[]));
+  // Collage fallback: OCR visual tiles independently. This handles social-media images where
+  // a single OCR pass mixes neighbouring recipe columns and rows.
+  if(recipes.length<2){
+   const bitmap=await createImageBitmap(blob);const W=bitmap.width,H=bitmap.height;const ratio=W/H;
+   const grids=ratio>.9&&ratio<1.1?[[3,3],[2,2],[3,2]]:ratio<.75?[[3,3],[2,3],[3,4],[2,4]]:[[3,2],[2,2],[4,2],[3,3]];
+   for(const [cols,rows] of grids){
+    const found=[];const tw=W/cols,th=H/rows;
+    for(let ry=0;ry<rows;ry++)for(let cx=0;cx<cols;cx++){
+     const res=await recognizeTile(worker,bitmap,cx*tw,ry*th,tw,th);const tileLines=ocrLines(res.data.words||[]);const tileRecipes=buildFromLines(tileLines);
+     if(tileRecipes.length)found.push(...tileRecipes);
+    }
+    const unique=dedupeRecipes(found);
+    if(unique.length>=2){recipes=unique;break;}
+   }
+   bitmap.close();
+  }
+  if(!recipes.length){const r=makeRecipe('Imported image');r.ingredients=ocrLines(full.data.words||[]).map(x=>x.text);recipes=[r];}
+  return recipes;
+ }finally{await worker.terminate();}
+}
+async function loadOriginal(x){const {data:u,error}=await sb.storage.from('cooking-confidential').createSignedUrl(x.file_path,600);if(error||!u?.signedUrl)throw Error(error?.message||'Could not read the original file.');const r=await fetch(u.signedUrl);if(!r.ok)throw Error('Could not load the original file.');return r.blob();}
+async function extract(id){
+ dialog.querySelector('#detailContent').innerHTML='<div class="dialog-card"><p class="eyebrow">EXTRACTING</p><h2>Preparing recipes…</h2><p class="small-note" id="multiStatus">Reading the original file.</p></div>';dialog.showModal();const status=t=>{const e=document.querySelector('#multiStatus');if(e)e.textContent=t;};
+ const {data:x,error}=await sb.from('cc_import_items').select('*').eq('id',id).single();if(error||!x)return fail(error?.message||'Import item not found.');
+ try{const blob=await loadOriginal(x);let recipes=[];
+  if(/\.(png|jpe?g|webp)$/i.test(x.file_name||'')||String(x.mime_type||'').startsWith('image/'))recipes=await ocrImage(blob,status);
   else if(/\.docx$/i.test(x.file_name||'')){status('Reading document structure…');const html=(await mammoth.convertToHtml({arrayBuffer:await blob.arrayBuffer()})).value||'';recipes=parseDocxMulti(html,x.file_name||'Imported document');}
   else if((x.mime_type||'').startsWith('text/')){const r=makeRecipe(x.file_name||'Imported recipe');r.ingredients=lines(await blob.text());recipes=[r];}
   else throw Error('This multi-recipe importer currently supports images, DOCX and text documents.');
   if(!recipes.length)throw Error('No recipes could be detected.');
   recipes=recipes.map(r=>({...r,ingredients:r.ingredients.map(clean).filter(Boolean),method:Array.isArray(r.method)?r.method.map(clean).filter(Boolean):lines(r.method),notes:r.notes.map(clean).filter(Boolean)}));
-  await sb.from('cc_import_items').update({extracted_text:JSON.stringify({version:2,multiple:true,recipes}),source_title:recipes[0]?.name||x.file_name,extraction_status:'ready',review_status:'pending',error_message:null}).eq('id',id);
-  render(id,x,recipes);
+  await sb.from('cc_import_items').update({extracted_text:JSON.stringify({version:3,multiple:true,recipes}),source_title:recipes[0]?.name||x.file_name,extraction_status:'ready',review_status:'pending',error_message:null}).eq('id',id);render(id,x,recipes);
  }catch(e){fail(e?.message||String(e));}
 }
 function fail(msg){dialog.querySelector('#detailContent').innerHTML=`<button class="close" type="button">×</button><p class="eyebrow">IMPORT ERROR</p><h2>Recipe extraction failed</h2><p class="small-note">${esc(msg)}</p>`;dialog.querySelector('.close').onclick=()=>dialog.close();}
-function render(id,x,recipes){
- const cards=recipes.map((r,i)=>`<article class="multi-recipe-card"><label class="multi-select"><input type="checkbox" data-r="${i}" checked><span><strong>${esc(r.name)}</strong><small>${r.ingredients.length} extracted lines${r.method.length?' · method found':''}</small></span></label><button type="button" class="secondary multi-edit" data-r="${i}">Review</button></article>`).join('');
- dialog.querySelector('#detailContent').innerHTML=`<button class="close" type="button">×</button><p class="eyebrow">MULTI-RECIPE IMPORT</p><h2>${recipes.length} recipes detected</h2><p class="small-note">Review each recipe before saving. The original file remains attached to this import.</p><div class="multi-list">${cards}</div><div class="detail-actions"><button class="secondary" id="multiCancel">Cancel</button><button class="primary" id="multiSave">Save selected recipes</button></div>`;
- dialog.querySelector('.close').onclick=()=>dialog.close();dialog.querySelector('#multiCancel').onclick=()=>dialog.close();
- dialog.querySelectorAll('.multi-edit').forEach(b=>b.onclick=()=>editOne(id,x,recipes,Number(b.dataset.r)));
- dialog.querySelector('#multiSave').onclick=async()=>{const selected=[...dialog.querySelectorAll('input[data-r]:checked')].map(e=>Number(e.dataset.r));await saveMany(id,x,recipes.filter((_,i)=>selected.includes(i)));};
-}
-function editOne(id,x,recipes,i){const r=recipes[i];dialog.querySelector('#detailContent').innerHTML=`<button class="close" type="button">×</button><p class="eyebrow">REVIEW RECIPE ${i+1} OF ${recipes.length}</p><h2>Check before saving</h2><form id="oneRecipe"><label>Recipe name<input name="name" required value="${esc(r.name)}"></label><div class="classification-grid"><label>Course<select name="course"><option value="">Select…</option>${courses.map(v=>`<option>${esc(v)}</option>`).join('')}</select></label><label>Recipe type<select name="recipe_type">${types.map(v=>`<option>${esc(v)}</option>`).join('')}</select></label></div><label>Cuisine<input name="cuisine" value="${esc(r.cuisine)}"></label><label>Servings<input name="servings" value="${esc(r.servings)}"></label><label>Ingredients<textarea name="ingredients" rows="10">${esc(r.ingredients.join('\n'))}</textarea></label><label>Method<textarea name="method" rows="10">${esc(r.method.join('\n'))}</textarea></label><label>Notes / storage / other information<textarea name="notes" rows="6">${esc(r.notes.join('\n'))}</textarea></label><div class="detail-actions"><button type="button" class="secondary" id="backMulti">Back to list</button><button class="primary">Save this recipe</button></div></form>`;dialog.querySelector('.close').onclick=()=>dialog.close();dialog.querySelector('#backMulti').onclick=()=>render(id,x,recipes);
- const f=dialog.querySelector('#oneRecipe');f.elements.recipe_type.value=r.recipe_type||'Dish';f.elements.course.value=r.course||'';
- f.onsubmit=async e=>{e.preventDefault();const fd=new FormData(f);const updated={...r,name:clean(fd.get('name')),course:clean(fd.get('course')),recipe_type:clean(fd.get('recipe_type'))||'Dish',cuisine:clean(fd.get('cuisine')),servings:clean(fd.get('servings')),ingredients:lines(fd.get('ingredients')),method:lines(fd.get('method')),notes:lines(fd.get('notes'))};recipes[i]=updated;render(id,x,recipes);};
-}
-async function saveMany(id,x,recipes){const {data:{user}}=await sb.auth.getUser();if(!user)return alert('Please sign in again.');if(!recipes.length)return alert('Select at least one recipe.');
- const rows=recipes.map(r=>({name:clean(r.name),description:clean(r.description)||null,cuisine:clean(r.cuisine)||null,course:clean(r.course)||null,recipe_type:clean(r.recipe_type)||'Dish',servings:clean(r.servings)||null,ingredients:r.ingredients,method:r.method.join('\n'),personal_notes:r.notes.join('\n')||null,source_type:'file',source_url:null,source_title:x.file_name||null,created_by:user.id,visibility:'private'}));
- const {error}=await sb.from('cc_recipes').insert(rows);if(error)return alert(error.message);
- const {error:ie}=await sb.from('cc_import_items').update({review_status:'approved',extraction_status:'ready',source_title:`${recipes.length} recipes from ${x.file_name||'import'}`}).eq('id',id);if(ie)return alert(ie.message);dialog.close();location.reload();
-}
+function render(id,x,recipes){const cards=recipes.map((r,i)=>`<article class="multi-recipe-card"><label class="multi-select"><input type="checkbox" data-r="${i}" checked><span><strong>${esc(r.name)}</strong><small>${r.ingredients.length} extracted lines${r.method.length?' · method found':''}</small></span></label><button type="button" class="secondary multi-edit" data-r="${i}">Review</button></article>`).join('');dialog.querySelector('#detailContent').innerHTML=`<button class="close" type="button">×</button><p class="eyebrow">MULTI-RECIPE IMPORT</p><h2>${recipes.length} recipes detected</h2><p class="small-note">Review each recipe before saving. The original file remains attached to this import.</p><div class="multi-list">${cards}</div><div class="detail-actions"><button class="secondary" id="multiCancel">Cancel</button><button class="primary" id="multiSave">Save selected recipes</button></div>`;dialog.querySelector('.close').onclick=()=>dialog.close();dialog.querySelector('#multiCancel').onclick=()=>dialog.close();dialog.querySelectorAll('.multi-edit').forEach(b=>b.onclick=()=>editOne(id,x,recipes,Number(b.dataset.r)));dialog.querySelector('#multiSave').onclick=async()=>{const selected=[...dialog.querySelectorAll('input[data-r]:checked')].map(e=>Number(e.dataset.r));await saveMany(id,x,recipes.filter((_,i)=>selected.includes(i)));};}
+function editOne(id,x,recipes,i){const r=recipes[i];dialog.querySelector('#detailContent').innerHTML=`<button class="close" type="button">×</button><p class="eyebrow">REVIEW RECIPE ${i+1} OF ${recipes.length}</p><h2>Check before saving</h2><form id="oneRecipe"><label>Recipe name<input name="name" required value="${esc(r.name)}"></label><div class="classification-grid"><label>Course<select name="course"><option value="">Select…</option>${courses.map(v=>`<option>${esc(v)}</option>`).join('')}</select></label><label>Recipe type<select name="recipe_type">${types.map(v=>`<option>${esc(v)}</option>`).join('')}</select></label></div><label>Cuisine<input name="cuisine" value="${esc(r.cuisine)}"></label><label>Servings<input name="servings" value="${esc(r.servings)}"></label><label>Ingredients<textarea name="ingredients" rows="10">${esc(r.ingredients.join('\n'))}</textarea></label><label>Method<textarea name="method" rows="10">${esc(r.method.join('\n'))}</textarea></label><label>Notes / storage / other information<textarea name="notes" rows="6">${esc(r.notes.join('\n'))}</textarea></label><div class="detail-actions"><button type="button" class="secondary" id="backMulti">Back to list</button><button class="primary">Save this recipe</button></div></form>`;dialog.querySelector('.close').onclick=()=>dialog.close();dialog.querySelector('#backMulti').onclick=()=>render(id,x,recipes);const f=dialog.querySelector('#oneRecipe');f.elements.recipe_type.value=r.recipe_type||'Dish';f.elements.course.value=r.course||'';f.onsubmit=async e=>{e.preventDefault();const fd=new FormData(f);recipes[i]={...r,name:clean(fd.get('name')),course:clean(fd.get('course')),recipe_type:clean(fd.get('recipe_type'))||'Dish',cuisine:clean(fd.get('cuisine')),servings:clean(fd.get('servings')),ingredients:lines(fd.get('ingredients')),method:lines(fd.get('method')),notes:lines(fd.get('notes'))};render(id,x,recipes);};}
+async function saveMany(id,x,recipes){const {data:{user}}=await sb.auth.getUser();if(!user)return alert('Please sign in again.');if(!recipes.length)return alert('Select at least one recipe.');const rows=recipes.map(r=>({name:clean(r.name),description:clean(r.description)||null,cuisine:clean(r.cuisine)||null,course:clean(r.course)||null,recipe_type:clean(r.recipe_type)||'Dish',servings:clean(r.servings)||null,ingredients:r.ingredients,method:r.method.join('\n'),personal_notes:r.notes.join('\n')||null,source_type:'file',source_url:null,source_title:x.file_name||null,created_by:user.id,visibility:'private'}));const {error}=await sb.from('cc_recipes').insert(rows);if(error)return alert(error.message);const {error:ie}=await sb.from('cc_import_items').update({review_status:'approved',extraction_status:'ready',source_title:`${recipes.length} recipes from ${x.file_name||'import'}`}).eq('id',id);if(ie)return alert(ie.message);dialog.close();location.reload();}
 window.ccMultiReview=extract;
