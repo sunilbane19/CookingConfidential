@@ -32,8 +32,6 @@
   <script type="module" src="import-ui-fix.js?v=1.0.0"></script>
   <script>
     document.addEventListener('click',(event)=>{if(event.target.closest('.review-btn')){const importDialog=document.querySelector('#importDialog');if(importDialog?.open)importDialog.close();}},true);
-    let ccWasHidden=false;
-    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')ccWasHidden=true;else if(ccWasHidden)window.location.reload();});
     function arrangeClassificationFields(root=document){
       root.querySelectorAll('#ccEditForm,#ccImportForm').forEach(form=>{
         if(form.dataset.ccClassificationArranged==='1') return;
@@ -50,6 +48,15 @@
     const ccClassificationObserver=new MutationObserver(()=>arrangeClassificationFields(document));
     ccClassificationObserver.observe(document.body,{subtree:true,childList:true});
     arrangeClassificationFields(document);
+    let ccTouchHandled=false;
+    document.addEventListener('touchend',(event)=>{
+      const target=event.target.closest('button,.card,.tab,.brand');
+      if(!target || ccTouchHandled) return;
+      ccTouchHandled=true;
+      setTimeout(()=>{ccTouchHandled=false;},350);
+      if(target.matches('.review-btn')) return;
+      target.click();
+    },{passive:true});
   </script>
 </body>
 </html>
