@@ -125,11 +125,7 @@ document.querySelector('#recipeForm').onsubmit = async e => {
   const f=new FormData(e.target), {data:{user}}=await supabase.auth.getUser();
   if(!user) return;
   const ingredients=String(f.get('ingredients')).split('\n').map(x=>x.trim()).filter(Boolean);
-  const {error}=await supabase.from('cc_recipes').insert({
-    name:f.get('name'), cuisine:f.get('cuisine')||null, course:f.get('course')||null,
-    ingredients, method:f.get('method')||null, personal_notes:f.get('notes')||null,
-    created_by:user.id, visibility:'private'
-  });
+  const {error}=await supabase.from('cc_recipes').insert({name:f.get('name'),cuisine:f.get('cuisine')||null,course:f.get('course')||null,ingredients,method:f.get('method')||null,personal_notes:f.get('notes')||null,created_by:user.id,visibility:'private'});
   if(error) return alert(error.message);
   recipeDialog.close(); e.target.reset(); await loadData();
 };
@@ -138,10 +134,7 @@ document.querySelector('#menuForm').onsubmit = async e => {
   e.preventDefault();
   const f=new FormData(e.target), {data:{user}}=await supabase.auth.getUser();
   if(!user) return;
-  const {error}=await supabase.from('cc_menus').insert({
-    name:f.get('name'), menu_date:f.get('date')||null, guest_count:f.get('guests')?Number(f.get('guests')):null,
-    occasion:f.get('occasion')||null, notes:f.get('notes')||null, visibility:'private', created_by:user.id
-  });
+  const {error}=await supabase.from('cc_menus').insert({name:f.get('name'),menu_date:f.get('date')||null,guest_count:f.get('guests')?Number(f.get('guests')):null,occasion:f.get('occasion')||null,notes:f.get('notes')||null,visibility:'private',created_by:user.id});
   if(error) return alert(error.message);
   menuDialog.close(); e.target.reset(); await loadData(); view='menus';
 };
@@ -158,42 +151,24 @@ async function openImportReview(){
  const {data,error}=await supabase.from('cc_import_items').select('*').eq('created_by',user.id).order('created_at',{ascending:false}).limit(50);
  if(error)return alert(error.message);
  const rows=data||[];
- importQueue.innerHTML=(rows.length?'<div class="queue-head"><strong>Import Inbox</strong><span>'+rows.length+' items</span></div>':'<div class="empty compact">No imports yet.</div>')+
- rows.map(x=>'<article class="review-item"><div><strong>'+esc(x.file_name||x.source_url||'Import')+'</strong><small>'+esc(x.extraction_status||'pending')+' · '+esc(x.review_status||'pending')+'</small></div><button class="secondary review-btn" data-id="'+x.id+'">Review</button></article>').join('');
+ importQueue.innerHTML=(rows.length?'<div class="queue-head"><strong>Import Inbox</strong><span>'+rows.length+' items</span></div>':'<div class="empty compact">No imports yet.</div>')+rows.map(x=>'<article class="review-item"><div><strong>'+esc(x.file_name||x.source_url||'Import')+'</strong><small>'+esc(x.extraction_status||'pending')+' · '+esc(x.review_status||'pending')+'</small></div><button class="secondary review-btn" data-id="'+x.id+'">Review</button></article>').join('');
  importQueue.querySelectorAll('.review-btn').forEach(b=>b.onclick=()=>reviewImport(Number(b.dataset.id)));
 }
 async function reviewImport(id){
  const {data:x,error}=await supabase.from('cc_import_items').select('*').eq('id',id).single(); if(error)return alert(error.message);
  let recipe={name:x.file_name?.replace(/\.[^.]+$/,'')||'Imported recipe',ingredients:[],method:'',cuisine:x.inferred_cuisine||'',course:x.inferred_course||'',servings:''};
- if(x.extraction_status==='ready' && x.extracted_text){
-   try{const j=JSON.parse(x.extracted_text);recipe={...recipe,name:j.name||recipe.name,ingredients:j.recipeIngredient||[],method:Array.isArray(j.recipeInstructions)?j.recipeInstructions.map(v=>typeof v==='string'?v:v.text||v.name||'').join('\n'):j.recipeInstructions||'',cuisine:j.recipeCuisine||recipe.cuisine,course:j.recipeCategory||recipe.course,servings:j.recipeYield||''};}catch{}
- }
+ if(x.extraction_status==='ready' && x.extracted_text){try{const j=JSON.parse(x.extracted_text);recipe={...recipe,name:j.name||recipe.name,ingredients:j.recipeIngredient||[],method:Array.isArray(j.recipeInstructions)?j.recipeInstructions.map(v=>typeof v==='string'?v:v.text||v.name||'').join('\n'):j.recipeInstructions||'',cuisine:j.recipeCuisine||recipe.cuisine,course:j.recipeCategory||recipe.course,servings:j.recipeYield||''};}catch{}}
  const ing=Array.isArray(recipe.ingredients)?recipe.ingredients.join('\n'):recipe.ingredients||'';
- detailDialog.querySelector('#detailContent').innerHTML=`<button class="close" onclick="detailDialog.close()">×</button>
- <p class="eyebrow">REVIEW IMPORT</p><h2>Check the recipe before saving</h2>
- <form id="importReviewForm">
- <label>Recipe name<input name="name" required value="${esc(recipe.name)}"></label>
- <div class="two-col"><label>Cuisine<input name="cuisine" value="${esc(recipe.cuisine)}"></label><label>Course<input name="course" value="${esc(recipe.course)}"></label></div>
- <label>Servings<input name="servings" value="${esc(recipe.servings)}"></label>
- <label>Ingredients<textarea name="ingredients" rows="8">${esc(ing)}</textarea></label>
- <label>Method<textarea name="method" rows="9">${esc(recipe.method)}</textarea></label>
- <div class="detail-actions"><button class="primary">Save to recipes</button></div>
- </form>`;
+ detailDialog.querySelector('#detailContent').innerHTML=`<button class="close" onclick="detailDialog.close()">×</button><p class="eyebrow">REVIEW IMPORT</p><h2>Check the recipe before saving</h2><form id="importReviewForm"><label>Recipe name<input name="name" required value="${esc(recipe.name)}"></label><div class="two-col"><label>Cuisine<input name="cuisine" value="${esc(recipe.cuisine)}"></label><label>Course<input name="course" value="${esc(recipe.course)}"></label></div><label>Servings<input name="servings" value="${esc(recipe.servings)}"></label><label>Ingredients<textarea name="ingredients" rows="8">${esc(ing)}</textarea></label><label>Method<textarea name="method" rows="9">${esc(recipe.method)}</textarea></label><div class="detail-actions"><button class="primary">Save to recipes</button></div></form>`;
  detailDialog.showModal();
- document.querySelector('#importReviewForm').onsubmit=async e=>{
-   e.preventDefault();const f=new FormData(e.target),{data:{user}}=await supabase.auth.getUser();if(!user)return;
-   const ingredients=String(f.get('ingredients')).split('\n').map(v=>v.trim()).filter(Boolean);
-   const {data:r,error:re}=await supabase.from('cc_recipes').insert({name:f.get('name'),cuisine:f.get('cuisine')||null,course:f.get('course')||null,servings:f.get('servings')||null,ingredients,method:f.get('method')||null,source_type:x.source_url?'social':'file',source_url:x.source_url||null,source_title:x.source_title||x.file_name||null,created_by:user.id,visibility:'private'}).select().single();
-   if(re)return alert(re.message);
-   await supabase.from('cc_import_items').update({review_status:'approved',extraction_status:'ready'}).eq('id',id);
-   detailDialog.close();await loadData();
- };
+ document.querySelector('#importReviewForm').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target),{data:{user}}=await supabase.auth.getUser();if(!user)return;const ingredients=String(f.get('ingredients')).split('\n').map(v=>v.trim()).filter(Boolean);const {error:re}=await supabase.from('cc_recipes').insert({name:f.get('name'),cuisine:f.get('cuisine')||null,course:f.get('course')||null,servings:f.get('servings')||null,ingredients,method:f.get('method')||null,source_type:x.source_url?'social':'file',source_url:x.source_url||null,source_title:x.source_title||x.file_name||null,created_by:user.id,visibility:'private'});if(re)return alert(re.message);await supabase.from('cc_import_items').update({review_status:'approved',extraction_status:'ready'}).eq('id',id);detailDialog.close();await loadData();};
 }
 
 function renderImportQueue(){
  importQueue.innerHTML=importItems.length ? '<div class="queue-head"><strong>'+importItems.length+' selected</strong><button class="secondary" id="uploadAll">Upload all</button></div>'+importItems.map(x=>'<div class="queue-item"><div><strong>'+esc(x.file_name)+'</strong><small>'+esc(x.mime_type||'')+(x.size?' · '+Math.round(x.size/1024)+' KB':'')+'</small></div><span>'+esc(x.status)+'</span></div>').join('') : '<div class="empty compact">Select files or add a URL to begin.</div>';
  const b=document.querySelector('#uploadAll'); if(b)b.onclick=uploadAllImports;
 }
+
 async function uploadAllImports(){
  const {data:{user}}=await supabase.auth.getUser(); if(!user)return;
  for(const item of importItems){
@@ -204,18 +179,22 @@ async function uploadAllImports(){
   let path=null;
   if(item.file){
    path=user.id+'/'+Date.now()+'-'+item.file.name.replace(/[^a-zA-Z0-9._-]/g,'_');
-   const up=await supabase.storage.from('cooking-confidential').upload('originals/'+path,item.file,{upsert:false});
+   const up=await supabase.storage.from('cooking-confidential').upload('originals/'+path,item.file,{upsert:false,contentType:item.mime_type});
    if(up.error){item.status='Failed';item.error=up.error.message;continue;}
   }
-  const ins=await supabase.from('cc_import_items').insert({import_id:importRow.data.id,file_name:item.file_name,file_path:path?'originals/'+path:null,mime_type:item.mime_type,source_url:item.source_url||null,created_by:user.id}).select().single();
-  if(!ins.error){ const itemId=ins.data?.id || ins.data?.[0]?.id; const fx=itemId?await supabase.functions.invoke('cc-import-extract',{body:{import_item_id:itemId}}):{error:null}; item.status=fx.error?'Uploaded — review pending':'Queued for extraction'; item.import_item_id=itemId; } else item.status='Failed';
-  if(ins.error)item.error=ins.error.message;
-  renderImportQueue();
+  const {data:ins,error}=await supabase.from('cc_import_items').insert({import_id:importRow.data.id,file_name:item.file_name,mime_type:item.mime_type,source_url:item.source_url||null,original_file_path:path?'originals/'+path:null,created_by:user.id,extraction_status:'pending',review_status:'pending'}).select().single();
+  if(error){item.status='Failed';item.error=error.message;continue;}
+  item.status='Uploaded';
+  const itemId=ins?.id;
+  const fx=itemId?await supabase.functions.invoke('cc-import-extract',{body:{import_item_id:itemId}}):{error:null};
+  if(fx.error){item.status='Uploaded — extraction pending';continue;}
+  item.status='Ready';
  }
+ await openImportReview();
 }
 
-document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));t.classList.add('active');view=t.dataset.view;render()});
-search.oninput=render;
+search.oninput=()=>render();
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{view=t.dataset.view;document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===t));render();});
 
 async function boot() {
   const {data:{session}}=await supabase.auth.getSession();
