@@ -24,12 +24,20 @@ const stars = n => n ? '★'.repeat(n) : '';
 const ingredientsText = r => Array.isArray(r.ingredients) ? r.ingredients.map(x => typeof x === 'string' ? x : [x.quantity,x.unit,x.name].filter(Boolean).join(' ')) : [];
 
 async function loadData() {
-  const [{data:r,error:re},{data:m,error:me}] = await Promise.all([
-    supabase.from('cc_recipes').select('*').order('updated_at',{ascending:false}),
-    supabase.from('cc_menus').select('*').order('menu_date',{ascending:false,nullsFirst:false}).order('created_at',{ascending:false})
-  ]);
-  if (re || me) throw new Error((re||me).message);
-  recipes = r || []; menus = m || []; render();
+  content.innerHTML = '<div class="empty">Loading your recipes…</div>';
+  const recipesResult = await supabase.from('cc_recipes').select('*').order('updated_at',{ascending:false});
+  if (recipesResult.error) throw new Error(recipesResult.error.message);
+  recipes = recipesResult.data || [];
+  render();
+
+  // Menus are secondary to the recipe library. Do not let a menu/RLS/network
+  // problem prevent recipes from appearing on the home screen.
+  try {
+    const menusResult = await supabase.from('cc_menus').select('*').order('menu_date',{ascending:false,nullsFirst:false}).order('created_at',{ascending:false});
+    if (!menusResult.error) menus = menusResult.data || [];
+  } catch (_) {
+    menus = [];
+  }
 }
 function recipeCard(r) { return `<article class="card" data-id="${r.id}"><div class="card-image">🍽</div><div class="card-body"><span class="tag">${esc(r.cuisine||'Uncategorised')}</span><h3>${esc(r.name)}</h3><div class="meta">${esc(r.course||'Recipe')} · ${stars(r.rating)}</div></div></article>`; }
 function render() {
@@ -104,7 +112,6 @@ async function boot(sessionOverride=null){
 
 supabase.auth.onAuthStateChange((_event,session)=>{
   if(session){
-    // Supabase warns that async Supabase calls made directly inside this callback can deadlock.
     setTimeout(()=>boot(session),0);
   } else {
     loginPanel.hidden=false;
