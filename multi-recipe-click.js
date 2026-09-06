@@ -1,0 +1,1 @@
+window.addEventListener('click',event=>{const button=event.target.closest('.review-btn');if(!button||typeof window.ccMultiReview!=='function')return;event.preventDefault();event.stopImmediatePropagation();window.ccMultiReview(Number(button.dataset.id));},true);
