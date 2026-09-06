@@ -24,9 +24,16 @@
   <dialog id="detailDialog"><div id="detailContent" class="dialog-card"></div></dialog>
   <dialog id="importDialog"><div class="dialog-card"><button class="close" id="closeImport">×</button><p class="eyebrow">UPLOAD RECIPES</p><h2>Bring recipes into your kitchen</h2><p class="small-note">Upload one image or document containing one or many recipes. You can also select multiple files. Each detected recipe is reviewed before it is saved.</p><label>Recipe files<input id="fileInput" type="file" multiple accept=".pdf,.doc,.docx,.txt,image/*"></label><label>Recipe URL<input id="sourceUrl" type="url" placeholder="https://..."></label><button class="secondary" id="addUrlBtn">Add URL</button><div id="importQueue" class="import-queue"></div></div></dialog>
 
-  <script type="module" src="app.js?v=1.2.6"></script>
+  <script type="module" src="app.js?v=1.2.7"></script>
   <script type="module" src="signout.js?v=1.0.1"></script>
   <script>
+    // The upload handler is intentionally lightweight and is loaded on page
+    // startup. This prevents a large OCR/document module bundle from blocking
+    // the Gmail/iOS in-app browser before the Upload button can respond.
+    let ccUploadPromise = import('./upload-mobile-fix.js?v=1.0.1').catch(error=>{
+      console.error('Cooking Confidential upload module:',error);
+      ccUploadPromise=null;
+    });
     let ccImportExtrasPromise;
     let ccRecipeExtrasPromise;
     let ccMenuExtrasPromise;
@@ -37,8 +44,7 @@
         './multi-recipe-click.js?v=1.0.0',
         './import-extraction-fallback.js?v=1.1.0',
         './import-review-fix.js?v=1.2.12',
-        './import-ui-fix.js?v=1.0.2',
-        './upload-mobile-fix.js?v=1.0.0'
+        './import-ui-fix.js?v=1.0.2'
       ];
       ccImportExtrasPromise=Promise.all(modules.map(src=>import(src))).catch(error=>{
         console.error('Cooking Confidential import modules:',error);
