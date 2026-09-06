@@ -24,34 +24,43 @@
   <dialog id="detailDialog"><div id="detailContent" class="dialog-card"></div></dialog>
   <dialog id="importDialog"><div class="dialog-card"><button class="close" id="closeImport">×</button><p class="eyebrow">UPLOAD RECIPES</p><h2>Bring recipes into your kitchen</h2><p class="small-note">Upload one image or document containing one or many recipes. You can also select multiple files. Each detected recipe is reviewed before it is saved.</p><label>Recipe files<input id="fileInput" type="file" multiple accept=".pdf,.doc,.docx,.txt,image/*"></label><label>Recipe URL<input id="sourceUrl" type="url" placeholder="https://..."></label><button class="secondary" id="addUrlBtn">Add URL</button><div id="importQueue" class="import-queue"></div></div></dialog>
 
-  <!-- Keep the core application lightweight. The import/review modules pull in
-       OCR/document libraries and are loaded only after the initial UI is usable. -->
   <script type="module" src="app.js?v=1.2.6"></script>
   <script type="module" src="signout.js?v=1.0.1"></script>
   <script>
-    let ccExtrasPromise;
-    function loadCookingConfidentialExtras(){
-      if(ccExtrasPromise) return ccExtrasPromise;
+    let ccImportExtrasPromise;
+    let ccRecipeExtrasPromise;
+    let ccMenuExtrasPromise;
+    function loadImportExtras(){
+      if(ccImportExtrasPromise) return ccImportExtrasPromise;
       const modules=[
         './multi-recipe-import.js?v=1.1.0',
         './multi-recipe-click.js?v=1.0.0',
         './import-extraction-fallback.js?v=1.1.0',
         './import-review-fix.js?v=1.2.12',
-        './recipe-management-fix.js?v=1.3.0',
-        './menu-builder.js?v=1.0.0',
         './import-ui-fix.js?v=1.0.2',
         './upload-mobile-fix.js?v=1.0.0'
       ];
-      ccExtrasPromise=Promise.all(modules.map(src=>import(src))).catch(error=>{
-        console.error('Cooking Confidential optional modules:',error);
-        ccExtrasPromise=null;
+      ccImportExtrasPromise=Promise.all(modules.map(src=>import(src))).catch(error=>{
+        console.error('Cooking Confidential import modules:',error);
+        ccImportExtrasPromise=null;
       });
-      return ccExtrasPromise;
+      return ccImportExtrasPromise;
+    }
+    function loadRecipeExtras(){
+      if(ccRecipeExtrasPromise) return ccRecipeExtrasPromise;
+      ccRecipeExtrasPromise=import('./recipe-management-fix.js?v=1.3.0').catch(error=>console.error('Cooking Confidential recipe module:',error));
+      return ccRecipeExtrasPromise;
+    }
+    function loadMenuExtras(){
+      if(ccMenuExtrasPromise) return ccMenuExtrasPromise;
+      ccMenuExtrasPromise=import('./menu-builder.js?v=1.0.0').catch(error=>console.error('Cooking Confidential menu module:',error));
+      return ccMenuExtrasPromise;
     }
     document.addEventListener('click',(event)=>{
-      if(event.target.closest('#importBtn')) loadCookingConfidentialExtras();
+      if(event.target.closest('#importBtn')) loadImportExtras();
+      if(event.target.closest('.card')) loadRecipeExtras();
+      if(event.target.closest('[data-view="menus"]')) loadMenuExtras();
     },true);
-    window.addEventListener('load',()=>setTimeout(loadCookingConfidentialExtras,2500),{once:true});
     document.addEventListener('click',(event)=>{if(event.target.closest('.review-btn')){const importDialog=document.querySelector('#importDialog');if(importDialog?.open)importDialog.close();}},true);
     function arrangeClassificationFields(root=document){
       root.querySelectorAll('#ccEditForm,#ccImportForm').forEach(form=>{
