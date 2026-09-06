@@ -27,13 +27,9 @@
   <script type="module" src="app.js?v=1.2.7"></script>
   <script type="module" src="signout.js?v=1.0.1"></script>
   <script>
-    // The upload handler is intentionally lightweight and is loaded on page
-    // startup. This prevents a large OCR/document module bundle from blocking
-    // the Gmail/iOS in-app browser before the Upload button can respond.
-    let ccUploadPromise = import('./upload-mobile-fix.js?v=1.0.1').catch(error=>{
-      console.error('Cooking Confidential upload module:',error);
-      ccUploadPromise=null;
-    });
+    // Keep the upload path lightweight. Large OCR/document modules are NOT
+    // loaded when the import dialog opens; this is important for Gmail/iOS WebView.
+    import('./upload-mobile-fix.js?v=1.0.2').catch(error=>console.error('Cooking Confidential upload module:',error));
     let ccImportExtrasPromise;
     let ccRecipeExtrasPromise;
     let ccMenuExtrasPromise;
@@ -63,9 +59,11 @@
       return ccMenuExtrasPromise;
     }
     document.addEventListener('click',(event)=>{
-      if(event.target.closest('#importBtn')) loadImportExtras();
+      // Intentionally do not call loadImportExtras() here. The Upload dialog
+      // must open without loading OCR/document code in Gmail/iOS WebView.
       if(event.target.closest('.card')) loadRecipeExtras();
       if(event.target.closest('[data-view="menus"]')) loadMenuExtras();
+      if(event.target.closest('.review-btn')) loadImportExtras();
     },true);
     document.addEventListener('click',(event)=>{if(event.target.closest('.review-btn')){const importDialog=document.querySelector('#importDialog');if(importDialog?.open)importDialog.close();}},true);
     function arrangeClassificationFields(root=document){
