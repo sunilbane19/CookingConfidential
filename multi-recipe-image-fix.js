@@ -34,9 +34,6 @@ function parseTile(words){
   if(!rows.length)return null;
   const heights=rows.map(r=>r.height).sort((a,b)=>a-b);
   const med=heights[Math.floor(heights.length/2)]||20;
-  // On the supplied collage each tile has a prominent title near the top.
-  // Use the first prominent row (and an immediately following prominent row)
-  // as the title, rather than trying to merge all tiles spatially.
   let titleIndex=rows.findIndex(r=>r.height>=med*1.35 && r.y0<rows[0].y0+med*7);
   if(titleIndex<0)titleIndex=0;
   const titleParts=[rows[titleIndex].text];
@@ -88,16 +85,26 @@ function showReview(id,recipes){
   const cards=recipes.map((r,i)=>`<article class="multi-recipe-card"><label class="multi-select"><input type="checkbox" data-r="${i}" checked><span><strong>${esc(r.name)}</strong><small>${r.ingredients.length} extracted lines · Rub</small></span></label><button type="button" class="secondary cc-image-edit" data-r="${i}">Review</button></article>`).join('');
   dialog.querySelector('#detailContent').innerHTML=`<button class="close" type="button">×</button><p class="eyebrow">MULTI-RECIPE IMPORT</p><h2>${recipes.length} recipes detected</h2><p class="small-note">Review each recipe before saving. The original image remains attached to this import.</p><div class="multi-list">${cards}</div><div class="detail-actions"><button class="secondary" id="ccImageCancel">Cancel</button><button class="primary" id="ccImageSave">Save selected recipes</button></div>`;
   dialog.showModal();
-  dialog.querySelector('.close').onclick=()=>dialog.close();
-  dialog.querySelector('#ccImageCancel').onclick=()=>dialog.close();
+  dialog.querySelector('.close').onclick=()=>showImportList();
+  dialog.querySelector('#ccImageCancel').onclick=()=>showImportList();
   dialog.querySelectorAll('.cc-image-edit').forEach(b=>b.onclick=()=>editRecipe(id,recipes,Number(b.dataset.r)));
   dialog.querySelector('#ccImageSave').onclick=()=>saveSelected(id,recipes);
+}
+
+function showImportList(){
+  if(dialog.open)dialog.close();
+  const importDialog=document.querySelector('#importDialog');
+  if(importDialog?.open)return;
+  // Re-open the upload/import inbox so the user can continue reviewing items.
+  importDialog?.showModal();
+  const close=document.querySelector('#closeImport');
+  if(close)close.focus();
 }
 
 function editRecipe(id,recipes,i){
   const r=recipes[i];
   dialog.querySelector('#detailContent').innerHTML=`<button class="close" type="button">×</button><p class="eyebrow">REVIEW RECIPE ${i+1} OF ${recipes.length}</p><h2>Check before saving</h2><form id="ccImageRecipeForm"><label>Recipe name<input name="name" required value="${esc(r.name)}"></label><div class="classification-grid"><label>Course<select name="course"><option value="">Select…</option>${courses.map(v=>`<option>${esc(v)}</option>`).join('')}</select></label><label>Recipe type<select name="recipe_type">${types.map(v=>`<option>${esc(v)}</option>`).join('')}</select></label></div><label>Cuisine<input name="cuisine" value="${esc(r.cuisine||'')}"></label><label>Servings<input name="servings" value="${esc(r.servings||'')}"></label><label>Ingredients<textarea name="ingredients" rows="10">${esc((r.ingredients||[]).join('\n'))}</textarea></label><label>Method<textarea name="method" rows="8" placeholder="Leave blank if the source contains no method.">${esc((r.method||[]).join('\n'))}</textarea></label><label>Notes<textarea name="notes" rows="5">${esc((r.notes||[]).join('\n'))}</textarea></label><div class="detail-actions"><button type="button" class="secondary" id="ccImageBack">Back to list</button><button class="primary">Save this recipe</button></div></form>`;
-  dialog.querySelector('.close').onclick=()=>dialog.close();
+  dialog.querySelector('.close').onclick=()=>showReview(id,recipes);
   dialog.querySelector('#ccImageBack').onclick=()=>showReview(id,recipes);
   const f=dialog.querySelector('#ccImageRecipeForm');
   f.elements.course.value=r.course||''; f.elements.recipe_type.value=r.recipe_type||'Rub';
@@ -123,11 +130,11 @@ export async function processImageImport(id){
   dialog.showModal();
   try{
     const item=await getItem(id); const blob=await loadOriginal(item); const bitmap=await createImageBitmap(blob); const W=bitmap.width,H=bitmap.height;
-    const ratio=W/H; const cols=3,rows=3; const worker=await createWorker('eng',1,{logger:m=>{if(m.status==='recognizing text')status(`Reading image… ${Math.round((m.progress||0)*100)}%`);}});
+    const cols=3,rows=3; const worker=await createWorker('eng',1,{logger:m=>{if(m.status==='recognizing text')status(`Reading image… ${Math.round((m.progress||0)*100)}%`);}});
     try{
       const recipes=[]; const tw=W/cols,th=H/rows;
       for(let ry=0;ry<rows;ry++)for(let cx=0;cx<cols;cx++){
-        const recipe=await ocrTile(worker,bitmap,cx*tw,ry*th,tw,th, status, `${ry*cols+cx+1} of 9`);
+        const recipe=await ocrTile(worker,bitmap,cx*tw,ry*th,tw,th,status,`${ry*cols+cx+1} of 9`);
         if(recipe)recipes.push(recipe);
       }
       const cleanRecipes=normalise(recipes);
@@ -139,7 +146,7 @@ export async function processImageImport(id){
   }catch(error){
     console.error('Cooking Confidential image extraction:',error);
     statusBox.innerHTML=`<button class="close" type="button">×</button><p class="eyebrow">IMPORT ERROR</p><h2>Recipe extraction failed</h2><p class="small-note">${esc(error?.message||String(error))}</p>`;
-    dialog.querySelector('.close').onclick=()=>dialog.close();
+    dialog.querySelector('.close').onclick=()=>showImportList();
   }
 }
 window.ccProcessImageImport=processImageImport;
