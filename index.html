@@ -23,65 +23,18 @@
   <dialog id="menuDialog"><form method="dialog" class="dialog-card" id="menuForm"><button class="close" value="cancel">×</button><p class="eyebrow">NEW MENU</p><h2>Create a menu</h2><label>Menu name<input name="name" required></label><div class="two-col"><label>Date<input type="date" name="date"></label><label>Guests<input type="number" min="1" name="guests"></label></div><label>Occasion<input name="occasion"></label><label>Notes<textarea name="notes" rows="5"></textarea></label><div class="dialog-actions"><button class="secondary" value="cancel">Cancel</button><button class="primary" type="submit">Create menu</button></div></form></dialog>
   <dialog id="detailDialog"><div id="detailContent" class="dialog-card"></div></dialog>
   <dialog id="importDialog"><div class="dialog-card"><button class="close" id="closeImport">×</button><p class="eyebrow">UPLOAD RECIPES</p><h2>Bring recipes into your kitchen</h2><p class="small-note">Upload one image or document containing one or many recipes. You can also select multiple files. Each detected recipe is reviewed before it is saved.</p><label>Recipe files<input id="fileInput" type="file" multiple accept=".pdf,.doc,.docx,.txt,image/*"></label><label>Recipe URL<input id="sourceUrl" type="url" placeholder="https://..."></label><button class="secondary" id="addUrlBtn">Add URL</button><div id="importQueue" class="import-queue"></div></div></dialog>
-
   <script type="module" src="app.js?v=1.2.7"></script>
   <script type="module" src="signout.js?v=1.0.1"></script>
   <script>
-    // Keep the upload path lightweight. Large OCR/document modules are NOT
-    // loaded when the import dialog opens; this is important for Gmail/iOS WebView.
-    import('./upload-mobile-fix.js?v=1.0.2').catch(error=>console.error('Cooking Confidential upload module:',error));
-    let ccImportExtrasPromise;
-    let ccRecipeExtrasPromise;
-    let ccMenuExtrasPromise;
-    function loadImportExtras(){
-      if(ccImportExtrasPromise) return ccImportExtrasPromise;
-      const modules=[
-        './multi-recipe-import.js?v=1.1.0',
-        './multi-recipe-click.js?v=1.0.0',
-        './import-extraction-fallback.js?v=1.1.0',
-        './import-review-fix.js?v=1.2.12',
-        './import-ui-fix.js?v=1.0.2'
-      ];
-      ccImportExtrasPromise=Promise.all(modules.map(src=>import(src))).catch(error=>{
-        console.error('Cooking Confidential import modules:',error);
-        ccImportExtrasPromise=null;
-      });
-      return ccImportExtrasPromise;
-    }
-    function loadRecipeExtras(){
-      if(ccRecipeExtrasPromise) return ccRecipeExtrasPromise;
-      ccRecipeExtrasPromise=import('./recipe-management-fix.js?v=1.3.0').catch(error=>console.error('Cooking Confidential recipe module:',error));
-      return ccRecipeExtrasPromise;
-    }
-    function loadMenuExtras(){
-      if(ccMenuExtrasPromise) return ccMenuExtrasPromise;
-      ccMenuExtrasPromise=import('./menu-builder.js?v=1.0.0').catch(error=>console.error('Cooking Confidential menu module:',error));
-      return ccMenuExtrasPromise;
-    }
-    document.addEventListener('click',(event)=>{
-      // Intentionally do not call loadImportExtras() here. The Upload dialog
-      // must open without loading OCR/document code in Gmail/iOS WebView.
-      if(event.target.closest('.card')) loadRecipeExtras();
-      if(event.target.closest('[data-view="menus"]')) loadMenuExtras();
-      if(event.target.closest('.review-btn')) loadImportExtras();
-    },true);
+    import('./upload-mobile-fix.js?v=1.0.3').catch(error=>console.error('Cooking Confidential upload module:',error));
+    let ccImportExtrasPromise,ccRecipeExtrasPromise,ccMenuExtrasPromise;
+    function loadImportExtras(){if(ccImportExtrasPromise)return ccImportExtrasPromise;const modules=['./multi-recipe-import.js?v=1.1.0','./multi-recipe-click.js?v=1.0.0','./import-extraction-fallback.js?v=1.1.0','./import-review-fix.js?v=1.2.12','./import-ui-fix.js?v=1.0.2'];ccImportExtrasPromise=Promise.all(modules.map(src=>import(src))).catch(error=>{console.error('Cooking Confidential import modules:',error);ccImportExtrasPromise=null;});return ccImportExtrasPromise;}
+    function loadRecipeExtras(){if(ccRecipeExtrasPromise)return ccRecipeExtrasPromise;ccRecipeExtrasPromise=import('./recipe-management-fix.js?v=1.3.0').catch(error=>console.error('Cooking Confidential recipe module:',error));return ccRecipeExtrasPromise;}
+    function loadMenuExtras(){if(ccMenuExtrasPromise)return ccMenuExtrasPromise;ccMenuExtrasPromise=import('./menu-builder.js?v=1.0.0').catch(error=>console.error('Cooking Confidential menu module:',error));return ccMenuExtrasPromise;}
+    document.addEventListener('click',(event)=>{if(event.target.closest('.card'))loadRecipeExtras();if(event.target.closest('[data-view="menus"]'))loadMenuExtras();if(event.target.closest('.review-btn'))loadImportExtras();},true);
     document.addEventListener('click',(event)=>{if(event.target.closest('.review-btn')){const importDialog=document.querySelector('#importDialog');if(importDialog?.open)importDialog.close();}},true);
-    function arrangeClassificationFields(root=document){
-      root.querySelectorAll('#ccEditForm,#ccImportForm').forEach(form=>{
-        if(form.dataset.ccClassificationArranged==='1') return;
-        const twoCol=form.querySelector(':scope > .two-col');
-        const typeLabel=form.querySelector(':scope > label:has(select[name="recipe_type"])');
-        if(!twoCol || !typeLabel) return;
-        const courseLabel=twoCol.querySelector('label:has(select[name="course"])');
-        const cuisineLabel=twoCol.querySelector('label:not(:has(select[name="course"]))');
-        if(!courseLabel || !cuisineLabel) return;
-        const grid=document.createElement('div');grid.className='classification-grid';grid.append(courseLabel,typeLabel);
-        twoCol.replaceWith(cuisineLabel,grid);form.dataset.ccClassificationArranged='1';
-      });
-    }
-    const ccClassificationObserver=new MutationObserver(()=>arrangeClassificationFields(document));
-    ccClassificationObserver.observe(document.body,{subtree:true,childList:true});
-    arrangeClassificationFields(document);
+    function arrangeClassificationFields(root=document){root.querySelectorAll('#ccEditForm,#ccImportForm').forEach(form=>{if(form.dataset.ccClassificationArranged==='1')return;const twoCol=form.querySelector(':scope > .two-col');const typeLabel=form.querySelector(':scope > label:has(select[name="recipe_type"])');if(!twoCol||!typeLabel)return;const courseLabel=twoCol.querySelector('label:has(select[name="course"])');const cuisineLabel=twoCol.querySelector('label:not(:has(select[name="course"]))');if(!courseLabel||!cuisineLabel)return;const grid=document.createElement('div');grid.className='classification-grid';grid.append(courseLabel,typeLabel);twoCol.replaceWith(cuisineLabel,grid);form.dataset.ccClassificationArranged='1';});}
+    const ccClassificationObserver=new MutationObserver(()=>arrangeClassificationFields(document));ccClassificationObserver.observe(document.body,{subtree:true,childList:true});arrangeClassificationFields(document);
   </script>
 </body>
 </html>
