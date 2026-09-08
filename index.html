@@ -27,7 +27,7 @@
   <script type="module" src="signout.js?v=1.0.1"></script>
   <script>
     import('./upload-mobile-fix.js?v=1.0.7').catch(error=>console.error('Cooking Confidential upload module:',error));
-    import('./import-inbox-fix.js?v=1.0.3').catch(error=>console.error('Cooking Confidential inbox module:',error));
+    import('./import-inbox-fix.js?v=1.0.4').catch(error=>console.error('Cooking Confidential inbox module:',error));
     let ccImportExtrasPromise,ccRecipeExtrasPromise,ccMenuExtrasPromise;
     function loadImportExtras(){if(ccImportExtrasPromise)return ccImportExtrasPromise;const modules=['./multi-recipe-import.js?v=1.1.1','./multi-recipe-click.js?v=1.0.0','./import-extraction-fallback.js?v=1.1.0','./import-review-fix.js?v=1.2.13','./import-ui-fix.js?v=1.0.2'];ccImportExtrasPromise=Promise.all(modules.map(src=>import(src))).catch(error=>{console.error('Cooking Confidential import modules:',error);ccImportExtrasPromise=null;});return ccImportExtrasPromise;}
     function loadRecipeExtras(){if(ccRecipeExtrasPromise)return ccRecipeExtrasPromise;ccRecipeExtrasPromise=import('./recipe-management-fix.js?v=1.3.0').catch(error=>console.error('Cooking Confidential recipe module:',error));return ccRecipeExtrasPromise;}
