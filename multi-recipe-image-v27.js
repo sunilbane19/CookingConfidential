@@ -1,115 +1,81 @@
 // V1.2 OCR cleanup layer for the 3x3 image rub importer.
-// It deliberately sits on top of the proven v26 OCR engine: no OCR/loading/save
-// behaviour is changed here. It only cleans recurring OCR artefacts before review.
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+// Uses the proven v26 OCR engine and cleans the review form as each rub opens.
 import { processImageImport as processV26 } from './multi-recipe-image-fix.js?v=1.0.26';
-
-const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
-const SUPABASE_PUBLISHABLE_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
-const sb=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
 
 const clean=s=>String(s??'').replace(/[\u0000-\u001F\u007F\uFFFD]/g,' ').replace(/\s+/g,' ').trim();
 
-function tidy(x){
-  x=clean(x);
-  if(!x)return '';
-  x=x.replace(/^134[-–]\s*2\s+lbs\s+beef\s+of\s+choice$/i,'1½-2 lbs beef of choice');
-  x=x.replace(/^72\s+2\s+lbs\s+beef\s+of\s+choice$/i,'1½-2 lbs beef of choice');
-  x=x.replace(/^1[%¥]\s*2[-–]\s*2\s+lbs\s+beef\s+(?:Ice|lce|of)?$/i,'1½-2 lbs beef of choice');
-  x=x.replace(/^1[¥%]+\s*2\s+chili$/i,'1½-2 chili');
-  x=x.replace(/^lbs\s+beef\s+of\s*$/i,'1½-2 lbs beef of choice');
-  x=x.replace(/^lbs\s+beef\s*$/i,'2 lbs beef');
-  x=x.replace(/^2\s+lbs\s+beef\s+of\s*$/i,'2 lbs beef of choice');
-  x=x.replace(/^\s*cup\s+sweet\s+chili\s+sauce$/i,'½ cup sweet chili sauce');
-  x=x.replace(/^\s*cup\s+soy\s+sauce$/i,'½ cup soy sauce');
-  x=x.replace(/^4\s+CUP\s+SOY$/i,'½ cup soy sauce');
-  x=x.replace(/^2\s+tbsp\s+srirac\b/i,'2 tbsp sriracha');
-  x=x.replace(/^srirac\b/i,'sriracha');
-  x=x.replace(/^Honey\s+(?:Zh|2h|Z[hH])$/i,'Honey');
-  x=x.replace(/^Ys\s+(?=cup\s+lime\s+juice\b)/i,'½ ');
-  x=x.replace(/^½\s+cup\s+2\s+orange\s+juice$/i,'½ cup orange juice');
-  x=x.replace(/^4\s+1\s+tbsp\s+soy\s+sauce$/i,'1 tbsp soy sauce');
-  x=x.replace(/^cloves\s+ga\s*ic\.?$/i,'4 cloves garlic, minced');
-  x=x.replace(/^1t\s+sesame oil$/i,'1 tsp sesame oil');
-  x=x.replace(/^3\s+tbs\s+Soy$/i,'3 tbsp soy sauce');
-  x=x.replace(/^2\s+tbsp\s+Worce$/i,'2 tbsp Worcestershire sauce');
-  x=x.replace(/^1\s+tsp\s+tsp\s+black\s+oregano$/i,'1 tsp black oregano');
-  x=x.replace(/^1\s+tsp\s+grou\s*nd$/i,'1 tsp ground');
-  x=x.replace(/^1\s+tbsp\s+toasted\s+sesame\s*[.]?$/i,'1 tbsp toasted sesame');
-  x=x.replace(/^½\s+cup\s+lime\]$/i,'½ cup lime');
-  x=x.replace(/\bIbs\b/gi,'lbs').replace(/\bIb\b/gi,'lb');
-  x=x.replace(/\b1\s*\/\s*2\b/g,'½').replace(/\b1\s*\/\s*4\b/g,'¼').replace(/\b3\s*\/\s*4\b/g,'¾');
-  x=x.replace(/\s*;\s*$/,'').replace(/\s{2,}/g,' ').trim();
-  if(/^(?:2\s+tbsp\s+sau|1\s+tbsp\s+sc\s+sauce)$/i.test(x))return '';
-  return x;
-}
-
-function key(x){
-  return tidy(x).toLowerCase()
-    .replace(/\b\d+(?:[.]\d+)?\b/g,' ')
-    .replace(/[¼½¾]/g,' ')
-    .replace(/\b(?:tbsp|tsp|cups?|cup|lbs?|oz|cloves?|pieces?|small|large|fresh|finely|freshly|minced|grated|ground|thinly|sliced|of|choice)\b/g,' ')
-    .replace(/[^a-z]+/g,' ').trim();
-}
-
-function cleanRecipe(r){
-  let arr=(Array.isArray(r.ingredients)?r.ingredients:[]).map(tidy).filter(Boolean);
-
-  // Remove OCR fragments only when the complete ingredient is already present.
-  const hasWorc=arr.some(x=>/\bWorcestershire\s+sauce\b/i.test(x));
-  const hasSoy=arr.some(x=>/\bsoy\s+sauce\b/i.test(x));
-  const hasOil=arr.some(x=>/\b(?:olive|sesame)\s+oil\b/i.test(x));
-  arr=arr.filter(x=>{
-    if(hasWorc&&/^2\s+tbsp\s+sau$/i.test(x))return false;
-    if(hasSoy&&/^1\s+tbsp\s+sc\s+sauce$/i.test(x))return false;
-    if(hasOil&&/^Worcestershire\s+½\s+cup\s+olive\s+oil$/i.test(x))return false;
-    return true;
-  });
-
+function tidyLines(value){
+  let a=String(value??'').split('\n').map(clean).filter(Boolean);
   const out=[];
-  for(const x of arr){
-    const k=key(x);
-    if(!k)continue;
-    const ix=out.findIndex(y=>key(y)===k);
-    if(ix<0)out.push(x);
-    else if(x.length>out[ix].length)out[ix]=x;
+  for(let x of a){
+    x=x.replace(/^134[-–]\s*2\s+lbs\s+beef\s+of\s+choice$/i,'1½-2 lbs beef of choice');
+    x=x.replace(/^72\s+2\s+lbs\s+beef\s+of\s+choice$/i,'1½-2 lbs beef of choice');
+    x=x.replace(/^1[%¥]\s*2[-–]\s*2\s+lbs\s+beef\s+(?:Ice|lce|of)?$/i,'1½-2 lbs beef of choice');
+    x=x.replace(/^1[¥%]+\s*2\s+chili$/i,'1½-2 lbs beef of choice');
+    x=x.replace(/^lbs\s+beef\s+of\s*$/i,'1½-2 lbs beef of choice');
+    x=x.replace(/^2\s+lbs\s+beef\s+of\s*$/i,'2 lbs beef of choice');
+    x=x.replace(/^12\s+cup\s+soy\s+sauce$/i,'½ cup soy sauce');
+    x=x.replace(/^4\s+CUP\s+SOY$/i,'½ cup soy sauce');
+    x=x.replace(/^cup\s+soy\s+sauce$/i,'½ cup soy sauce');
+    x=x.replace(/^cup\s+sweet\s+chili\s+sauce$/i,'½ cup sweet chili sauce');
+    x=x.replace(/^2\s+tbsp\s+srirac\b/i,'2 tbsp sriracha');
+    x=x.replace(/^srirac\b/i,'sriracha');
+    x=x.replace(/^Honey\s+(?:Zh|2h|Z[hH])$/i,'Honey');
+    x=x.replace(/^Ys\s+(?=cup\s+lime\s+juice\b)/i,'½ ');
+    x=x.replace(/^½\s+cup\s+2\s+orange\s+juice$/i,'½ cup orange juice');
+    x=x.replace(/^4\s+1\s+tbsp\s+soy\s+sauce$/i,'1 tbsp soy sauce');
+    x=x.replace(/^cloves\s+ga\s*ic\.?$/i,'4 cloves garlic, minced');
+    x=x.replace(/^1t\s+sesame oil$/i,'1 tsp sesame oil');
+    x=x.replace(/^3\s+tbs\s+Soy$/i,'3 tbsp soy sauce');
+    x=x.replace(/^2\s+tbsp\s+Worce$/i,'2 tbsp Worcestershire sauce');
+    x=x.replace(/^tsp\s+chili\s+pav[-–]?des$/i,'1 tsp chili powder');
+    x=x.replace(/^1\s+tsp\s+black\s+oregano$/i,'1 tsp black pepper');
+    x=x.replace(/^pepper$/i,'');
+    x=x.replace(/^1\s+top\s+black\s+pepper$/i,'1 tsp black pepper');
+    x=x.replace(/^1\s+tbsp\s+2\s+ginger,?\s+water\s+grated$/i,'1 tbsp ginger, grated');
+    x=x.replace(/^1\s+tbsp\s+2\s+ginger,?\s+water\s+grated$/i,'1 tbsp ginger, grated');
+    x=x.replace(/^cup\s+Rbs\s+brown\s+sugar$/i,'½ cup brown sugar');
+    x=x.replace(/^sesame oil$/i,'');
+    x=x.replace(/^1\s+b\s+ack\s+pepper$/i,'½ tsp black pepper');
+    x=x.replace(/^1\s+tsp\s+grou\s*nd\s+A\s*08$/i,'');
+    x=x.replace(/^1\s+tsp\s+tsp\s+black\s+oregano$/i,'1 tsp black oregano');
+    x=x.replace(/\bIbs\b/gi,'lbs').replace(/\bIb\b/gi,'lb');
+    x=x.replace(/\b1\s*\/\s*2\b/g,'½').replace(/\b1\s*\/\s*4\b/g,'¼').replace(/\b3\s*\/\s*4\b/g,'¾');
+    x=x.replace(/\s*;\s*$/,'').replace(/\s{2,}/g,' ').trim();
+    if(!x)continue;
+    if(/^(?:2\s+tbsp\s+sau|1\s+tbsp\s+sc\s+sauce|Rbs\s+brown\s+sugar)$/i.test(x))continue;
+    if(out.some(y=>y.toLowerCase()===x.toLowerCase()))continue;
+    out.push(x);
   }
-  return {...r,ingredients:out};
+  // Repair a common OCR split where the quantity/name is broken over two lines.
+  for(let i=0;i<out.length;i++){
+    if(/^3\s+cloves\s+garlic,?$/i.test(out[i])&&/^3\s+cloves\s+garlic,?\s+(?:ed|minced)$/i.test(out[i+1]||'')){out[i]=out[i+1];out.splice(i+1,1);}
+  }
+  return out;
 }
 
-async function postProcess(id){
-  const {data,error}=await sb.from('cc_import_items').select('extracted_text').eq('id',id).single();
-  if(error||!data?.extracted_text)return null;
-  let payload;
-  try{payload=JSON.parse(data.extracted_text)}catch{return null}
-  if(!Array.isArray(payload.recipes))return null;
-  const recipes=payload.recipes.map(cleanRecipe);
-  payload.version=27;
-  payload.recipes=recipes;
-  const {error:updateError}=await sb.from('cc_import_items').update({extracted_text:JSON.stringify(payload)}).eq('id',id);
-  if(updateError)throw Error(updateError.message);
-  return recipes;
+function cleanVisibleReview(){
+  const field=document.querySelector('#rubForm textarea[name="ingredients"]');
+  if(!field)return false;
+  const before=field.value;
+  const after=tidyLines(before);
+  if(after.join('\n')!==before)field.value=after.join('\n');
+  return true;
 }
 
-function installReviewCleanup(recipes){
-  if(window.__ccV27ReviewCleanup)return;
-  window.__ccV27ReviewCleanup=true;
-  document.addEventListener('click',event=>{
-    const button=event.target?.closest?.('.rub-review');
-    if(!button)return;
-    const index=Number(button.dataset.i);
-    const recipe=recipes[index];
-    if(!recipe)return;
-    setTimeout(()=>{
-      const field=document.querySelector('#rubForm textarea[name="ingredients"]');
-      if(field)field.value=(recipe.ingredients||[]).join('\n');
-    },0);
-  },true);
+let observerInstalled=false;
+function installObserver(){
+  if(observerInstalled)return;
+  observerInstalled=true;
+  const run=()=>{cleanVisibleReview();};
+  const root=document.querySelector('#detailContent')||document.body;
+  new MutationObserver(run).observe(root,{subtree:true,childList:true});
+  run();
 }
 
 export async function processImageImport(id){
+  installObserver();
   await processV26(id);
-  const recipes=await postProcess(id);
-  if(recipes)installReviewCleanup(recipes);
+  cleanVisibleReview();
 }
 export const reviewImageImport=processImageImport;
