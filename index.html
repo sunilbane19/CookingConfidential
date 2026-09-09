@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#f6f1e8">
   <title>Cooking Confidential</title>
-  <link rel="stylesheet" href="styles.css?v=1.0.2">
+  <link rel="stylesheet" href="styles.css?v=1.0.3">
   <link rel="stylesheet" href="header-fix.css?v=1.0.0">
   <link rel="stylesheet" href="dropdowns.css?v=1.3.1">
   <link rel="stylesheet" href="multi-import.css?v=1.0.4">
@@ -29,6 +29,7 @@
     import('./upload-mobile-fix.js?v=1.0.27').catch(error=>console.error('Cooking Confidential upload module:',error));
     import('./import-inbox-fix.js?v=1.0.27').catch(error=>console.error('Cooking Confidential inbox module:',error));
     import('./rub-save-refresh.js?v=1.0.0').catch(error=>console.error('Cooking Confidential rub refresh module:',error));
+    import('./recipe-thumbnails.js?v=1.0.2').catch(error=>console.error('Cooking Confidential thumbnail module:',error));
     let ccImportExtrasPromise,ccRecipeExtrasPromise,ccMenuExtrasPromise;
     function loadImportExtras(){if(ccImportExtrasPromise)return ccImportExtrasPromise;const modules=['./multi-recipe-import.js?v=1.1.1','./multi-recipe-click.js?v=1.0.0','./import-extraction-fallback.js?v=1.1.0','./import-review-fix.js?v=1.2.13','./import-ui-fix.js?v=1.0.2'];ccImportExtrasPromise=Promise.all(modules.map(src=>import(src))).catch(error=>{console.error('Cooking Confidential import modules:',error);ccImportExtrasPromise=null;});return ccImportExtrasPromise;}
     function loadRecipeExtras(){if(ccRecipeExtrasPromise)return ccRecipeExtrasPromise;ccRecipeExtrasPromise=import('./recipe-management-fix.js?v=1.3.1').catch(error=>console.error('Cooking Confidential recipe module:',error));return ccRecipeExtrasPromise;}
