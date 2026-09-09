@@ -24,7 +24,7 @@ const pool=Object.values(IMAGES),used=new Set();
 let recipes=[];
 async function load(){try{const{data}=await sb.from('cc_recipes').select('id,name,cuisine,course,ingredients');recipes=data||[];apply()}catch(e){console.warn('Recipe thumbnails:',e)}}
 function textOf(r){return[r.name,r.cuisine,r.course,Array.isArray(r.ingredients)?r.ingredients.join(' '):''].join(' ').toLowerCase()}
-function candidates(r){const t=textOf(r),out=[];const add=k=>{if(IMAGES[k]&&!out.includes(IMAGES[k]))out.push(IMAGES[k])};
+function candidates(r){const t=textOf(r),out=[];const add=k=>{if(IMAGES[k]&&!out.includes(IMAGES[k]))out.push(IMAGES[k]);};
  if(/teriyaki/.test(t))add('teriyaki');
  if(/fajita/.test(t))add('fajita');
  if(/bulgogi|korean/.test(t))add('bulgogi');
@@ -40,6 +40,6 @@ function candidates(r){const t=textOf(r),out=[];const add=k=>{if(IMAGES[k]&&!out
  add('steakHerbs');add('carneTacos');
  return out.concat(pool.filter(x=>!out.includes(x)));}
 function choose(r){for(const c of candidates(r))if(!used.has(c.url)){used.add(c.url);return c}const fallback=candidates(r)[0];if(fallback)used.add(fallback.url);return fallback}
-function apply(){used.clear();const cards=[...document.querySelectorAll('.card')];cards.forEach(card=>{const box=card.querySelector('.card-image');if(!box)return;const r=recipes.find(x=>Number(x.id)===Number(card.dataset.id));if(!r)return;const chosen=choose(r);if(!chosen)return;box.dataset.ccThumb='1';box.innerHTML=`<img src="${chosen.url}" alt="${chosen.alt}" loading="lazy">`})}
+function apply(){used.clear();const cards=[...document.querySelectorAll('.card')];cards.forEach(card=>{const box=card.querySelector('.card-image');if(!box)return;const r=recipes.find(x=>Number(x.id)===Number(card.dataset.id));if(!r)return;const chosen=choose(r);if(!chosen)return;const current=box.querySelector('img')?.getAttribute('src')||'';if(current===chosen.url)return;box.dataset.ccThumb='1';box.innerHTML=`<img src="${chosen.url}" alt="${chosen.alt}" loading="lazy">`;});}
 new MutationObserver(()=>apply()).observe(document.body,{subtree:true,childList:true});
 load();
