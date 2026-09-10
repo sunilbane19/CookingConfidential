@@ -1,0 +1,5 @@
+import {createClient} from 'https://esm.sh/@supabase/supabase-js@2';
+const sb=createClient('https://yiwmtfbqbynimqvwxosu.supabase.co','sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu');
+let busy=false;
+async function route(button,event){if(busy)return;const id=Number(button.dataset.id);if(!id)return;const article=button.closest('.review-item');const visibleName=article?.querySelector('.review-item-main strong')?.textContent||'';const image=button.dataset.image==='1';const{data:item}=await sb.from('cc_import_items').select('file_name,source_title').eq('id',id).single();const name=item?.file_name||visibleName;const source=String(item?.source_title||'');const frozenRub=image&&(/\brubs?\b/i.test(name)||/\brubs?\b/i.test(source)||/Rubs for all/i.test(source));if(frozenRub)return;event.preventDefault();event.stopImmediatePropagation();busy=true;try{const mod=await import('./general-recipe-extractor.js?v=1.0.0');await mod.reviewGeneralImport(id)}catch(e){console.error('General recipe extraction:',e)}finally{busy=false}}
+document.addEventListener('click',event=>{const b=event.target?.closest?.('.cc-inbox-review');if(!b)return;route(b,event)},true);
