@@ -19,7 +19,7 @@ async function saveRecipe(user,name,ingredients,itemTitle){
   return {saved:true,duplicate:false,id:data?.id};
 }
 async function latestImport(user){
-  const{data}=await sb.from('cc_import_items').select('id,file_name,source_title,created_at').eq('created_by',user.id).eq('review_status','pending').order('created_at',{ascending:false}).limit(1).maybeSingle();
+  const{data}=await sb.from('cc_import_items').select('id,file_name,source_title,created_at').eq('created_by',user.id).eq('review_status','pending').eq('source_title','Four-recipe image').order('created_at',{ascending:false}).limit(1).maybeSingle();
   return data||null;
 }
 function values(form,i){
@@ -38,7 +38,7 @@ async function handleBulk(form){
   if(!choices.length){alert('Select at least one recipe to save.');return}
   try{
     const user=await currentUser();const item=await latestImport(user);const itemTitle=item?.file_name||'Imported image';let saved=0,duplicates=0,invalid=0;
-    for(const i of choices){const{ name,ingredients }=values(form,i);if(!name||!ingredients.length){invalid++;continue}const result=await saveRecipe(user,name,ingredients,itemTitle);const card=form.querySelector(`[data-recipe-index="${i}"]`);mark(card,result.duplicate?'Already saved':'Saved');if(result.duplicate)duplicates++;else saved++}
+    for(const i of choices){const{ name,ingredients}=values(form,i);if(!name||!ingredients.length){invalid++;continue}const result=await saveRecipe(user,name,ingredients,itemTitle);const card=form.querySelector(`[data-recipe-index="${i}"]`);mark(card,result.duplicate?'Already saved':'Saved');if(result.duplicate)duplicates++;else saved++}
     if(item)await sb.from('cc_import_items').update({recipe_id:null,review_status:'approved',extraction_status:'ready'}).eq('id',item.id);
     const parts=[];if(saved)parts.push(`${saved} saved`);if(duplicates)parts.push(`${duplicates} already saved`);if(invalid)parts.push(`${invalid} skipped`);
     alert(parts.join(' • ')||'Nothing was saved.');
@@ -46,8 +46,6 @@ async function handleBulk(form){
   }catch(e){alert(e.message||'Could not save the selected recipes.')}
 }
 
-// This is a capture-phase guard. It runs before the older Pesto review handlers,
-// so a duplicate can never reach their direct INSERT call.
 document.addEventListener('click',async event=>{
   const one=event.target?.closest?.('.cc-save-one');
   const bulk=event.target?.closest?.('#ccSaveSelected');
