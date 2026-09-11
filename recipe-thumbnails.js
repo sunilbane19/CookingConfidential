@@ -4,6 +4,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const sb=createClient('https://yiwmtfbqbynimqvwxosu.supabase.co','sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu');
 const img=(id,alt)=>({url:`https://images.unsplash.com/${id}?auto=format&fit=crop&fm=jpg&q=82&w=900`,alt});
+const remote=(url,alt)=>({url,alt});
 const IMAGES={
  teriyaki:img('photo-1732187582879-3ca83139c1b8','Beef teriyaki bowl'),
  fajita:img('photo-1689774187968-0e6c29a1d82e','Grilled fajita meat'),
@@ -18,13 +19,21 @@ const IMAGES={
  rawGarlic:img('photo-1690983330536-3b0089d07cf9','Steak with garlic and herbs'),
  marinatedBeef:img('photo-1785636883701-bd4f9e3173c4','Marinated beef on a grill'),
  streetTacos:img('photo-1648437595587-e6a8b0cdf1f9','Street tacos with lime'),
- carneTacos:img('photo-1579633711380-ad5922a56153','Carne asada tacos with salsa')
+ carneTacos:img('photo-1579633711380-ad5922a56153','Carne asada tacos'),
+ basilPesto:img('photo-1743615242147-017a3d712696','Basil pesto pasta with basil and Parmesan'),
+ cilantroPesto:remote('https://art.whisk.com/image/upload/fl_progressive,h_560,w_560,c_fill,dpr_2.0/v1761064136051/recipe/2f11a5ab5070c090daf9cda065adee08.jpg','Cilantro jalapeño pesto with fresh cilantro and jalapeño'),
+ mintPesto:img('photo-1634612778224-8d33d9d66c61','Green mint and parsley pesto sauce'),
+ parsleyPesto:remote('https://data.thefeedfeed.com/recommended/post_1748354.jpg','Parsley pistachio pesto with herbs and pistachios')
 };
 const pool=Object.values(IMAGES),used=new Set();
 let recipes=[];
 async function load(){try{const{data}=await sb.from('cc_recipes').select('id,name,cuisine,course,ingredients');recipes=data||[];apply()}catch(e){console.warn('Recipe thumbnails:',e)}}
 function textOf(r){return[r.name,r.cuisine,r.course,Array.isArray(r.ingredients)?r.ingredients.join(' '):''].join(' ').toLowerCase()}
 function candidates(r){const t=textOf(r),out=[];const add=k=>{if(IMAGES[k]&&!out.includes(IMAGES[k]))out.push(IMAGES[k]);};
+ if(/basil\s+pesto/.test(t))add('basilPesto');
+ if(/cilantro.*jalapeno|jalapeno.*cilantro/.test(t))add('cilantroPesto');
+ if(/mint\s+pesto/.test(t))add('mintPesto');
+ if(/parsley\s+pesto|pistachio.*pesto/.test(t))add('parsleyPesto');
  if(/teriyaki/.test(t))add('teriyaki');
  if(/fajita/.test(t))add('fajita');
  if(/bulgogi|korean/.test(t))add('bulgogi');
