@@ -1,7 +1,7 @@
 // Recipe card thumbnail layer.
 // Chooses food/ingredient photography that fits the recipe and avoids reusing the same
 // image across visible cards whenever the image pool has an unused match.
-import './import-dedupe-guard.js?v=1.0.1';
+import './import-dedupe-guard.js?v=1.0.2';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const sb=createClient('https://yiwmtfbqbynimqvwxosu.supabase.co','sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu');
 const img=(id,alt)=>({url:`https://images.unsplash.com/${id}?auto=format&fit=crop&fm=jpg&q=82&w=900`,alt});
