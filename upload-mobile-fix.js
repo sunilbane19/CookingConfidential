@@ -1,6 +1,6 @@
 // Lightweight mobile upload handler for iOS/Gmail in-app browsers.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import './import-dedupe-guard.js?v=1.0.1';
+import './import-dedupe-guard.js?v=1.0.2';
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
 const sb=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
