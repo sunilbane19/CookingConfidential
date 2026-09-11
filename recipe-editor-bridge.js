@@ -1,5 +1,5 @@
-// Reliable recipe-editor bridge.
-// Captures the detail-view Edit button before app.js can fall back to its loading alert.
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+const sb=createClient('https://yiwmtfbqbynimqvwxosu.supabase.co','sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu');
 const STYLE_ID='cc-editor-bridge-style';
 if(!document.getElementById(STYLE_ID)){
   const style=document.createElement('style');
@@ -20,24 +20,16 @@ document.addEventListener('click',async event=>{
   if(!button)return;
   const detail=document.querySelector('#detailDialog');
   if(!detail?.open)return;
-  const cards=document.querySelectorAll('.card');
   const title=document.querySelector('#detailContent .detail-title')?.textContent?.trim();
-  const recipe=[...cards].map(c=>({card:c,id:Number(c.dataset.id)})).find(x=>{
-    const name=x.card.querySelector('h3')?.textContent?.trim();
-    return name===title;
-  });
-  if(!recipe)return;
+  if(!title)return;
   event.preventDefault();
   event.stopImmediatePropagation();
   try{
+    const q=await sb.from('cc_recipes').select('*').eq('name',title).limit(1).maybeSingle();
+    if(q.error)throw q.error;
+    if(!q.data)throw new Error('Recipe could not be found.');
     const openEditor=await ensureEditor();
-    const r=window.__CCRecipes?.find?.(x=>Number(x.id)===recipe.id);
-    if(r)await openEditor(r);
-    else{
-      const {data,error}=await window.__CCSupabase.from('cc_recipes').select('*').eq('id',recipe.id).single();
-      if(error)throw error;
-      await openEditor(data);
-    }
+    await openEditor(q.data);
   }catch(error){
     console.error('Cooking Confidential recipe editor bridge:',error);
     alert('Could not open the recipe editor. Please refresh the page and try again.');
