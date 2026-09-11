@@ -2,20 +2,24 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const sb=createClient('https://yiwmtfbqbynimqvwxosu.supabase.co','sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu');
 const norm=s=>String(s??'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
-const ingredientKey=a=>Array.isArray(a)?a.map(norm).filter(Boolean).join('|'):norm(a);
 
 async function currentUser(){const{data:{user}}=await sb.auth.getUser();if(!user)throw Error('Please sign in again before saving.');return user}
-async function existingRecipe(user,name,ingredients){
-  const{data,error}=await sb.from('cc_recipes').select('id,name,ingredients').eq('created_by',user.id).ilike('name',name.trim());
+async function existingRecipe(user,name){
+  const{data,error}=await sb.from('cc_recipes').select('id,name').eq('created_by',user.id).ilike('name',name.trim());
   if(error)throw Error(error.message);
-  const wanted=ingredientKey(ingredients);
-  return (data||[]).find(r=>norm(r.name)===norm(name)&&ingredientKey(r.ingredients)===wanted)||null;
+  return (data||[]).find(r=>norm(r.name)===norm(name))||null;
 }
 async function saveRecipe(user,name,ingredients,itemTitle){
-  const existing=await existingRecipe(user,name,ingredients);
+  const existing=await existingRecipe(user,name);
   if(existing)return {saved:false,duplicate:true,id:existing.id};
   const{data,error}=await sb.from('cc_recipes').insert({name,description:null,ingredients,method:null,cuisine:null,course:'Ingredient',source_type:'file',source_url:null,source_title:itemTitle||'Imported image',created_by:user.id,visibility:'private'}).select('id').single();
-  if(error)throw Error(`Could not save ${name}: ${error.message}`);
+  if(error){
+    if(error.code==='23505'){
+      const duplicate=await existingRecipe(user,name);
+      if(duplicate)return {saved:false,duplicate:true,id:duplicate.id};
+    }
+    throw Error(`Could not save ${name}: ${error.message}`);
+  }
   return {saved:true,duplicate:false,id:data?.id};
 }
 async function latestImport(user){
