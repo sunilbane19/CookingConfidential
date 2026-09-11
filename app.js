@@ -1,6 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const SUPABASE_URL = 'https://yiwmtfbqbynimqvwxosu.supabase.co';
-const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_EG30cid4BV1Uvr4EeM3f9g_hztA7Wpu';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
 const APP_URL = 'https://cookingconfidential.in/';
 const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const content = document.querySelector('#content');
@@ -49,19 +49,13 @@ async function showRecipe(id) {
   detailDialog.showModal();
   document.querySelector('#editRecipeBtn').onclick = async () => {
     try {
-      if (typeof window.CCOpenEditor !== 'function') {
-        await import('./recipe-management-fix.js?v=1.3.2');
-      }
-      if (typeof window.CCOpenEditor === 'function') await window.CCOpenEditor(r);
-      else alert('Recipe editor could not be loaded. Please try again.');
-    } catch (e) {
-      console.error('Cooking Confidential recipe editor:', e);
-      alert('Recipe editor could not be loaded. Please try again.');
-    }
+      if (typeof window.CCOpenEditor !== 'function') await import('./recipe-management-fix.js?v=1.3.4');
+      if (typeof window.CCOpenEditor === 'function') await window.CCOpenEditor(r); else alert('Recipe editor could not be loaded. Please try again.');
+    } catch (e) { console.error('Cooking Confidential recipe editor:', e); alert('Recipe editor could not be loaded. Please try again.'); }
   };
   document.querySelector('#favBtn').onclick = async () => { const {error}=await supabase.from('cc_recipes').update({is_favourite:!r.is_favourite}).eq('id',r.id); if(error)return alert(error.message); r.is_favourite=!r.is_favourite; detailDialog.close(); render(); };
 }
-async function copyMenu(id) { const m=menus.find(x=>x.id===id); if(!m)return; const {data:{user}}=await supabase.auth.getUser(); if(!user)return; const {data,error}=await supabase.from('cc_menus').insert({name:m.name+' — Copy',menu_date:null,occasion:m.occasion,guest_count:m.guest_count,notes:m.notes,visibility:'private',created_by:user.id}).select().single(); if(error)return alert(error.message); const items=await supabase.from('cc_menu_items').select('*').eq('menu_id',m.id).order('sort_order'); if(items.error)return alert(items.error.message); if(items.data?.length){const rows=items.data.map(x=>({menu_id:data.id,recipe_id:x.recipe_id,section:x.section,sort_order:x.sort_order,custom_label:x.custom_label}));const ins=await supabase.from('cc_menu_items').insert(rows);if(ins.error)return alert(ins.error.message);} await loadData(); alert('Menu copied. You can now edit the new version without changing the original.'); }
+async function copyMenu(id) { const m=menus.find(x=>x.id===id);if(!m)return;const {data:{user}}=await supabase.auth.getUser();if(!user)return;const {data,error}=await supabase.from('cc_menus').insert({name:m.name+' — Copy',menu_date:null,occasion:m.occasion,guest_count:m.guest_count,notes:m.notes,visibility:'private',created_by:user.id}).select().single();if(error)return alert(error.message);const items=await supabase.from('cc_menu_items').select('*').eq('menu_id',m.id).order('sort_order');if(items.error)return alert(items.error.message);if(items.data?.length){const rows=items.data.map(x=>({menu_id:data.id,recipe_id:x.recipe_id,section:x.section,sort_order:x.sort_order,custom_label:x.custom_label}));const ins=await supabase.from('cc_menu_items').insert(rows);if(ins.error)return alert(ins.error.message);}await loadData();alert('Menu copied. You can now edit the new version without changing the original.');}
 loginForm.onsubmit=async e=>{e.preventDefault();const button=loginForm.querySelector('button');if(!button||button.disabled)return;const email=document.querySelector('#emailInput').value.trim();button.disabled=true;button.textContent='Sending…';loginMessage.textContent='Sending sign-in link…';const {error}=await supabase.auth.signInWithOtp({email,options:{emailRedirectTo:APP_URL}});if(error){const message=String(error.message||'').toLowerCase();loginMessage.textContent=message.includes('rate limit')?'Please wait about 60 seconds before requesting another sign-in link.':'We could not send the sign-in link right now. Please try again in a moment.';button.disabled=false;button.textContent='Send me a sign-in link';}else loginMessage.textContent='Check your email for the sign-in link.';};
 document.querySelector('#recipeForm').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target),{data:{user}}=await supabase.auth.getUser();if(!user)return;const ingredients=String(f.get('ingredients')).split('\n').map(x=>x.trim()).filter(Boolean);const {error}=await supabase.from('cc_recipes').insert({name:f.get('name'),cuisine:f.get('cuisine')||null,course:f.get('course')||null,ingredients,method:f.get('method')||null,personal_notes:f.get('notes')||null,created_by:user.id,visibility:'private'});if(error)return alert(error.message);recipeDialog.close();e.target.reset();await loadData();};
 document.querySelector('#menuForm').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target),{data:{user}}=await supabase.auth.getUser();if(!user)return;const {error}=await supabase.from('cc_menus').insert({name:f.get('name'),menu_date:f.get('date')||null,guest_count:f.get('guests')?Number(f.get('guests')):null,occasion:f.get('occasion')||null,notes:f.get('notes')||null,visibility:'private',created_by:user.id});if(error)return alert(error.message);menuDialog.close();e.target.reset();await loadData();view='menus';};
