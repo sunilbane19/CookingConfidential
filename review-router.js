@@ -15,7 +15,8 @@ document.addEventListener('click',async event=>{
   await repairKnownImport(id);
   const {data:item}=await sb.from('cc_import_items').select('extracted_text').eq('id',id).single();
   let j={};try{j=JSON.parse(item?.extracted_text||'{}')}catch{}
-  if(Array.isArray(j.recipes)&&j.recipes.length===1){if(await reviewSingleRecipe(id))return;}
+  const single=Array.isArray(j.recipes)?j.recipes.length===1:!!(j.recipe&&typeof j.recipe==='object');
+  if(single&&await reviewSingleRecipe(id))return;
   if(await reviewMultiRecipeV3(id))return;
   await reviewImportFixed(id);
  }catch(e){alert(e.message||'Could not open review.')}
