@@ -1,8 +1,8 @@
-import { reviewMultiRecipeV3 } from './multi-recipe-review-v3.js?v=3.0.0';
-import { reviewImportFixed } from './import-review-fix.js?v=1.2.16';
+import { reviewMultiRecipeV3 } from './multi-recipe-review-v3.js?v=3.0.1';
+import { reviewImportFixed } from './import-review-fix.js?v=1.2.18';
 
 document.addEventListener('click',async event=>{
- const button=event.target.closest('.review-btn');
+ const button=event.target.closest('.cc-inbox-review');
  if(!button)return;
  event.preventDefault();
  event.stopImmediatePropagation();
