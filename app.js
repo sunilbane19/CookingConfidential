@@ -19,6 +19,39 @@ let importItems = [];
 let recipes = [], menus = [], view = 'recipes';
 const esc = (s='') => String(s).replace(/[&<>\"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));
 const stars = n => n ? '★'.repeat(n) : '';
+
+function ingredientsText(r){
+  const value = r?.ingredients;
+  if (Array.isArray(value)) return value.map(x => typeof x === 'string' ? x : [x?.amount,x?.quantity,x?.unit,x?.name,x?.ingredient].filter(Boolean).join(' ')).filter(Boolean);
+  if (typeof value === 'string') return value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+  return [];
+}
+
+function ensureNoticeStyles(){
+  if(document.querySelector('#ccNoticeStyles'))return;
+  const s=document.createElement('style');s.id='ccNoticeStyles';s.textContent=`
+  #ccNotice{border:0;border-radius:24px;padding:0;max-width:min(520px,calc(100vw - 32px));width:calc(100% - 32px);background:transparent;box-shadow:0 24px 70px rgba(0,0,0,.24)}
+  #ccNotice::backdrop{background:rgba(20,18,15,.48);backdrop-filter:blur(2px)}
+  .cc-notice-card{background:#fbf8f2;border:1px solid #ddd5c8;border-radius:24px;padding:30px 28px 24px;color:#25221e;font-family:Arial,sans-serif}
+  .cc-notice-card .eyebrow{margin:0 0 10px;color:#a94432;font-weight:700;letter-spacing:.16em;font-size:12px}
+  .cc-notice-card h3{margin:0 0 12px;font-family:Georgia,serif;font-size:28px;line-height:1.1}
+  .cc-notice-card p{margin:0;color:#746f66;font-size:16px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere}
+  .cc-notice-actions{display:flex;justify-content:flex-end;margin-top:22px}.cc-notice-actions button{min-width:120px}
+  @media(max-width:600px){#ccNotice{max-width:none}.cc-notice-card{padding:26px 22px 20px}.cc-notice-card h3{font-size:25px}.cc-notice-actions button{width:100%}}
+  `;document.head.appendChild(s);
+}
+function showNotice(message){
+  ensureNoticeStyles();
+  let d=document.querySelector('#ccNotice');
+  if(!d){d=document.createElement('dialog');d.id='ccNotice';document.body.appendChild(d)}
+  const text=String(message??'Something went wrong.');
+  const looksError=/(error|could not|couldn't|unable|failed|failure|invalid|select at least|please sign|not found|try again|problem|loading)/i.test(text);
+  d.innerHTML=`<div class="cc-notice-card"><p class="eyebrow">${looksError?'ERROR':'NOTICE'}</p><h3>${looksError?'Something went wrong':'Cooking Confidential'}</h3><p>${esc(text)}</p><div class="cc-notice-actions"><button class="primary" type="button" id="ccNoticeOk">OK</button></div></div>`;
+  d.querySelector('#ccNoticeOk').onclick=()=>d.close();
+  if(!d.open)d.showModal();
+}
+window.alert=showNotice;
+
 async function loadData() {
   content.innerHTML = '<div class="empty">Loading your recipes…</div>';
   const recipesResult = await supabase.from('cc_recipes').select('*').order('updated_at',{ascending:false});
@@ -32,7 +65,8 @@ async function loadData() {
 }
 function recipeCard(r) { return `<article class="card" data-id="${r.id}"><div class="card-image">🍽</div><div class="card-body"><span class="tag">${esc(r.cuisine||'Uncategorised')}</span><h3>${esc(r.name)}</h3><div class="meta">${esc(r.course||'Recipe')} · ${stars(r.rating)}</div></div></article>`; }
 function render() {
-  const q = search.value.trim().toLowerCase(); if (view === 'menus') return renderMenus(q);
+  const q = search.value.trim().toLowerCase();
+  if (view === 'menus') return renderMenus(q);
   let list = recipes.filter(r => view !== 'favourites' || r.is_favourite).filter(r => (r.name+' '+(r.cuisine||'')+' '+(r.country||'')+' '+(r.region||'')+' '+(r.course||'')+' '+ingredientsText(r).join(' ')+' '+(r.personal_notes||'')).toLowerCase().includes(q));
   content.innerHTML = `<div class="section-head"><h2>${view==='favourites'?'Favourites':'Your recipes'}</h2><span class="count">${list.length} recipes</span></div>${list.length ? '<div class="grid">'+list.map(recipeCard).join('')+'</div>' : '<div class="empty">No recipes found. Try another ingredient, cuisine or dish.</div>'}`;
   content.querySelectorAll('.card').forEach(c => c.onclick = () => showRecipe(+c.dataset.id));
@@ -68,7 +102,8 @@ function queueFiles(files){files.forEach(file=>addImportItem({file,file_name:fil
 function renderImportQueue(){importQueue.innerHTML=importItems.length?'<div class="queue-head"><strong>'+importItems.length+' selected</strong><button class="secondary" id="uploadAll" type="button">Upload all</button></div>'+importItems.map(x=>'<div class="queue-item"><div><strong>'+esc(x.file_name)+'</strong><small>'+esc(x.mime_type||'')+(x.size?' · '+Math.round(x.size/1024)+' KB':'')+'</small></div><span>'+esc(x.status)+'</span></div>').join(''):'<div class="empty compact">Select files or add a URL to begin.</div>';}
 search.oninput=()=>render();
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{view=t.dataset.view;document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===t));render();});
-window.addEventListener('cc:recipes-changed',()=>loadData().catch(e=>console.error('Cooking Confidential refresh:',e)));
-async function boot(sessionOverride=null){let session=sessionOverride;if(!session){const {data:{session:currentSession}}=await supabase.auth.getSession();session=currentSession;}if(!session){loginPanel.hidden=false;appPanel.hidden=true;return;}loginPanel.hidden=true;appPanel.hidden=false;userBadge.textContent=session.user.email||'Signed in';try{await loadData();}catch(e){content.innerHTML='<div class="empty">'+esc(e.message)+'</div>';}}
+window.addEventListener('cc:recipes-changed',()=>loadData().catch(e=>showNotice(e.message||'Could not refresh your recipes.')));
+async function boot(sessionOverride=null){let session=sessionOverride;if(!session){const {data:{session:currentSession}}=await supabase.auth.getSession();session=currentSession;}if(!session){loginPanel.hidden=false;appPanel.hidden=true;return;}loginPanel.hidden=true;appPanel.hidden=false;userBadge.textContent=session.user.email||'Signed in';try{await loadData();}catch(e){console.error('Cooking Confidential load:',e);showNotice(e.message||'Could not load your recipes.');}}
 supabase.auth.onAuthStateChange((_event,session)=>{if(session){setTimeout(()=>boot(session),0);}else{loginPanel.hidden=false;appPanel.hidden=true;}});
+ensureNoticeStyles();
 boot();
