@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const sb=createClient('https://esm.sh/@supabase/supabase-js@2' ? 'https://yiwmtfbqbynimqvwxosu.supabase.co' : '', 'sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu');
+const sb=createClient('https://yiwmtfbqbynimqvwxosu.supabase.co','sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu');
 const dialog=document.querySelector('#detailDialog');
 const clean=s=>String(s??'').replace(/\\[rnt]/g,m=>m==='\\n'?'\n':' ').replace(/[\u0000-\u001F\u007F\uFFFD]/g,' ').replace(/[ \t]+/g,' ').trim();
 const lines=s=>String(s??'').replace(/\\n/g,'\n').replace(/\\r/g,'\n').replace(/\r/g,'').split(/\n/).map(clean).filter(Boolean);
@@ -13,8 +13,8 @@ const socialLine=/^(?:swadish|follow|write a comment|recipe by|original audio|\d
 function cleanIngredientBlock(value){const raw=Array.isArray(value)?value.flatMap(v=>lines(typeof v==='string'?v:ingredient(v))):lines(value);const out=[];for(const rawLine of raw){const v=ingredient(rawLine);if(!v||heading.test(v)||garbage.test(v)||/^serves?\s+\d/i.test(v)||/^recipe ingredients?$/i.test(v))continue;if(/^instructions?\s*[,.:]?$/i.test(v)||/^method\s*[,.:]?$/i.test(v)){break}if(!out.some(x=>x.toLowerCase()===v.toLowerCase()))out.push(v)}return out}
 function cleanMethodBlock(value){const raw=Array.isArray(value)?value.flatMap(v=>lines(typeof v==='string'?v:ingredient(v))):lines(value);return [...new Set(raw.map(clean).filter(v=>v&&!heading.test(v)&&!garbage.test(v)&&!socialLine.test(v)))]}
 function filenameTitle(fileName){return String(fileName||'Imported recipe').replace(/\.[^.]+$/,'').replace(/[_-]+/g,' ').replace(/\s+/g,' ').trim()||'Imported recipe'}
-function titleIsUsable(name,fileName){const v=clean(name);if(!v||timeLine.test(v)||dateLine.test(v)||socialLine.test(v)||/^\d{1,4}$/.test(v)||heading.test(v)||v.length<3||v.length>100)return false;const letters=(v.match(/[A-Za-z]/g)||[]).length;if(letters<4)return false;const file=filenameTitle(fileName);if(file.split(/\s+/).length>=2&&!/[A-Za-z]/.test(file))return false;return true}
-function bestName(r,fileName){const extracted=clean(r?.name);const file=filenameTitle(fileName);if(!titleIsUsable(extracted,fileName))return file;if(timeLine.test(extracted)||dateLine.test(extracted))return file;const recipeWord=/\b(sauce|dip|dressing|curry|chutney|marinade|rub|paste|pesto|bread|cake|salad|soup|rice|chicken|fish|meat|pasta|dessert|pakora|wada|vada|pickle|relish|stew)\b/i;if(recipeWord.test(file)&&!recipeWord.test(extracted))return file;return extracted}
+function titleIsUsable(name,fileName){const v=clean(name);if(!v||timeLine.test(v)||dateLine.test(v)||socialLine.test(v)||/^\d{1,4}$/.test(v)||heading.test(v)||v.length<3||v.length>100)return false;const letters=(v.match(/[A-Za-z]/g)||[]).length;if(letters<4)return false;return true}
+function bestName(r,fileName){const extracted=clean(r?.name),file=filenameTitle(fileName);if(!titleIsUsable(extracted,fileName))return file;const recipeWord=/\b(sauce|dip|dressing|curry|chutney|marinade|rub|paste|pesto|bread|cake|salad|soup|rice|chicken|fish|meat|pasta|dessert|pakora|wada|vada|pickle|relish|stew)\b/i;if(recipeWord.test(file)&&!recipeWord.test(extracted))return file;return extracted}
 export async function reviewSingleRecipe(id){
  const {data:x,error}=await sb.from('cc_import_items').select('*').eq('id',id).single();if(error||!x)return false;
  let j={};try{j=JSON.parse(x.extracted_text||'{}')}catch{return false}
