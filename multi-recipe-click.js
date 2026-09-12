@@ -1,1 +1,2 @@
+import('./multi-recipe-save-fix.js?v=1.0.1').catch(error=>console.error('Cooking Confidential multi-recipe save fix:',error));
 window.addEventListener('click',event=>{const button=event.target.closest('.review-btn');if(!button||typeof window.ccMultiReview!=='function')return;const name=button.closest('.review-item')?.querySelector('strong')?.textContent||'';if(!/\.(png|jpe?g|webp)$/i.test(name))return;event.preventDefault();event.stopImmediatePropagation();window.ccMultiReview(Number(button.dataset.id));},true);
