@@ -24,6 +24,8 @@ Removed obsolete code that contained test-input-specific behaviour:
 - Removed the old extraction fallback that explicitly parsed Karivepaku Podi.
 - Removed the explicit “swadish” title cleanup and named recipe-word fallback from single-recipe review.
 - Replaced the scanned-PDF review trigger with generic suspicious-title / weak-ingredient checks.
+- Removed the old image routing that selected different OCR engines from filenames such as rub/pesto.
+- Removed the obsolete rub-specific refresh hook and legacy rub/pesto image OCR modules.
 - Removed the deleted fallback module from the import extras loaded by `index.html`.
 
 ## What counts as acceptable heuristic logic
