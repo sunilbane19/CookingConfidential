@@ -19,7 +19,6 @@ let importItems = [];
 let recipes = [], menus = [], view = 'recipes';
 const esc = (s='') => String(s).replace(/[&<>\"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));
 const stars = n => n ? '★'.repeat(n) : '';
-const ingredientsText = r => Array.isArray(r.ingredients) ? r.ingredients.map(x => typeof x === 'string' ? x : [x.quantity,x.unit,x.name].filter(Boolean).join(' ')) : [];
 async function loadData() {
   content.innerHTML = '<div class="empty">Loading your recipes…</div>';
   const recipesResult = await supabase.from('cc_recipes').select('*').order('updated_at',{ascending:false});
@@ -45,7 +44,7 @@ function renderMenus(q) {
 }
 async function showRecipe(id) {
   const r = recipes.find(x => x.id === id); if (!r) return;
-  detailDialog.querySelector('#detailContent').innerHTML = `<button class="close" onclick="detailDialog.close()">×</button><span class="tag">${esc(r.cuisine||'')} · ${esc(r.course||'Recipe')}</span><h2 class="detail-title">${esc(r.name)}</h2><div class="meta">${stars(r.rating)}</div><div class="detail-section"><h4>Ingredients</h4><ul>${ingredientsText(r).map(i=>'<li>'+esc(i)+'</li>').join('')}</ul></div><div class="detail-section"><h4>Method</h4><p>${esc(r.method||'')}</p></div>${r.personal_notes ? '<div class="detail-section"><h4>My notes</h4><p>'+esc(r.personal_notes)+'</p></div>' : ''}${r.source_url ? '<div class="detail-section"><h4>Source</h4><p><a href="'+esc(r.source_url)+'" target="_blank" rel="noopener">'+esc(r.source_title||r.source_url)+'</a></p></div>' : ''}<div class="detail-actions" style="display:flex;gap:12px;align-items:stretch;flex-wrap:nowrap"><button class="secondary" id="editRecipeBtn" type="button" style="flex:1;min-width:0">Edit recipe</button><button class="secondary" id="favBtn" type="button" style="flex:1;min-width:0">${r.is_favourite?'★ Remove favourite':'☆ Add to favourites'}</button></div>`;
+  detailDialog.querySelector('#detailContent').innerHTML = `<button class="close" onclick="detailDialog.close()">×</button><span class="tag">${esc(r.cuisine||'')} · ${esc(r.course||'Recipe')}</span><h2 class="detail-title">${esc(r.name)}</h2><div class="meta">${stars(r.rating)}</div><div class="detail-section"><h4>Ingredients</h4><ul>${ingredientsText(r).map(i=>'<li>'+esc(i)+'</li>').join('')}</ul></div><div class="detail-section"><h4>Method</h4><p>${esc(r.method||'')}</p></div>${r.personal_notes ? '<div class="detail-section"><h4>My notes</h4><p>'+esc(r.personal_notes)+'</p>' : ''}${r.source_url ? '<div class="detail-section"><h4>Source</h4><p><a href="'+esc(r.source_url)+'" target="_blank" rel="noopener">'+esc(r.source_title||r.source_url)+'</a></p></div>' : ''}<div class="detail-actions" style="display:flex;gap:12px;align-items:stretch;flex-wrap:nowrap"><button class="secondary" id="editRecipeBtn" type="button" style="flex:1;min-width:0">Edit recipe</button><button class="secondary" id="favBtn" type="button" style="flex:1;min-width:0">${r.is_favourite?'★ Remove favourite':'☆ Add to favourites'}</button></div>`;
   detailDialog.showModal();
   document.querySelector('#editRecipeBtn').onclick = async () => {
     try {
@@ -69,6 +68,7 @@ function queueFiles(files){files.forEach(file=>addImportItem({file,file_name:fil
 function renderImportQueue(){importQueue.innerHTML=importItems.length?'<div class="queue-head"><strong>'+importItems.length+' selected</strong><button class="secondary" id="uploadAll" type="button">Upload all</button></div>'+importItems.map(x=>'<div class="queue-item"><div><strong>'+esc(x.file_name)+'</strong><small>'+esc(x.mime_type||'')+(x.size?' · '+Math.round(x.size/1024)+' KB':'')+'</small></div><span>'+esc(x.status)+'</span></div>').join(''):'<div class="empty compact">Select files or add a URL to begin.</div>';}
 search.oninput=()=>render();
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{view=t.dataset.view;document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===t));render();});
+window.addEventListener('cc:recipes-changed',()=>loadData().catch(e=>console.error('Cooking Confidential refresh:',e)));
 async function boot(sessionOverride=null){let session=sessionOverride;if(!session){const {data:{session:currentSession}}=await supabase.auth.getSession();session=currentSession;}if(!session){loginPanel.hidden=false;appPanel.hidden=true;return;}loginPanel.hidden=true;appPanel.hidden=false;userBadge.textContent=session.user.email||'Signed in';try{await loadData();}catch(e){content.innerHTML='<div class="empty">'+esc(e.message)+'</div>';}}
 supabase.auth.onAuthStateChange((_event,session)=>{if(session){setTimeout(()=>boot(session),0);}else{loginPanel.hidden=false;appPanel.hidden=true;}});
 boot();
