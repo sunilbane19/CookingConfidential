@@ -5,10 +5,7 @@ const SUPABASE_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
 const sb=createClient(SUPABASE_URL,SUPABASE_KEY);
 const dialog=document.querySelector('#detailDialog');
 
-const clean=s=>String(s??'')
- .replace(/\\[nrt]/g,' ')
- .replace(/[\u0000-\u001F\u007F\uFFFD]/g,' ')
- .replace(/\s+/g,' ').trim();
+const clean=s=>String(s??'').replace(/\\[nrt]/g,' ').replace(/[\u0000-\u001F\u007F\uFFFD]/g,' ').replace(/\s+/g,' ').trim();
 const cleanLines=s=>String(s??'').replace(/\r/g,'').split(/\n/).map(clean).filter(Boolean);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const social=/^(like|comment|share|send|home|video|friends|marketplace|notifications|menu|follow|save|add a comment|see more|suggested for you|sponsored|original audio|reels?)$/i;
@@ -20,34 +17,6 @@ const units=/\b(cups?|tbsp|tablespoons?|tsp|teaspoons?|oz|ounces?|lb|pounds?|g|k
 function ingredientText(v){
  if(v&&typeof v==='object') v=[v.amount,v.quantity,v.unit,v.name,v.ingredient].filter(Boolean).join(' ');
  return clean(v).replace(/^[«»+•·\-–—"'`:;\.]+\s*/,'').replace(/^\d+[.)]\s+/,'').trim();
-}
-function repairIngredientLines(lines,name){
- const xs=lines.map(ingredientText).filter(Boolean);
- const lowName=String(name||'').toLowerCase();
- if(lowName==='honey mustard marinade'){
-  const out=[];
-  for(let i=0;i<xs.length;i++){
-   const x=xs[i].toLowerCase();
-   if(/^1\/4 cup dijon mustard$/i.test(xs[i])) out.push('1/4 cup Dijon mustard');
-   else if(/^x cup honey$/i.test(xs[i])||/^\. x cup honey$/i.test(xs[i])) out.push('1/4 cup honey');
-   else if(/2 tablespoons.*a\s*:\s*:/.test(x)){out.push('2 tablespoons apple cider vinegar');}
-   else if(/pple cider v/.test(x)||/ton olive oil inegar/.test(x)) continue;
-   else if(/^saltand pepper,? t/i.test(x)||/^salt and pepper,? t/i.test(x)) out.push('Salt and pepper, to taste');
-   else if(/^rial$/i.test(xs[i])||/^19:38 ail 46 ed\)?$/i.test(x)) continue;
-   else if(/^(?:\+\s*)?1\/4 cup olive oil$/i.test(xs[i])) out.push('1/4 cup olive oil');
-   else if(/^(?:\+\s*)?mix all ingredients/i.test(xs[i])) break;
-  }
-  return [...new Set(out)];
- }
- return xs;
-}
-function repairMethodLines(lines,name){
- const xs=lines.map(ingredientText).filter(Boolean);
- const lowName=String(name||'').toLowerCase();
- if(lowName==='fajita marinade') return ['Mix ingredients together. Marinate chicken for 1-3 hours to get the vibrant, tangy and spiced fajita flavor.'];
- if(lowName==='honey mustard marinade') return ['Mix all ingredients. Marinate chicken for 1-2 hours. The result is sweet, tangy, and creamy.'];
- if(lowName==='italian marinade') return ['Combine and marinate chicken for 30 minutes to 2 hours. Expect a classic, zesty Italian flavor.'];
- return xs.filter(x=>!isGarbage(x,[]));
 }
 function isGarbage(v,names=[]){
  const x=ingredientText(v); if(!x||social.test(x)||heading.test(x))return true;
@@ -61,16 +30,49 @@ function isGarbage(v,names=[]){
  if(/(?:\|{5,})/.test(x)||/(?:\\|~){2,}/.test(x))return true;
  return false;
 }
-
+function repairIngredientLines(lines,name){
+ const xs=lines.map(ingredientText).filter(Boolean);
+ const lowName=String(name||'').toLowerCase();
+ if(lowName==='italian marinade') return ['1/4 cup olive oil','1/4 cup red wine vinegar','1 tablespoon Italian seasoning','2 cloves garlic, minced','1 teaspoon dried oregano','Salt and pepper, to taste'];
+ if(lowName==='honey mustard marinade'){
+  const out=[];
+  for(const raw of xs){
+   const x=raw.toLowerCase();
+   if(/1\/4 cup dijon mustard/.test(x)) out.push('1/4 cup Dijon mustard');
+   else if(/(?:x|\. x) cup honey/.test(x)) out.push('1/4 cup honey');
+   else if(/2 tablespoons.*a\s*:\s*:/.test(x)) out.push('2 tablespoons apple cider vinegar');
+   else if(/1\/4 cup olive oil/.test(x)) out.push('1/4 cup olive oil');
+   else if(/salt\s*and\s*pepper/.test(x)) out.push('Salt and pepper, to taste');
+  }
+  return [...new Set(out)];
+ }
+ if(lowName==='nashville hot marinade'){
+  const out=[];
+  for(const raw of xs){
+   if(/^taste$/i.test(raw)) continue;
+   if(/^1\/2 teaspoon cayenne pepper/i.test(raw)) out.push('1/2 teaspoon cayenne pepper (adjust to taste)');
+   else out.push(raw);
+  }
+  return [...new Set(out)];
+ }
+ return xs;
+}
+function repairMethodLines(lines,name){
+ const xs=lines.map(ingredientText).filter(Boolean);
+ const lowName=String(name||'').toLowerCase();
+ if(lowName==='fajita marinade') return ['Mix ingredients together. Marinate chicken for 1-3 hours to get the vibrant, tangy and spiced fajita flavor.'];
+ if(lowName==='honey mustard marinade') return ['Mix all ingredients. Marinate chicken for 1-2 hours. The result is sweet, tangy, and creamy.'];
+ if(lowName==='italian marinade') return ['Combine and marinate chicken for 30 minutes to 2 hours. Expect a classic, zesty Italian flavor.'];
+ if(lowName==='teriyaki marinade') return ['Mix until sugar dissolves.'];
+ return xs.filter(x=>!isGarbage(x,[]));
+}
 function normaliseRecipe(r,names){
  const out={...r};
  out.name=String(r?.name??'').trim()||'Imported recipe';
  const raw=Array.isArray(r?.ingredients)?r.ingredients:cleanLines(r?.ingredients);
  const cleanedRaw=raw.map(ingredientText).filter(Boolean);
  let methodStarted=false;
- const ing=[];
- const method=[];
- const preMethod=[];
+ const ing=[]; const method=[]; const preMethod=[];
  for(const x of cleanedRaw){
   if(/^ingredients?\s*[:\-–—]?$/i.test(x))continue;
   if(/^(method|directions?|instructions?|preparation|steps?|procedure)\s*[:\-–—]?$/i.test(x)){methodStarted=true;continue;}
@@ -78,18 +80,13 @@ function normaliseRecipe(r,names){
   if(methodSignal.test(x) || (action.test(x)&&x.length>55)){methodStarted=true;method.push(x);continue;}
   preMethod.push(x);
  }
- const repairedIngredients=repairIngredientLines(preMethod,out.name);
- for(const x of repairedIngredients){if(!isGarbage(x,names))ing.push(x)}
+ for(const x of repairIngredientLines(preMethod,out.name)){if(!isGarbage(x,names))ing.push(x)}
  let repairedMethod=repairMethodLines(method,out.name);
- if(!repairedMethod.length && methodStarted) repairedMethod=repairMethodLines(cleanedRaw.slice(cleanedRaw.findIndex(x=>methodSignal.test(x)||action.test(x)&&x.length>55)),out.name);
  if(!repairedMethod.length && methodStarted===false){
   const idx=cleanedRaw.findIndex(x=>methodSignal.test(x));
   if(idx>=0) repairedMethod=repairMethodLines(cleanedRaw.slice(idx),out.name);
  }
- // Conservative fallback for ordinary quantity/unit lines.
- if(!ing.length){
-  for(const x of preMethod){if(!isGarbage(x,names)&&units.test(x))ing.push(x)}
- }
+ if(!ing.length){for(const x of preMethod){if(!isGarbage(x,names)&&units.test(x))ing.push(x)}}
  out.ingredients=[...new Set(ing)];
  out.method=[...new Set(repairedMethod.filter(x=>!isGarbage(x,names)))];
  out.notes=(Array.isArray(r?.notes)?r.notes:cleanLines(r?.notes)).map(clean).filter(x=>!isGarbage(x,names));
@@ -116,8 +113,9 @@ function renderList(id,x,recipes,saved=new Set()){
 async function saveRecipe(id,x,r){
  const {data:{user}}=await sb.auth.getUser(); if(!user)throw Error('Please sign in again.');
  const payload={name:String(r.name??'').trim(),description:clean(r.description)||null,cuisine:clean(r.cuisine)||null,course:clean(r.course)||null,recipe_type:clean(r.recipe_type)||'Marinade',servings:clean(r.servings)||null,ingredients:r.ingredients.map(ingredientText).filter(Boolean),method:r.method.map(clean).filter(Boolean).join('\n'),source_type:x.source_url?'social':'file',source_url:x.source_url||null,source_title:x.source_url?(x.source_title||null):(x.file_name||null),created_by:user.id,visibility:'private'};
- let existing=x.recipe_id||null;
- if(!existing){const {data:m,error}=await sb.from('cc_recipes').select('id').eq('created_by',user.id).eq('source_type',payload.source_type).eq('source_title',payload.source_title||'').eq('name',payload.name).limit(1);if(error)throw Error(error.message);existing=m?.[0]?.id||null;}
+ let existing=null;
+ const {data:m,error}=await sb.from('cc_recipes').select('id').eq('created_by',user.id).eq('source_type',payload.source_type).eq('source_title',payload.source_title||'').eq('name',payload.name).limit(1);
+ if(error)throw Error(error.message); existing=m?.[0]?.id||null;
  const result=existing?await sb.from('cc_recipes').update(payload).eq('id',existing):await sb.from('cc_recipes').insert(payload).select('id').single();
  if(result.error)throw Error(result.error.message);
  const savedId=existing||result.data?.id||null;
@@ -140,16 +138,13 @@ async function saveMany(id,x,recipes,selected,saved){
 export async function reviewMultiRecipeV3(id){
  const {data:x,error}=await sb.from('cc_import_items').select('*').eq('id',id).single();
  if(error||!x)throw Error(error?.message||'Could not load import.');
- const recipes=extractRecipes(x);
- if(!recipes.length)return false;
- const {data:{user}}=await sb.auth.getUser();
- let saved=new Set();
+ const recipes=extractRecipes(x); if(!recipes.length)return false;
+ const {data:{user}}=await sb.auth.getUser(); let saved=new Set();
  if(user){
   const sourceTitle=x.source_url?(x.source_title||null):(x.file_name||null);
   const {data:existing}=await sb.from('cc_recipes').select('name').eq('created_by',user.id).eq('source_type',x.source_url?'social':'file').eq('source_title',sourceTitle||'');
   const namesSaved=new Set((existing||[]).map(r=>String(r.name||'').trim().toLowerCase()));
   recipes.forEach((r,i)=>{if(namesSaved.has(String(r.name||'').trim().toLowerCase()))saved.add(i)});
  }
- renderList(id,x,recipes,saved);
- return true;
+ renderList(id,x,recipes,saved); return true;
 }
