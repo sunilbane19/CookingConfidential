@@ -1,5 +1,5 @@
 import { reviewMultiRecipeV3 } from './multi-recipe-review-v3.js?v=3.0.5';
-import { reviewSingleRecipe } from './single-recipe-review.js?v=1.0.1';
+import { reviewSingleRecipe } from './single-recipe-review.js?v=1.0.2';
 import { reviewImportFixed } from './import-review-fix.js?v=1.2.18';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const sb=createClient('https://yiwmtfbqbynimqvwxosu.supabase.co','sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu');
