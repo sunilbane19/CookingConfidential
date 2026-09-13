@@ -32,7 +32,7 @@ function deriveRecipe(text,fileName){
  const pre=ih>0?a.slice(0,ih):a.slice(0,Math.min(12,a.length));let name=pre.map((x,i)=>({x,i,s:titleScore(x)})).filter(v=>v.s>=0).sort((u,v)=>v.s-u.s||u.i-v.i)[0]?.x||'';
  if(!name)name=clean(fileName.replace(/\.[^.]+$/,'').replace(/[_-]+/g,' '));
  name=name.replace(/^[^A-Za-z]+/,'').replace(/[✨⭐🌟]+/g,'').trim()||'Imported recipe';
- const desc=pre.find(x=/^(?:a\s+|an\s+|the\s+)?(?:tangy|rich|spicy|sweet|refreshing|classic|simple|savory|creamy|zesty)\b/i.test(x))||'';
+ const desc=pre.find(x=>/^(?:a\s+|an\s+|the\s+)?(?:tangy|rich|spicy|sweet|refreshing|classic|simple|savory|creamy|zesty)\b/i.test(x))||'';
  const lower=name.toLowerCase();
  const cuisine=/japanese|italian|mexican|indian|thai|chinese|korean|french|greek|spanish|mediterranean|american/i.exec(`${name} ${desc}`)?.[0]||'';
  const course=/\b(sauce|dip|dressing|marinade|rub|paste|chutney|bread|cake|salad|soup|dessert|beverage)\b/i.exec(lower)?.[0]||'';
