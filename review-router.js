@@ -8,7 +8,7 @@ async function loadReviewModules(){
     import('./single-recipe-review.js?v=1.0.6'),
     import('./multi-recipe-review-v3.js?v=3.0.7'),
     import('./import-review-fix.js?v=1.2.20'),
-    import('./scanned-pdf-ocr.js?v=1.0.3')
+    import('./scanned-pdf-ocr.js?v=1.0.4')
   ]);
   return {single:single.reviewSingleRecipe,multi:multi.reviewMultiRecipeV3,fixed:fixed.reviewImportFixed,ocr:ocr.ocrScannedPdf};
 }
