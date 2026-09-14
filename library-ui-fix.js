@@ -1,7 +1,7 @@
 // Cooking Confidential: resilient auth + scalable recipe library.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const CC_SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
-const CC_SUPABASE_KEY='sb_publishable_EG30cid4BVU1vr6EeM3f9g_hztA7Wpu';
+const CC_SUPABASE_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
 const ccFetchNative=window.fetch.bind(window);
 window.fetch=async(input,init={})=>{const url=typeof input==='string'?input:(input?.url||'');if(!url.includes('supabase.co'))return ccFetchNative(input,init);const headers=new Headers(init.headers||input?.headers||{});const authorization=headers.get('authorization');if(authorization?.toLowerCase().startsWith('bearer sb_publishable_'))headers.delete('Authorization');let lastError;for(let attempt=0;attempt<2;attempt++){const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),9000);try{const response=await ccFetchNative(input,{...init,headers,signal:controller.signal,cache:'no-store'});clearTimeout(timer);return response}catch(error){clearTimeout(timer);lastError=error;if(attempt===0)await new Promise(resolve=>setTimeout(resolve,300));}}throw lastError};
 const ccAuth=createClient(CC_SUPABASE_URL,CC_SUPABASE_KEY);
