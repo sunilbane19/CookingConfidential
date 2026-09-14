@@ -29,14 +29,12 @@ window.fetch=async(input,init={})=>{
 };
 
 const ccAuth=createClient(CC_SUPABASE_URL,CC_SUPABASE_KEY);
-const ccLoginMessage=document.querySelector('#loginMessage');
-const ccLoginForm=document.querySelector('#loginForm');
-const ccLoginButton=ccLoginForm?.querySelector('button');
 
 function ccSetLoginMessage(message,isError=false){
-  if(!ccLoginMessage)return;
-  ccLoginMessage.textContent=message;
-  ccLoginMessage.dataset.state=isError?'error':'ok';
+  const node=document.querySelector('#loginMessage');
+  if(!node)return;
+  node.textContent=message;
+  node.dataset.state=isError?'error':'ok';
 }
 
 function ccFriendlyAuthError(error){
@@ -47,17 +45,19 @@ function ccFriendlyAuthError(error){
   return message;
 }
 
-// Capture the submit before app.js's direct form handler. This removes the competing
-// login implementation and guarantees that the actual Auth error is shown.
-if(ccLoginForm){
-  ccLoginForm.addEventListener('submit',async event=>{
+function installLoginCapture(){
+  const form=document.querySelector('#loginForm');
+  if(!form||form.dataset.ccAuthCapture==='1')return !!form;
+  form.dataset.ccAuthCapture='1';
+  form.addEventListener('submit',async event=>{
     event.preventDefault();
     event.stopImmediatePropagation();
-    if(!ccLoginButton||ccLoginButton.disabled)return;
+    const button=form.querySelector('button');
+    if(!button||button.disabled)return;
     const email=document.querySelector('#emailInput')?.value.trim();
     if(!email){ccSetLoginMessage('Please enter your email address.',true);return;}
-    ccLoginButton.disabled=true;
-    ccLoginButton.textContent='Sending…';
+    button.disabled=true;
+    button.textContent='Sending…';
     ccSetLoginMessage('Sending sign-in link…');
     try{
       const {error}=await ccAuth.auth.signInWithOtp({email,options:{emailRedirectTo:'https://cookingconfidential.in/'}});
@@ -67,12 +67,21 @@ if(ccLoginForm){
       console.error('Cooking Confidential sign-in:',error);
       ccSetLoginMessage(ccFriendlyAuthError(error),true);
     }finally{
-      ccLoginButton.disabled=false;
-      ccLoginButton.textContent='Send me a sign-in link';
+      button.disabled=false;
+      button.textContent='Send me a sign-in link';
     }
   },true);
+  return true;
 }
 
+// Install immediately and also watch briefly in case the app shell creates the form later.
+if(!installLoginCapture()){
+  const observer=new MutationObserver(()=>{if(installLoginCapture())observer.disconnect();});
+  observer.observe(document.documentElement,{subtree:true,childList:true});
+  setTimeout(()=>observer.disconnect(),10000);
+}
+
+// Explicitly handle token_hash callbacks so magic-link verification is deterministic.
 (async()=>{
   const params=new URLSearchParams(window.location.search);
   const tokenHash=params.get('token_hash');
