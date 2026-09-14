@@ -1,6 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const SUPABASE_URL = 'https://yiwmtfbqbynimqvwxosu.supabase.co';
-const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_EG30cid4BVU1vr6EeM3f9g_hztA7Wpu';
 const APP_URL = 'https://cookingconfidential.in/';
 const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 const content = document.querySelector('#content');
@@ -44,12 +44,27 @@ function showNotice(message){
   let d=document.querySelector('#ccNotice');
   if(!d){d=document.createElement('dialog');d.id='ccNotice';document.body.appendChild(d)}
   const text=String(message??'Something went wrong.');
-  const looksError=/(error|could not|couldn't|unable|failed|failure|invalid|select at least|please sign|not found|try again|problem|loading)/i.test(text);
+  const looksError=/(error|could not|couldn't|unable|failed|failure|invalid|select at least|please sign|not found|try again|problem|loading|jwt)/i.test(text);
   d.innerHTML=`<div class="cc-notice-card"><p class="eyebrow">${looksError?'ERROR':'NOTICE'}</p><h3>${looksError?'Something went wrong':'Cooking Confidential'}</h3><p>${esc(text)}</p><div class="cc-notice-actions"><button class="primary" type="button" id="ccNoticeOk">OK</button></div></div>`;
   d.querySelector('#ccNoticeOk').onclick=()=>d.close();
   if(!d.open)d.showModal();
 }
 window.alert=showNotice;
+
+function isFutureJwtError(error){
+  return /jwt.*(issued|iat).*future|issued at future/i.test(String(error?.message||error||''));
+}
+
+async function recoverInvalidSession(error){
+  if(!isFutureJwtError(error)) return false;
+  console.warn('Cooking Confidential: cached Supabase session has a future-issued JWT; clearing local session.', error);
+  try { await supabase.auth.signOut({scope:'local'}); } catch (_) {}
+  loginPanel.hidden=false;
+  appPanel.hidden=true;
+  loginMessage.textContent='Your saved sign-in session is no longer valid. Please request a new sign-in link.';
+  content.innerHTML='';
+  return true;
+}
 
 async function loadData() {
   content.innerHTML = '<div class="empty">Loading your recipes…</div>';
@@ -99,8 +114,8 @@ function queueFiles(files){files.forEach(file=>addImportItem({file,file_name:fil
 function renderImportQueue(){importQueue.innerHTML=importItems.length?'<div class="queue-head"><strong>'+importItems.length+' selected</strong><button class="secondary" id="uploadAll" type="button">Upload all</button></div>'+importItems.map(x=>'<div class="queue-item"><div><strong>'+esc(x.file_name)+'</strong><small>'+esc(x.mime_type||'')+(x.size?' · '+Math.round(x.size/1024)+' KB':'')+'</small></div><span>'+esc(x.status)+'</span></div>').join(''):'<div class="empty compact">Select files or add a URL to begin.</div>';}
 search.oninput=()=>render();
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{view=t.dataset.view;document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===t));render();});
-window.addEventListener('cc:recipes-changed',()=>loadData().catch(e=>showNotice(e.message||'Could not refresh your recipes.')));
-async function boot(sessionOverride=null){let session=sessionOverride;if(!session){const {data:{session:currentSession}}=await supabase.auth.getSession();session=currentSession;}if(!session){loginPanel.hidden=false;appPanel.hidden=true;return;}loginPanel.hidden=true;appPanel.hidden=false;userBadge.textContent=session.user.email||'Signed in';try{await loadData();}catch(e){console.error('Cooking Confidential load:',e);showNotice(e.message||'Could not load your recipes.');}}
-supabase.auth.onAuthStateChange((_event,session)=>{if(session){setTimeout(()=>boot(session),0);}else{loginPanel.hidden=false;appPanel.hidden=true;}});
+window.addEventListener('cc:recipes-changed',()=>loadData().catch(async e=>{if(!(await recoverInvalidSession(e)))showNotice(e.message||'Could not refresh your recipes.');}));
+async function boot(sessionOverride=null){let session=sessionOverride;if(!session){const {data:{session:currentSession},error}=await supabase.auth.getSession();if(error){if(await recoverInvalidSession(error))return;throw error;}session=currentSession;}if(!session){loginPanel.hidden=false;appPanel.hidden=true;return;}loginPanel.hidden=true;appPanel.hidden=false;userBadge.textContent=session.user.email||'Signed in';try{await loadData();}catch(e){console.error('Cooking Confidential load:',e);if(!(await recoverInvalidSession(e)))showNotice(e.message||'Could not load your recipes.');}}
+supabase.auth.onAuthStateChange((_event,session)=>{if(session){setTimeout(()=>boot(session).catch(e=>{console.error('Cooking Confidential auth:',e);showNotice(e.message||'Could not load your recipes.');}),0);}else{loginPanel.hidden=false;appPanel.hidden=true;}});
 ensureNoticeStyles();
-boot();
+boot().catch(e=>{console.error('Cooking Confidential boot:',e);showNotice(e.message||'Could not load your recipes.');});
