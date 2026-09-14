@@ -1,51 +1,15 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-
-const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
-const PAGE_SIZE=12;
-let client=null;
-let page=0;
-let total=0;
-let active=false;
-
-async function getClient(){
-  if(client)return client;
-  const source=await fetch('/app.js?v=1.3.8',{cache:'no-store'}).then(r=>r.text());
-  const key=source.match(/sb_publishable_[A-Za-z0-9_-]+/)?.[0];
-  if(!key)throw new Error('Could not initialise the recipe library.');
-  client=createClient(SUPABASE_URL,key);
-  return client;
-}
-function esc(s=''){return String(s).replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));}
-function stars(n){return n?'★'.repeat(n):'';}
-function render(data,count){
-  const content=document.querySelector('#content');
-  if(!content)return;
-  total=count||0;
-  const pages=Math.max(1,Math.ceil(total/PAGE_SIZE));
-  page=Math.min(page,pages-1);
-  const cards=(data||[]).map(r=>`<article class="card" data-recovery-id="${r.id}"><div class="card-image">🍽</div><div class="card-body"><span class="tag">${esc(r.cuisine||'Uncategorised')}</span><h3>${esc(r.name||'Untitled recipe')}</h3><div class="meta">${esc(r.course||'Recipe')} · ${stars(r.rating)}</div></div></article>`).join('');
-  const start=total?page*PAGE_SIZE+1:0,end=Math.min((page+1)*PAGE_SIZE,total);
-  content.innerHTML=`<div class="section-head"><h2>Your recipes</h2><span class="count">${total} recipes</span></div>${cards?'<div class="grid">'+cards+'</div>':'<div class="empty">No recipes found.</div>'}${total>PAGE_SIZE?`<div style="display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;margin:24px 0 8px"><button class="secondary cc-recovery-page" data-page="0" ${page===0?'disabled':''}>First</button><button class="secondary cc-recovery-page" data-page="${Math.max(0,page-1)}" ${page===0?'disabled':''}>‹ Prev</button><span style="padding:0 8px;color:#746f66;font-size:14px">${start}–${end} of ${total} · Page ${page+1} of ${pages}</span><button class="secondary cc-recovery-page" data-page="${Math.min(pages-1,page+1)}" ${page>=pages-1?'disabled':''}>Next ›</button><button class="secondary cc-recovery-page" data-page="${pages-1}" ${page>=pages-1?'disabled':''}>Last</button></div>`:''}`;
-  content.querySelectorAll('.cc-recovery-page').forEach(b=>b.onclick=async()=>{if(b.disabled)return;page=Number(b.dataset.page);await load();});
-  content.querySelectorAll('[data-recovery-id]').forEach(c=>c.onclick=()=>{const id=Number(c.dataset.recoveryId);const r=(data||[]).find(x=>x.id===id);if(!r)return;const d=document.querySelector('#detailDialog');if(!d)return;d.querySelector('#detailContent').innerHTML=`<button class="close" onclick="detailDialog.close()">×</button><span class="tag">${esc(r.cuisine||'')} · ${esc(r.course||'Recipe')}</span><h2 class="detail-title">${esc(r.name||'Untitled recipe')}</h2><div class="meta">${stars(r.rating)}</div><div class="detail-section"><h4>Ingredients</h4><ul>${(Array.isArray(r.ingredients)?r.ingredients:(typeof r.ingredients==='string'?r.ingredients.split(/\r?\n/):[])).map(i=>'<li>'+esc(typeof i==='string'?i:[i?.amount,i?.quantity,i?.unit,i?.name,i?.ingredient].filter(Boolean).join(' '))+'</li>').join('')}</ul></div><div class="detail-section"><h4>Method</h4><p>${esc(r.method||'')}</p></div>`;d.showModal();});
-}
-async function load(){
-  const sb=await getClient();
-  const {data:{session}}=await sb.auth.getSession();
-  if(!session)throw new Error('Please sign in again.');
-  let q=sb.from('cc_recipes').select('*',{count:'exact'}).order('updated_at',{ascending:false}).range(page*PAGE_SIZE,page*PAGE_SIZE+PAGE_SIZE-1);
-  const search=document.querySelector('#searchInput')?.value.trim();
-  if(search){const like=`*${search.replace(/[(),%]/g,' ')}*`;q=q.or(`(name.ilike.${like},cuisine.ilike.${like},country.ilike.${like},region.ilike.${like},course.ilike.${like},personal_notes.ilike.${like})`);}
-  const {data,error,count}=await q;if(error)throw error;render(data,count);
-}
-async function recover(){
-  if(active)return;
-  active=true;
-  try{await load();}catch(e){console.error('Cooking Confidential library recovery:',e);active=false;return;}
-}
-setTimeout(()=>{
-  const content=document.querySelector('#content');
-  if(!content)return;
-  if(/Loading your recipes/i.test(content.textContent||''))recover();
-},3500);
-window.addEventListener('cc:recipes-changed',()=>{if(active)load().catch(()=>{});});
+// Isolated library fallback. Activates only if the main library remains in its loading state.
+const CC_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
+const CC_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
+const CC_STORAGE_KEY='sb-yiwmtfbqbynimqvwxosu-auth-token';
+const CC_PAGE_SIZE=12;
+let ccPage=0,ccRows=[],ccBusy=false;
+function ccToken(){try{const v=JSON.parse(localStorage.getItem(CC_STORAGE_KEY)||'null');return v?.access_token||v?.currentSession?.access_token||null}catch{return null}}
+function ccEsc(v=''){return String(v).replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]))}
+function ccUrl(page){const u=new URL(CC_URL+'/rest/v1/cc_recipes');u.searchParams.set('select','*');u.searchParams.set('order','updated_at.desc');u.searchParams.set('limit',CC_PAGE_SIZE);u.searchParams.set('offset',page*CC_PAGE_SIZE);const q=String(document.querySelector('#searchInput')?.value||'').trim();if(q){const like=`*${q.replace(/[(),%]/g,' ')}*`;u.searchParams.set('or',`(name.ilike.${like},cuisine.ilike.${like},country.ilike.${like},region.ilike.${like},course.ilike.${like},personal_notes.ilike.${like})`)}if(document.querySelector('.tab.active')?.dataset.view==='favourites')u.searchParams.set('is_favourite','eq.true');return u.toString()}
+async function ccFetch(page){const token=ccToken();if(!token)throw new Error('Your saved sign-in session is unavailable. Please sign in again.');const c=new AbortController(),t=setTimeout(()=>c.abort(),10000);try{const r=await fetch(ccUrl(page),{headers:{apikey:CC_KEY,Authorization:`Bearer ${token}`},cache:'no-store',signal:c.signal});const text=await r.text();let data=[];try{data=JSON.parse(text)}catch{}if(!r.ok)throw new Error(data?.message||data?.hint||`Library request failed (${r.status}).`);if(!Array.isArray(data))throw new Error('The recipe library returned an unexpected response.');return data}finally{clearTimeout(t)}}
+function ccRender(){const content=document.querySelector('#content');if(!content)return;const start=ccPage*CC_PAGE_SIZE+1,end=ccPage*CC_PAGE_SIZE+ccRows.length;const cards=ccRows.map(r=>`<article class="card cc-recovery-card" data-id="${r.id}"><div class="card-image">🍽</div><div class="card-body"><span class="tag">${ccEsc(r.cuisine||'Uncategorised')}</span><h3>${ccEsc(r.name||'Untitled recipe')}</h3><div class="meta">${ccEsc(r.course||'Recipe')} ${r.rating?'· '+'★'.repeat(r.rating):''}</div></div></article>`).join('');content.innerHTML=`<div class="section-head"><h2>${document.querySelector('.tab.active')?.dataset.view==='favourites'?'Favourites':'Your recipes'}</h2><span class="count">${start}–${end}</span></div>${cards?'<div class="grid">'+cards+'</div>':'<div class="empty">No recipes found.</div>'}<div style="display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;margin:24px 0 8px"><button class="secondary" id="ccRecoveryPrev" ${ccPage===0?'disabled':''}>‹ Prev</button><span style="padding:0 8px;color:#746f66;font-size:14px">Page ${ccPage+1}</span><button class="secondary" id="ccRecoveryNext" ${ccRows.length<CC_PAGE_SIZE?'disabled':''}>Next ›</button></div>`;document.querySelector('#ccRecoveryPrev')?.addEventListener('click',()=>ccLoad(ccPage-1));document.querySelector('#ccRecoveryNext')?.addEventListener('click',()=>ccLoad(ccPage+1));document.querySelectorAll('.cc-recovery-card').forEach(c=>c.addEventListener('click',()=>ccShow(Number(c.dataset.id))))}
+function ccShow(id){const r=ccRows.find(x=>Number(x.id)===id);if(!r)return;const d=document.querySelector('#detailDialog');if(!d)return;const ing=Array.isArray(r.ingredients)?r.ingredients:(typeof r.ingredients==='string'?r.ingredients.split(/\r?\n/):[]);d.querySelector('#detailContent').innerHTML=`<button class="close" onclick="detailDialog.close()">×</button><span class="tag">${ccEsc(r.cuisine||'')} · ${ccEsc(r.course||'Recipe')}</span><h2 class="detail-title">${ccEsc(r.name||'Untitled recipe')}</h2><div class="meta">${r.rating?'★'.repeat(r.rating):''}</div><div class="detail-section"><h4>Ingredients</h4><ul>${ing.map(i=>`<li>${ccEsc(typeof i==='string'?i:[i?.amount,i?.quantity,i?.unit,i?.name,i?.ingredient].filter(Boolean).join(' '))}</li>`).join('')}</ul></div><div class="detail-section"><h4>Method</h4><p>${ccEsc(r.method||'')}</p></div>`;d.showModal()}
+async function ccLoad(page){if(page<0||ccBusy)return;ccBusy=true;try{ccRows=await ccFetch(page);ccPage=page;ccRender()}catch(e){const c=document.querySelector('#content');if(c)c.innerHTML=`<div class="empty">${ccEsc(e.message||'Could not load your recipes. Please try again.')}</div>`}finally{ccBusy=false}}
+setTimeout(()=>{const c=document.querySelector('#content');if(c&&/Loading your recipes/i.test(c.textContent||''))ccLoad(0)},3500);
+window.addEventListener('cc:recipes-changed',()=>{if(ccRows.length)ccLoad(ccPage).catch(()=>{})});
