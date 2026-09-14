@@ -1,7 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const SUPABASE_URL = 'https://yiwmtfbqbynimqvwxosu.supabase.co';
-const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_EG30cid4BVU1vr6EeM3f9g_hztA7Wpu';
 const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
 const signOutBtn = document.querySelector('#signOutBtn');
@@ -28,6 +28,7 @@ if (signOutBtn) {
   });
 }
 
-const { data: { session } } = await supabase.auth.getSession();
-setAuthControls(session);
+// Do not call getSession() here. app.js already owns session bootstrap;
+// a second getSession() can race a token refresh and produce
+// “Refresh result discarded: session state changed mid-flight”.
 supabase.auth.onAuthStateChange((_event, nextSession) => setAuthControls(nextSession));
