@@ -10,7 +10,6 @@ window.fetch=async(input,init={})=>{
   const url=typeof input==='string' ? input : (input?.url||'');
   if(!url.includes(ccSupabaseHost)) return ccFetchNative(input,init);
   const headers=new Headers(init.headers||input?.headers||{});
-  // New publishable keys belong in apikey. Do not send the publishable key as a Bearer token.
   const authorization=headers.get('authorization');
   if(authorization?.toLowerCase().startsWith('bearer sb_publishable_'))headers.delete('Authorization');
   let lastError;
@@ -48,10 +47,12 @@ function ccFriendlyAuthError(error){
   return message;
 }
 
-// Replace the app shell's generic login error with the real Supabase Auth error.
+// Capture the submit before app.js's direct form handler. This removes the competing
+// login implementation and guarantees that the actual Auth error is shown.
 if(ccLoginForm){
-  ccLoginForm.onsubmit=async event=>{
+  ccLoginForm.addEventListener('submit',async event=>{
     event.preventDefault();
+    event.stopImmediatePropagation();
     if(!ccLoginButton||ccLoginButton.disabled)return;
     const email=document.querySelector('#emailInput')?.value.trim();
     if(!email){ccSetLoginMessage('Please enter your email address.',true);return;}
@@ -69,17 +70,14 @@ if(ccLoginForm){
       ccLoginButton.disabled=false;
       ccLoginButton.textContent='Send me a sign-in link';
     }
-  };
+  },true);
 }
 
-// Explicitly handle token_hash callbacks. This makes the magic-link flow deterministic
-// and gives an actionable error instead of allowing an invalid callback to render blank.
 (async()=>{
   const params=new URLSearchParams(window.location.search);
   const tokenHash=params.get('token_hash');
   const type=params.get('type');
   if(!tokenHash)return;
-
   try{
     ccSetLoginMessage('Completing sign-in…');
     try{await ccAuth.auth.signOut({scope:'local'});}catch(_){ }
