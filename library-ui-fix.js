@@ -3,7 +3,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const CC_SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
-const CC_SUPABASE_KEY='sb_publishable_EG30cid4BVU1vr6EeM3f9g_hztA7Wpu';
+const CC_SUPABASE_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
 const ccFetchNative=window.fetch.bind(window);
 const ccSupabaseHost='supabase.co';
 window.fetch=async(input,init={})=>{
@@ -74,14 +74,12 @@ function installLoginCapture(){
   return true;
 }
 
-// Install immediately and also watch briefly in case the app shell creates the form later.
 if(!installLoginCapture()){
   const observer=new MutationObserver(()=>{if(installLoginCapture())observer.disconnect();});
   observer.observe(document.documentElement,{subtree:true,childList:true});
   setTimeout(()=>observer.disconnect(),10000);
 }
 
-// Explicitly handle token_hash callbacks so magic-link verification is deterministic.
 (async()=>{
   const params=new URLSearchParams(window.location.search);
   const tokenHash=params.get('token_hash');
