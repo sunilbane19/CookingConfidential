@@ -9,12 +9,16 @@ const ccSupabaseHost='supabase.co';
 window.fetch=async(input,init={})=>{
   const url=typeof input==='string' ? input : (input?.url||'');
   if(!url.includes(ccSupabaseHost)) return ccFetchNative(input,init);
+  const headers=new Headers(init.headers||input?.headers||{});
+  // New publishable keys belong in apikey. Do not send the publishable key as a Bearer token.
+  const authorization=headers.get('authorization');
+  if(authorization?.toLowerCase().startsWith('bearer sb_publishable_'))headers.delete('Authorization');
   let lastError;
   for(let attempt=0;attempt<2;attempt++){
     const controller=new AbortController();
     const timer=setTimeout(()=>controller.abort(),9000);
     try{
-      const response=await ccFetchNative(input,{...init,signal:controller.signal,cache:'no-store'});
+      const response=await ccFetchNative(input,{...init,headers,signal:controller.signal,cache:'no-store'});
       clearTimeout(timer);
       return response;
     }catch(error){
