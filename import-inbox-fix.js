@@ -1,4 +1,4 @@
-import { supabase as sb } from './supabase-client.js?v=1.0.1';
+import { supabase as sb } from './supabase-client-legacy.js?v=1.0.0';
 const importDialog=document.querySelector('#importDialog'),importQueue=document.querySelector('#importQueue');
 const esc=s=>String(s??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));let busy=false;
 async function openInbox(){if(!importDialog)return;importDialog.showModal();loadInbox()}
