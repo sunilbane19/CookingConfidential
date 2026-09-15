@@ -1,41 +1,12 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-
-// Authentication recovery plus a single, reliable magic-link handler.
-const URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
-const KEY='sb_publishable_EG30cid4BVU1vr6EeM3f9g_hztA7Wpu';
-const STORAGE='sb-yiwmtfbqbynimqvwxosu-auth-token';
-const FLAG='cc-jwt-future-recovery';
-let recovering=false;
-const sb=createClient(URL,KEY);
-
-function storedSession(){try{const raw=localStorage.getItem(STORAGE);if(!raw)return null;const v=JSON.parse(raw);return v?.currentSession||v?.session||v||null}catch{return null}}
-async function forceRefresh(){if(recovering)return false;const now=Date.now();if(now-Number(localStorage.getItem(FLAG)||0)<60000)return false;const session=storedSession();if(!session?.refresh_token)return false;recovering=true;localStorage.setItem(FLAG,String(now));try{const {data,error}=await sb.auth.refreshSession({refresh_token:session.refresh_token});if(error||!data?.session){console.warn('JWT recovery refresh failed',error||'No session returned');recovering=false;return false}localStorage.removeItem(FLAG);location.reload();return true}catch(e){console.warn('JWT recovery failed',e);recovering=false;return false}}
-
-// Capture the submit before app.js's legacy handler so the old generic message
-// cannot hide the real Supabase error. Use the exact current site as redirect.
-document.addEventListener('submit',async event=>{
-  const form=event.target;
-  if(!(form instanceof HTMLFormElement)||form.id!=='loginForm')return;
-  event.preventDefault();event.stopImmediatePropagation();
-  const input=form.querySelector('#emailInput'),button=form.querySelector('button'),message=form.querySelector('#loginMessage');
-  const email=String(input?.value||'').trim();if(!email||!button||button.disabled)return;
-  button.disabled=true;button.textContent='Sending…';if(message)message.textContent='Sending sign-in link…';
-  try{
-    const redirectTo=new URL('./',location.href).href;
-    const result=await Promise.race([
-      sb.auth.signInWithOtp({email,options:{emailRedirectTo:redirectTo,shouldCreateUser:false}}),
-      new Promise((_,reject)=>setTimeout(()=>reject(new Error('The sign-in request timed out. Please check your connection and try again.')),15000))
-    ]);
-    if(result.error)throw result.error;
-    if(message)message.textContent='Check your email for the sign-in link.';
-  }catch(error){
-    console.error('Cooking Confidential sign-in:',error);
-    const raw=String(error?.message||error||'Could not send the sign-in link.');
-    const lower=raw.toLowerCase();
-    if(message)message.textContent=(lower.includes('rate limit')||lower.includes('too many requests'))?'Please wait about 60 seconds before requesting another sign-in link.':raw;
-    button.disabled=false;button.textContent='Send me a sign-in link';
-  }
-},true);
-
-const observer=new MutationObserver(()=>{if(/JWT issued at future/i.test(document.body?.innerText||''))forceRefresh()});
-observer.observe(document.documentElement,{subtree:true,childList:true,characterData:true});
+// Cooking Confidential: login + JWT recovery guard.
+// Deliberately dependency-free so the sign-in button works even if another module fails to load.
+const CC_AUTH_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
+const CC_AUTH_KEY='sb_publishable_EG30cid4BVU1vr6EeM3f9g_hztA7Wpu';
+const CC_AUTH_STORAGE='sb-yiwmtfbqbynimqvwxosu-auth-token';
+const CC_JWT_FLAG='cc-jwt-future-recovery';
+let ccRecovering=false;
+function ccStoredSession(){try{const raw=localStorage.getItem(CC_AUTH_STORAGE);if(!raw)return null;const v=JSON.parse(raw);return v?.currentSession||v?.session||v||null}catch{return null}}
+function ccJwtIat(token){try{const p=String(token||'').split('.')[1];if(!p)return null;const b64=p.replace(/-/g,'+').replace(/_/g,'/');const json=JSON.parse(atob(b64+'='.repeat((4-b64.length%4)%4)));return Number(json.iat)||null}catch{return null}}
+async function ccForceRefresh(){if(ccRecovering)return false;const session=ccStoredSession();if(!session?.refresh_token)return false;const now=Date.now(),iat=ccJwtIat(session.access_token);if(!iat||iat*1000<=now+5000)return false;if(now-Number(localStorage.getItem(CC_JWT_FLAG)||0)<60000)return false;ccRecovering=true;localStorage.setItem(CC_JWT_FLAG,String(now));try{const response=await fetch(CC_AUTH_URL+'/auth/v1/token?grant_type=refresh_token',{method:'POST',headers:{'Content-Type':'application/json','apikey':CC_AUTH_KEY},body:JSON.stringify({refresh_token:session.refresh_token})});if(!response.ok){console.warn('JWT recovery refresh failed',response.status);ccRecovering=false;return false}localStorage.removeItem(CC_JWT_FLAG);location.reload();return true}catch(e){console.warn('JWT recovery failed',e);ccRecovering=false;return false}}
+document.addEventListener('submit',function(event){const form=event.target;if(!(form instanceof HTMLFormElement)||form.id!=='loginForm')return;event.preventDefault();event.stopImmediatePropagation();const input=form.querySelector('#emailInput'),button=form.querySelector('button'),message=form.querySelector('#loginMessage');const email=String(input?.value||'').trim();if(!email||!button||button.disabled)return;button.disabled=true;button.textContent='Sending…';if(message)message.textContent='Sending sign-in link…';const redirectTo=new URL('./',location.href).href;fetch(CC_AUTH_URL+'/auth/v1/otp',{method:'POST',headers:{'Content-Type':'application/json','apikey':CC_AUTH_KEY},body:JSON.stringify({email,create_user:false,redirect_to:redirectTo})}).then(async response=>{let data=null;try{data=await response.json()}catch(_){}if(!response.ok)throw new Error(data?.msg||data?.message||data?.error_description||('Sign-in request failed ('+response.status+').'));return data}).then(()=>{if(message)message.textContent='Check your email for the sign-in link.';button.disabled=false;button.textContent='Send me a sign-in link'}).catch(error=>{console.error('Cooking Confidential sign-in:',error);if(message)message.textContent=String(error?.message||error||'Could not send the sign-in link.');button.disabled=false;button.textContent='Send me a sign-in link'});},true);
+const ccObserver=new MutationObserver(()=>{if(/JWT issued at future/i.test(document.body?.innerText||''))ccForceRefresh()});ccObserver.observe(document.documentElement,{subtree:true,childList:true,characterData:true});ccForceRefresh();
