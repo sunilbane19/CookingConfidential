@@ -1,5 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-const supabase=createClient('https://yiwmtfbqbynimqvwxosu.supabase.co','sb_publishable_EG30cid4BVU1vr6EeM3f9g_hztA7Wpu');
+import { supabase } from './supabase-client.js?v=1.0.1';
 const dialog=document.querySelector('#detailDialog');
 const esc=s=>String(s??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));
 const clean=s=>String(s??'').replace(/\s*\[[\s\d,;,-]+\]\s*/g,' ').replace(/\s+/g,' ').trim();
