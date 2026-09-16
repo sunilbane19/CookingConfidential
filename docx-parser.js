@@ -1,6 +1,6 @@
 const clean=s=>String(s??'').replace(/[\u0000-\u001F\u007F\uFFFD]/g,' ').replace(/\s+/g,' ').trim();
 
-const GENERIC=/^(recipe|recipes|ingredients?|ingredient list|the ingredients|method|the method|directions?|the directions|instructions?|the instructions|preparation|the preparation|steps?|the steps|contents?|index|introduction|notes?|tips?|storage|serving suggestions?|servings?|yield)[:.]?$/i;
+const GENERIC=/^(recipe|recipes|ingredients?|ingredient list|the ingredients|method|the method|directions?|the directions|instructions?|the instructions|preparation|the preparation|steps?|the steps|contents?|index|introduction|description|overview|component breakdown|step[- ]by[- ]step execution plan|notes?|tips?|storage|serving suggestions?|servings?|yield)[:.]?$/i;
 const SECTION={
   ingredients:/^(?:the\s+)?ingredients?(?:\s+list)?\s*:?$/i,
   method:/^(?:the\s+)?(?:instructions?|method|directions?|preparation|steps?|stages?)\s*:?$/i,
