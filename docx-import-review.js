@@ -33,12 +33,26 @@ function editOne(id,x,recipes,i){
   dialog.querySelector('.close').onclick=()=>dialog.close();
   dialog.querySelector('#docxBack').onclick=()=>render(id,x,recipes);
   const f=dialog.querySelector('#docxOne');
-  f.onsubmit=e=>{
+  f.onsubmit=async e=>{
     e.preventDefault();
     const fd=new FormData(f);
-    recipes[i]={...r,name:clean(fd.get('name')),ingredients:lines(fd.get('ingredients')),method:lines(fd.get('method')),notes:lines(fd.get('notes'))};
-    render(id,x,recipes);
+    const updated={...r,name:clean(fd.get('name')),ingredients:lines(fd.get('ingredients')),method:lines(fd.get('method')),notes:lines(fd.get('notes'))};
+    recipes[i]=updated;
+    await saveOne(id,x,updated);
   };
+}
+
+async function saveOne(id,x,r){
+  const{data:{user}}=await sb.auth.getUser();
+  if(!user)return alert('Please sign in again.');
+  const prepared=window.ccRecipeInheritance?.applyInheritance?window.ccRecipeInheritance.applyInheritance([r]):[r];
+  const p=prepared[0];
+  const row={name:clean(p.name),description:clean(p.description)||null,cuisine:clean(p.cuisine)||null,course:clean(p.course)||null,recipe_type:clean(p.recipe_type)||'Dish',servings:clean(p.servings)||null,ingredients:p.ingredients,method:Array.isArray(p.method)?p.method.join('\n'):clean(p.method),personal_notes:Array.isArray(p.notes)?p.notes.join('\n')||null:null,source_type:'file',source_url:null,source_title:x.file_name||null,created_by:user.id,visibility:'private'};
+  const{error}=await sb.from('cc_recipes').insert([row]);
+  if(error)return alert(error.message);
+  alert('Recipe saved.');
+  dialog.close();
+  location.reload();
 }
 
 async function saveMany(id,x,recipes){
