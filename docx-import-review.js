@@ -7,12 +7,12 @@ const lines=s=>String(s??'').replace(/\r/g,'').split('\n').map(clean).filter(Boo
 const GENERIC=/^(recipe|recipes|ingredients?|method|directions?|instructions?|preparation|steps?|contents?|index|introduction|notes?|tips?|storage|serving suggestions?)[:.]?$/i;
 const UNIT=/\b(?:g|gm|kg|mg|ml|l|oz|lb|lbs|tsp|tbsp|cup|cups|pint|pints|quart|quarts|clove|cloves|slice|slices|piece|pieces|can|cans|packet|packets|tbsp\.|tsp\.)\b/i;
 const NUMBER=/\b\d+(?:[.,]\d+)?(?:\s*[½¼¾⅓⅔⅛⅜⅝⅞])?\b/;
-function isHeading(s){const x=clean(s);if(!x||GENERIC.test(x)||x.length>70)return false;const w=x.split(/\s+/);if(w.length>8)return false;return w.filter(v=>/^[A-Z][A-Za-z'&-]*$/.test(v)).length>=Math.max(1,Math.ceil(w.length*.35));}
 function isIngredient(raw){const x=clean(raw);if(!x||GENERIC.test(x)||x.length>100)return false;if(/^\d+[.)]\s+/.test(x)&&NUMBER.test(x))return true;if(/\t/.test(String(raw))&&NUMBER.test(x))return true;if(/\s{2,}/.test(String(raw))&&NUMBER.test(x)&&x.length<85)return true;const nums=x.match(/\d+(?:[.,]\d+)?/g)||[];if(nums.length===1&&UNIT.test(x)&&x.length<70&&!/[.!?]{2}/.test(x))return true;if(/\b(?:to taste|as needed|as required)\b/i.test(x)&&x.length<70)return true;return false;}
-function normalizeIngredient(x){return clean(String(x).replace(/^\d+[.)]\s*/,''));}
+function isReferenceLine(s){return /^(?:use|using|as|same|above|below|refer to|see|follow|replace|substitute|for)\b/i.test(clean(s));}
+function isHeading(s){const x=clean(s);if(!x||GENERIC.test(x)||x.length>70)return false;if(isIngredient(x)||(/\d/.test(x)&&UNIT.test(x)))return false;if(isReferenceLine(x))return false;const w=x.split(/\s+/);if(w.length>8)return false;return w.filter(v=>/^[A-Z][A-Za-z'&-]*$/.test(v)).length>=Math.max(1,Math.ceil(w.length*.35));}
 function parseDocx(html,fileName){
  const doc=new DOMParser().parseFromString(html,'text/html');
- const nodes=[...doc.querySelectorAll('h1,h2,h3,h4,h5,h6,p,li')].map(e=>({raw:e.textContent||'',text:clean(e.textContent||'')})).filter(x=>x.text);
+ const nodes=[...doc.querySelectorAll('h1,h2,h3,h4,h5,h6,p,li')].map(e=>({raw:e.textContent||'',text:clean(e.textContent||''),tag:e.tagName.toLowerCase()})).filter(x=>x.text);
  if(!nodes.length)return[];
  const heads=[];for(let i=0;i<nodes.length;i++)if(isHeading(nodes[i].text))heads.push(i);
  const recipeHeads=heads.filter((idx,pos)=>{const t=nodes[idx].text;return !/(?:\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\b|\b20\d{2}\b)/i.test(t)||pos>0;});
@@ -21,8 +21,8 @@ function parseDocx(html,fileName){
   const start=usable[h],end=h+1<usable.length?usable[h+1]:nodes.length,section=nodes.slice(start+1,end);
   const r={name:clean(nodes[start].text)||clean(fileName.replace(/\.[^.]+$/,'')),description:'',cuisine:'',course:'',recipe_type:'Dish',servings:'',ingredients:[],method:[],notes:[]};
   let sawIngredient=false,afterIngredients=false;
-  for(const n of section){const t=n.text;if(/^ingredients?(?:\s+list)?\s*:?$/i.test(t)){sawIngredient=true;continue;}if(/^notes?\s*:?$/i.test(t)){afterIngredients=true;continue;}if(!afterIngredients&&(isIngredient(n.raw)||isIngredient(t))){r.ingredients.push(normalizeIngredient(t));sawIngredient=true;continue;}if(sawIngredient||r.ingredients.length){afterIngredients=true;r.method.push(t);}}
-  if(!r.ingredients.length){for(const n of section)if(isIngredient(n.raw)||isIngredient(n.text))r.ingredients.push(normalizeIngredient(n.text));if(r.ingredients.length){const ingSet=new Set(r.ingredients);r.method=section.map(n=>n.text).filter(t=>!ingSet.has(normalizeIngredient(t))&&!/^ingredients?|notes?\s*:/i.test(t));}}
+  for(const n of section){const t=n.text;if(/^ingredients?(?:\s+list)?\s*:?$/i.test(t)){sawIngredient=true;continue;}if(/^notes?\s*:?$/i.test(t)){afterIngredients=true;continue;}if(!afterIngredients&&(isIngredient(n.raw)||isIngredient(t))){r.ingredients.push(clean(String(t).replace(/^\d+[.)]\s*/,'')));sawIngredient=true;continue;}if(sawIngredient||r.ingredients.length){afterIngredients=true;r.method.push(t);}}
+  if(!r.ingredients.length){for(const n of section)if(isIngredient(n.raw)||isIngredient(n.text))r.ingredients.push(clean(String(n.text).replace(/^\d+[.)]\s*/,'')));if(r.ingredients.length){const ingSet=new Set(r.ingredients);r.method=section.map(n=>n.text).filter(t=>!ingSet.has(clean(String(t).replace(/^\d+[.)]\s*/,'')))&&!/^ingredients?|notes?\s*:/i.test(t));}}
   r.ingredients=[...new Set(r.ingredients)].filter(Boolean);r.method=r.method.filter(t=>!/^ingredients?|notes?\s*:/i.test(t));
   if(r.name&&(r.ingredients.length||r.method.length||/above|same process|same method|use the/i.test(r.name)))out.push(r);
  }
