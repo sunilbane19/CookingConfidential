@@ -1,6 +1,6 @@
 import { supabase as sb } from './supabase-client-legacy.js?v=1.0.0';
 import * as mammoth from 'https://esm.sh/mammoth@1.6.0';
-import { parseDocx } from './docx-parser.js?v=1.0.0';
+import { parseDocx } from './docx-parser.js?v=1.0.1';
 
 const dialog=document.querySelector('#detailDialog');
 const esc=s=>String(s??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));
@@ -67,7 +67,7 @@ export async function reviewDocxImport(id){
     let recipes=parseDocx(html,x.file_name||'Imported document');
     if(!recipes.length)throw Error('No recipes could be detected in the DOCX.');
     if(window.ccRecipeInheritance?.applyInheritance)recipes=window.ccRecipeInheritance.applyInheritance(recipes);
-    const{error:ue}=await sb.from('cc_import_items').update({extracted_text:JSON.stringify({version:8,multiple:recipes.length>1,recipes}),source_title:recipes[0]?.name||x.file_name,extraction_status:'ready',review_status:'pending',error_message:null}).eq('id',id);
+    const{error:ue}=await sb.from('cc_import_items').update({extracted_text:JSON.stringify({version:9,multiple:recipes.length>1,recipes}),source_title:recipes[0]?.name||x.file_name,extraction_status:'ready',review_status:'pending',error_message:null}).eq('id',id);
     if(ue)throw ue;
     render(id,x,recipes);
   }catch(e){dialog.close();alert(e?.message||String(e));}
