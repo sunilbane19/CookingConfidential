@@ -1,6 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const supabase=createClient('https://yiwmtfbqbynimqvwxosu.supabase.co','sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu');
+const supabase=createClient('https://yiwmtfbqbynimqvwxosu.supabase.co','sb_publishable_EG30cid4BVU1vr6EeM3f9g_hztA7Wpu');
 const esc=s=>String(s??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));
 let recipes=[];
 
@@ -48,22 +48,22 @@ function renderBuilder(){
 }
 
 async function openMenuBuilder(){
- const {data:{user}}=await supabase.auth.getUser();if(!user)return;
- const {data,error}=await supabase.from('cc_recipes').select('*').order('name');if(error)return alert(error.message);recipes=data||[];renderBuilder();
+ const {data:{user}}=await supabase.auth.getUser();if(!user)return window.ccShowError('Please sign in again.','Sign-in required');
+ const {data,error}=await supabase.from('cc_recipes').select('*').order('name');if(error)return window.ccShowError(error.message,'Could not load recipes');recipes=data||[];renderBuilder();
 }
 
 async function saveBuiltMenu(e){
  e.preventDefault();
- const f=new FormData(e.target),{data:{user}}=await supabase.auth.getUser();if(!user)return;
+ const f=new FormData(e.target),{data:{user}}=await supabase.auth.getUser();if(!user)return window.ccShowError('Please sign in again.','Sign-in required');
  const ids=[...document.querySelectorAll('#ccRecipeList input[name="recipe"]:checked')].map(x=>Number(x.value));
- if(!ids.length)return alert('Please select at least one recipe for the menu.');
+ if(!ids.length)return window.ccShowError('Please select at least one recipe for the menu.','No recipes selected');
  const menu={name:String(f.get('name')).trim(),menu_date:f.get('date')||null,guest_count:f.get('guests')?Number(f.get('guests')):null,occasion:String(f.get('occasion')||'').trim()||null,notes:String(f.get('notes')||'').trim()||null,visibility:'private',created_by:user.id};
  const {data:m,error}=await supabase.from('cc_menus').insert(menu).select().single();
- if(error)return alert(error.message);
+ if(error)return window.ccShowError(error.message,'Could not create menu');
  const rows=ids.map((recipe_id,i)=>({menu_id:m.id,recipe_id,section:null,sort_order:i,custom_label:null}));
  const ins=await supabase.from('cc_menu_items').insert(rows);
- if(ins.error){await supabase.from('cc_menus').delete().eq('id',m.id);return alert(ins.error.message);}
- e.target.reset();document.querySelector('#detailDialog').close();alert('Menu created from your selected recipes.');window.location.reload();
+ if(ins.error){await supabase.from('cc_menus').delete().eq('id',m.id);return window.ccShowError(ins.error.message,'Could not add recipes to menu');}
+ e.target.reset();document.querySelector('#detailDialog').close();window.location.reload();
 }
 
 function repairDialogButtons(){
