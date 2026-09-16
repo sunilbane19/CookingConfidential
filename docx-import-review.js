@@ -42,6 +42,11 @@ function editOne(id,x,recipes,i){
   };
 }
 
+function showSaveSuccess(message){
+  dialog.querySelector('#detailContent').innerHTML=`<div class="dialog-card"><p class="eyebrow">RECIPE SAVED</p><h2>Recipe saved</h2><p class="small-note">${esc(message)}</p><div class="detail-actions"><button class="primary" id="saveSuccessContinue">Back to recipes</button></div></div>`;
+  dialog.querySelector('#saveSuccessContinue').onclick=()=>{dialog.close();location.reload();};
+}
+
 async function saveOne(id,x,r){
   const{data:{user}}=await sb.auth.getUser();
   if(!user)return alert('Please sign in again.');
@@ -50,9 +55,7 @@ async function saveOne(id,x,r){
   const row={name:clean(p.name),description:clean(p.description)||null,cuisine:clean(p.cuisine)||null,course:clean(p.course)||null,recipe_type:clean(p.recipe_type)||'Dish',servings:clean(p.servings)||null,ingredients:p.ingredients,method:Array.isArray(p.method)?p.method.join('\n'):clean(p.method),personal_notes:Array.isArray(p.notes)?p.notes.join('\n')||null:null,source_type:'file',source_url:null,source_title:x.file_name||null,created_by:user.id,visibility:'private'};
   const{error}=await sb.from('cc_recipes').insert([row]);
   if(error)return alert(error.message);
-  alert('Recipe saved.');
-  dialog.close();
-  location.reload();
+  showSaveSuccess(`“${clean(p.name)}” has been added to your recipe collection.`);
 }
 
 async function saveMany(id,x,recipes){
@@ -66,7 +69,7 @@ async function saveMany(id,x,recipes){
   if(error)return alert(error.message);
   const{error:ie}=await sb.from('cc_import_items').update({review_status:'approved',extraction_status:'ready',source_title:`${prepared.length} recipes from ${x.file_name||'import'}`}).eq('id',id);
   if(ie)return alert(ie.message);
-  dialog.close();location.reload();
+  showSaveSuccess(`${prepared.length} ${prepared.length===1?'recipe has':'recipes have'} been added to your recipe collection.`);
 }
 
 export async function reviewDocxImport(id){
