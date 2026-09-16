@@ -49,27 +49,27 @@ function showSaveSuccess(message,onContinue){
 
 async function saveOne(id,x,r,recipes){
   const{data:{user}}=await sb.auth.getUser();
-  if(!user)return alert('Please sign in again.');
+  if(!user)return window.ccShowError('Please sign in again.','Sign-in required');
   const prepared=window.ccRecipeInheritance?.applyInheritance?window.ccRecipeInheritance.applyInheritance([r]):[r];
   const p=prepared[0];
   const row={name:clean(p.name),description:clean(p.description)||null,cuisine:clean(p.cuisine)||null,course:clean(p.course)||null,recipe_type:clean(p.recipe_type)||'Dish',servings:clean(p.servings)||null,ingredients:p.ingredients,method:Array.isArray(p.method)?p.method.join('\n'):clean(p.method),personal_notes:Array.isArray(p.notes)?p.notes.join('\n')||null:null,source_type:'file',source_url:null,source_title:x.file_name||null,created_by:user.id,visibility:'private'};
   const{error}=await sb.from('cc_recipes').insert([row]);
-  if(error)return alert(error.message);
+  if(error)return window.ccShowError(error.message,'Could not save recipe');
   r._saved=true;
   showSaveSuccess(`“${clean(p.name)}” has been added to your recipe collection.`,()=>render(id,x,recipes));
 }
 
 async function saveMany(id,x,recipes){
   const{data:{user}}=await sb.auth.getUser();
-  if(!user)return alert('Please sign in again.');
-  if(!recipes.length)return alert('Select at least one recipe.');
+  if(!user)return window.ccShowError('Please sign in again.','Sign-in required');
+  if(!recipes.length)return window.ccShowError('Select at least one recipe.','Nothing selected');
   let prepared=recipes;
   if(window.ccRecipeInheritance?.applyInheritance)prepared=window.ccRecipeInheritance.applyInheritance(recipes);
   const rows=prepared.map(r=>({name:clean(r.name),description:clean(r.description)||null,cuisine:clean(r.cuisine)||null,course:clean(r.course)||null,recipe_type:clean(r.recipe_type)||'Dish',servings:clean(r.servings)||null,ingredients:r.ingredients,method:Array.isArray(r.method)?r.method.join('\n'):clean(r.method),personal_notes:Array.isArray(r.notes)?r.notes.join('\n')||null:null,source_type:'file',source_url:null,source_title:x.file_name||null,created_by:user.id,visibility:'private'}));
   const{error}=await sb.from('cc_recipes').insert(rows);
-  if(error)return alert(error.message);
+  if(error)return window.ccShowError(error.message,'Could not save recipes');
   const{error:ie}=await sb.from('cc_import_items').update({review_status:'approved',extraction_status:'ready',source_title:`${prepared.length} recipes from ${x.file_name||'import'}`}).eq('id',id);
-  if(ie)return alert(ie.message);
+  if(ie)return window.ccShowError(ie.message,'Could not update import status');
   showSaveSuccess(`${prepared.length} ${prepared.length===1?'recipe has':'recipes have'} been added to your recipe collection.`,()=>{dialog.close();location.reload();});
 }
 
@@ -78,7 +78,7 @@ export async function reviewDocxImport(id){
   dialog.querySelector('#detailContent').innerHTML='<div class="dialog-card"><p class="eyebrow">EXTRACTING</p><h2>Preparing recipes…</h2><p class="small-note">Reading the DOCX structure.</p></div>';
   dialog.showModal();
   const{data:x,error}=await sb.from('cc_import_items').select('*').eq('id',id).single();
-  if(error||!x){dialog.close();return alert(error?.message||'Import item could not be loaded.');}
+  if(error||!x)return window.ccShowError(error?.message||'Import item could not be loaded.','Could not load import');
   try{
     const blob=await loadOriginal(x);
     const html=(await mammoth.convertToHtml({arrayBuffer:await blob.arrayBuffer()})).value||'';
@@ -88,7 +88,7 @@ export async function reviewDocxImport(id){
     const{error:ue}=await sb.from('cc_import_items').update({extracted_text:JSON.stringify({version:11,multiple:recipes.length>1,recipes}),source_title:recipes[0]?.name||x.file_name,extraction_status:'ready',review_status:'pending',error_message:null}).eq('id',id);
     if(ue)throw ue;
     render(id,x,recipes);
-  }catch(e){dialog.close();alert(e?.message||String(e));}
+  }catch(e){window.ccShowError(e?.message||String(e),'Could not process document');}
 }
 
 window.ccDocxReview=reviewDocxImport;
