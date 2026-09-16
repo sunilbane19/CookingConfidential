@@ -1,0 +1,106 @@
+const clean=s=>String(s??'').replace(/[\u0000-\u001F\u007F\uFFFD]/g,' ').replace(/\s+/g,' ').trim();
+
+const GENERIC=/^(recipe|recipes|ingredients?|ingredient list|method|directions?|instructions?|preparation|steps?|contents?|index|introduction|notes?|tips?|storage|serving suggestions?|servings?|yield)[:.]?$/i;
+const SECTION={
+  ingredients:/^ingredients?(?:\s+list)?\s*:?$/i,
+  method:/^(?:instructions?|method|directions?|preparation|steps?)\s*:?$/i,
+  notes:/^(?:notes?|storage|serving suggestions?)\s*:?$/i
+};
+const COMPONENT=/^(?:\d+[.)]?\s*)?(?:the\s+(?:ingredients?|marinade|glaze|sauce|rub|dressing|paste|filling|stuffing|topping|mixture|aromatics?|seasoning|spice blend|velveting|brine|batter|coating|garnish|cooking|chicken|beef|pork|fish|vegetables?)\b|for\s+(?:cooking|serving|garnish|the\s+cooking|the\s+garnish|the\s+sauce|the\s+chicken))\b/i;
+const STEP=/^(?:step|stage)\s*\d+\s*[:.-]?/i;
+const UNIT=/\b(?:g|gm|kg|mg|ml|l|oz|lb|lbs|tsp|tbsp|cup|cups|pint|pints|quart|quarts|clove|cloves|slice|slices|piece|pieces|can|cans|packet|packets|bunch|bunches|sprig|sprigs|pinch|pinches|litre|litres|liter|liters)\.?\b/i;
+const NUMBER=/\b\d+(?:[.,]\d+)?(?:\s*[½¼¾⅓⅔⅛⅜⅝⅞])?\b/;
+const META=/^(?:prep|preparation|cook|cooking|steam|steaming|chill|chilling|fry|frying|rest|resting|freeze|freezing|yield|makes?|serves?|servings?|total|active|inactive|time|difficulty|cuisine|course)\b/i;
+
+function isGarbage(s){
+  const x=clean(s); if(!x)return true;
+  if(/[©®™]/.test(x))return true;
+  if(/\b(?:follow|subscribe|like|share|save|comment|link in bio|learn more)\b/i.test(x) && !UNIT.test(x))return true;
+  return false;
+}
+
+function isIngredientLike(s){
+  const x=clean(s); if(!x||GENERIC.test(x)||SECTION.method.test(x)||SECTION.notes.test(x)||STEP.test(x))return false;
+  if(COMPONENT.test(x))return false;
+  if(/^\d+[.)]\s+/.test(x))return true;
+  if(NUMBER.test(x)&&UNIT.test(x))return true;
+  if(/\b(?:to taste|as needed|as required|for frying|for garnish|for serving)\b/i.test(x))return true;
+  if(/\t/.test(String(s))&&NUMBER.test(x))return true;
+  return false;
+}
+
+function titleCaseScore(s){
+  const x=clean(s); if(!x||x.length<3||x.length>90||GENERIC.test(x)||COMPONENT.test(x)||STEP.test(x)||META.test(x))return false;
+  const w=x.replace(/^\d+[.)]?\s*/,'').split(/\s+/); if(w.length>12)return false;
+  const caps=w.filter(v=>/^[A-Z][A-Za-z'&-]*[A-Za-z'&-]*$/.test(v)).length;
+  return caps>=Math.max(1,Math.ceil(w.length*.35));
+}
+
+function makeRecipe(name){return {name:clean(name)||'Imported recipe',description:'',cuisine:'',course:'',recipe_type:'Dish',servings:'',ingredients:[],method:[],notes:[]};}
+
+export function parseDocx(html,fileName='Imported document'){
+  const doc=new DOMParser().parseFromString(html,'text/html');
+  const nodes=[...doc.querySelectorAll('h1,h2,h3,h4,h5,h6,p,li')]
+    .map(e=>({raw:e.textContent||'',text:clean(e.textContent||''),tag:e.tagName.toLowerCase()}))
+    .filter(n=>n.text);
+  if(!nodes.length)return[];
+
+  // Only headings that are outside an Ingredients/Method/Notes section can start
+  // a new recipe. Culinary component headings inside those sections never do.
+  const candidates=[]; let section='';
+  for(let i=0;i<nodes.length;i++){
+    const t=nodes[i].text;
+    if(SECTION.ingredients.test(t)){section='ingredients';continue;}
+    if(SECTION.method.test(t)){section='method';continue;}
+    if(SECTION.notes.test(t)){section='notes';continue;}
+    if(section&&COMPONENT.test(t))continue;
+    if(titleCaseScore(t)){
+      // A new title after Method/Notes is a strong recipe boundary. Before the
+      // first Ingredients heading, accept the first title as the recipe title.
+      if(!section || section==='method' || section==='notes')candidates.push(i);
+    }
+  }
+
+  // Keep only title candidates that have a real recipe section before the next
+  // candidate. This prevents metadata/title-like lines from becoming recipes.
+  const recipeHeads=candidates.filter((idx,pos)=>{
+    const end=pos+1<candidates.length?candidates[pos+1]:nodes.length;
+    return nodes.slice(idx+1,end).some(n=>SECTION.ingredients.test(n.text)||SECTION.method.test(n.text));
+  });
+  if(!recipeHeads.length)return[];
+
+  const recipes=[];
+  for(let h=0;h<recipeHeads.length;h++){
+    const start=recipeHeads[h],end=h+1<recipeHeads.length?recipeHeads[h+1]:nodes.length;
+    const r=makeRecipe(nodes[start].text);
+    let current='';
+    for(const n of nodes.slice(start+1,end)){
+      const t=n.text;
+      if(SECTION.ingredients.test(t)){current='ingredients';continue;}
+      if(SECTION.method.test(t)){current='method';continue;}
+      if(SECTION.notes.test(t)){current='notes';continue;}
+      if(isGarbage(t))continue;
+
+      if(current==='ingredients'){
+        // Preserve culinary subsection headings in the Ingredients field. They
+        // are structure, not separate recipes and not ingredient quantities.
+        if(COMPONENT.test(t)){r.ingredients.push(t);continue;}
+        // DOCX ingredient lists are often unnumbered (e.g. "oil for frying").
+        // Once inside Ingredients, keep ordinary lines rather than dropping them
+        // merely because they lack a measurable unit.
+        if(!STEP.test(t))r.ingredients.push(clean(t));
+      }else if(current==='method'){
+        // Preserve Step 1/2 and component headings exactly as useful method structure.
+        r.method.push(clean(t));
+      }else if(current==='notes'){
+        r.notes.push(clean(t));
+      }
+    }
+    r.ingredients=[...new Set(r.ingredients)].filter(Boolean);
+    r.method=[...new Set(r.method)].filter(Boolean);
+    r.notes=[...new Set(r.notes)].filter(Boolean);
+    if(r.ingredients.length||r.method.length)recipes.push(r);
+  }
+
+  return recipes.length?recipes:[makeRecipe(clean(fileName.replace(/\.[^.]+$/,'')))];
+}
