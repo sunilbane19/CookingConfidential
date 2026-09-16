@@ -20,6 +20,14 @@ function cleanRecipeText(s){
     .trim();
 }
 
+// Mammoth/Word exports sometimes preserve paragraph breaks as the literal two
+// characters "\\n" inside a paragraph. Expand both those markers and real line
+// breaks before building the parser's node list so each ingredient/step remains
+// a separate editable line.
+function expandedLines(s){
+  return String(s??'').replace(/\\n/g,'\n').split(/\r?\n+/).map(cleanRecipeText).filter(Boolean);
+}
+
 function isGarbage(s){
   const x=cleanRecipeText(s); if(!x)return true;
   if(/[©®™]/.test(x))return true;
@@ -55,7 +63,7 @@ function makeRecipe(name){return {name:cleanRecipeText(name)||'Imported recipe',
 export function parseDocx(html,fileName='Imported document'){
   const doc=new DOMParser().parseFromString(html,'text/html');
   const nodes=[...doc.querySelectorAll('h1,h2,h3,h4,h5,h6,p,li')]
-    .map(e=>({raw:e.textContent||'',text:cleanRecipeText(e.textContent||''),tag:e.tagName.toLowerCase()}))
+    .flatMap(e=>expandedLines(e.textContent||'').map(text=>({raw:text,text,tag:e.tagName.toLowerCase()})))
     .filter(n=>n.text);
   if(!nodes.length)return[];
 
