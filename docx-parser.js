@@ -6,9 +6,8 @@ const SECTION={
   method:/^(?:instructions?|method|directions?|preparation|steps?)\s*:?$/i,
   notes:/^(?:notes?|storage|serving suggestions?)\s*:?$/i
 };
-// A component heading can contain descriptive words before the culinary noun:
-// "The Sweet & Spicy (Yangnyeom) Sauce", "The Marion-Style Wok-Finish Aromatics & Glaze", etc.
-const COMPONENT=/^(?:\d+[.)]?\s*)?(?:the\b.*\b(?:marinade|glaze|sauce|rub|dressing|paste|filling|stuffing|topping|mixture|aromatics?|seasoning|spice blend|velveting|brine|batter|coating|garnish|cooking|chicken|beef|pork|fish|vegetables?)\b|for\s+(?:cooking|serving|garnish|the\s+cooking|the\s+garnish|the\s+sauce|the\s+chicken))$/i;
+// A component heading can contain descriptive words before the culinary noun.
+const COMPONENT=/^(?:\d+[.)]?\s*)?(?:the\b.*\b(?:marinade|glaze|sauce|rub|dressing|paste|filling|stuffing|topping|mixture|aromatics?|seasoning|spice blend|velveting|brine|batter|coating|garnish|cooking|chicken|beef|pork|fish|vegetables?)\b|for\b.*\b(?:cooking|serving|garnish|sauce|chicken|beef|pork|fish|vegetables?)\b)$/i;
 const STEP=/^(?:step|stage)\s*\d+\s*[:.-]?/i;
 const UNIT=/\b(?:g|gm|kg|mg|ml|l|oz|lb|lbs|tsp|tbsp|cup|cups|pint|pints|quart|quarts|clove|cloves|slice|slices|piece|pieces|can|cans|packet|packets|bunch|bunches|sprig|sprigs|pinch|pinches|litre|litres|liter|liters)\.?\b/i;
 const NUMBER=/\b\d+(?:[.,]\d+)?(?:\s*[½¼¾⅓⅔⅛⅜⅝⅞])?\b/;
@@ -80,13 +79,9 @@ export function parseDocx(html,fileName='Imported document'){
       if(isGarbage(t))continue;
 
       if(current==='ingredients'){
-        // Keep component headings in the Ingredients field as structure, never as recipes.
         if(COMPONENT.test(t)){r.ingredients.push(t);continue;}
-        // Once inside Ingredients, retain ordinary lines too (including unquantified
-        // lines such as "oil for frying") instead of dropping them.
         if(!STEP.test(t))r.ingredients.push(clean(t));
       }else if(current==='method'){
-        // Preserve Step headings and method subheadings exactly as extracted structure.
         r.method.push(clean(t));
       }else if(current==='notes'){
         r.notes.push(clean(t));
