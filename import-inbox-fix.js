@@ -12,3 +12,4 @@ async function deleteImport(id){if(!(await confirmDeleteImport()))return;try{con
 document.addEventListener('click',event=>{const b=event.target?.closest?.('#importBtn');if(!b)return;event.preventDefault();event.stopImmediatePropagation();openInbox()},true);
 const detailDialog=document.querySelector('#detailDialog');if(detailDialog)detailDialog.addEventListener('close',()=>{if(importDialog?.open)setTimeout(loadInbox,150)});window.ccReloadImportInbox=loadInbox;
 import('./recipe-inheritance.js?v=1.0.0').catch(error=>console.error('Cooking Confidential inheritance module:',error));
+import('./docx-review-click.js?v=1.0.0').catch(error=>console.error('Cooking Confidential DOCX review module:',error));
