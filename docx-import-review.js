@@ -16,7 +16,7 @@ async function loadOriginal(x){
 }
 
 function render(id,x,recipes){
-  const cards=recipes.map((r,i)=>`<article class="multi-recipe-card"><label class="multi-select"><input type="checkbox" data-r="${i}" checked><span><strong>${esc(r.name)}</strong><small>${r.ingredients.length} ingredients${r.method.length?' · method found':''}</small></span></label><button type="button" class="secondary docx-edit" data-r="${i}">Review</button></article>`).join('');
+  const cards=recipes.map((r,i)=>`<article class="multi-recipe-card"><label class="multi-select"><input type="checkbox" data-r="${i}" ${r._saved?'':'checked'} ${r._saved?'disabled':''}><span><strong>${esc(r.name)}</strong><small>${r._saved?'Saved · ':''}${r.ingredients.length} ingredients${r.method.length?' · method found':''}</small></span></label><button type="button" class="secondary docx-edit" data-r="${i}" ${r._saved?'disabled':''}>${r._saved?'Saved':'Review'}</button></article>`).join('');
   dialog.querySelector('#detailContent').innerHTML=`<button class="close" type="button">×</button><p class="eyebrow">MULTI-RECIPE IMPORT</p><h2>${recipes.length} recipes detected</h2><p class="small-note">Review each recipe before saving. Shared-base references are kept for the inheritance step; recipe-specific differences are not discarded.</p><div class="multi-list">${cards}</div><div class="detail-actions"><button class="secondary" id="docxCancel">Cancel</button><button class="primary" id="docxSave">Save selected recipes</button></div>`;
   dialog.querySelector('.close').onclick=()=>dialog.close();
   dialog.querySelector('#docxCancel').onclick=()=>dialog.close();
@@ -38,16 +38,16 @@ function editOne(id,x,recipes,i){
     const fd=new FormData(f);
     const updated={...r,name:clean(fd.get('name')),ingredients:lines(fd.get('ingredients')),method:lines(fd.get('method')),notes:lines(fd.get('notes'))};
     recipes[i]=updated;
-    await saveOne(id,x,updated);
+    await saveOne(id,x,updated,recipes);
   };
 }
 
-function showSaveSuccess(message){
+function showSaveSuccess(message,onContinue){
   dialog.querySelector('#detailContent').innerHTML=`<div class="dialog-card"><p class="eyebrow">RECIPE SAVED</p><h2>Recipe saved</h2><p class="small-note">${esc(message)}</p><div class="detail-actions"><button class="primary" id="saveSuccessContinue">Back to recipes</button></div></div>`;
-  dialog.querySelector('#saveSuccessContinue').onclick=()=>{dialog.close();location.reload();};
+  dialog.querySelector('#saveSuccessContinue').onclick=onContinue;
 }
 
-async function saveOne(id,x,r){
+async function saveOne(id,x,r,recipes){
   const{data:{user}}=await sb.auth.getUser();
   if(!user)return alert('Please sign in again.');
   const prepared=window.ccRecipeInheritance?.applyInheritance?window.ccRecipeInheritance.applyInheritance([r]):[r];
@@ -55,7 +55,8 @@ async function saveOne(id,x,r){
   const row={name:clean(p.name),description:clean(p.description)||null,cuisine:clean(p.cuisine)||null,course:clean(p.course)||null,recipe_type:clean(p.recipe_type)||'Dish',servings:clean(p.servings)||null,ingredients:p.ingredients,method:Array.isArray(p.method)?p.method.join('\n'):clean(p.method),personal_notes:Array.isArray(p.notes)?p.notes.join('\n')||null:null,source_type:'file',source_url:null,source_title:x.file_name||null,created_by:user.id,visibility:'private'};
   const{error}=await sb.from('cc_recipes').insert([row]);
   if(error)return alert(error.message);
-  showSaveSuccess(`“${clean(p.name)}” has been added to your recipe collection.`);
+  r._saved=true;
+  showSaveSuccess(`“${clean(p.name)}” has been added to your recipe collection.`,()=>render(id,x,recipes));
 }
 
 async function saveMany(id,x,recipes){
@@ -69,7 +70,7 @@ async function saveMany(id,x,recipes){
   if(error)return alert(error.message);
   const{error:ie}=await sb.from('cc_import_items').update({review_status:'approved',extraction_status:'ready',source_title:`${prepared.length} recipes from ${x.file_name||'import'}`}).eq('id',id);
   if(ie)return alert(ie.message);
-  showSaveSuccess(`${prepared.length} ${prepared.length===1?'recipe has':'recipes have'} been added to your recipe collection.`);
+  showSaveSuccess(`${prepared.length} ${prepared.length===1?'recipe has':'recipes have'} been added to your recipe collection.`,()=>{dialog.close();location.reload();});
 }
 
 export async function reviewDocxImport(id){
