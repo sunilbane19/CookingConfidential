@@ -1,7 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const SUPABASE_URL = 'https://yiwmtfbqbynimqvwxosu.supabase.co';
-const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_EG30cid4BVU1vr6EeM3f9g_hztA7Wpu';
 const APP_URL = 'https://cookingconfidential.in/';
 const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
@@ -29,15 +29,10 @@ async function loadData() {
   if (recipesResult.error) throw new Error(recipesResult.error.message);
   recipes = recipesResult.data || [];
   render();
-
-  // Menus are secondary to the recipe library. Do not let a menu/RLS/network
-  // problem prevent recipes from appearing on the home screen.
   try {
     const menusResult = await supabase.from('cc_menus').select('*').order('menu_date',{ascending:false,nullsFirst:false}).order('created_at',{ascending:false});
     if (!menusResult.error) menus = menusResult.data || [];
-  } catch (_) {
-    menus = [];
-  }
+  } catch (_) { menus = []; }
 }
 function recipeCard(r) { return `<article class="card" data-id="${r.id}"><div class="card-image">🍽</div><div class="card-body"><span class="tag">${esc(r.cuisine||'Uncategorised')}</span><h3>${esc(r.name)}</h3><div class="meta">${esc(r.course||'Recipe')} · ${stars(r.rating)}</div></div></article>`; }
 function render() {
@@ -60,7 +55,15 @@ async function copyMenu(id) { const m=menus.find(x=>x.id===id); if(!m)return; co
 loginForm.onsubmit=async e=>{e.preventDefault();const button=loginForm.querySelector('button');if(!button||button.disabled)return;const email=document.querySelector('#emailInput').value.trim();button.disabled=true;button.textContent='Sending…';loginMessage.textContent='Sending sign-in link…';const {error}=await supabase.auth.signInWithOtp({email,options:{emailRedirectTo:APP_URL}});if(error){const message=String(error.message||'').toLowerCase();loginMessage.textContent=message.includes('rate limit')?'Please wait about 60 seconds before requesting another sign-in link.':'We could not send the sign-in link right now. Please try again in a moment.';button.disabled=false;button.textContent='Send me a sign-in link';}else loginMessage.textContent='Check your email for the sign-in link.';};
 document.querySelector('#recipeForm').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target),{data:{user}}=await supabase.auth.getUser();if(!user)return;const ingredients=String(f.get('ingredients')).split('\n').map(x=>x.trim()).filter(Boolean);const {error}=await supabase.from('cc_recipes').insert({name:f.get('name'),cuisine:f.get('cuisine')||null,course:f.get('course')||null,ingredients,method:f.get('method')||null,personal_notes:f.get('notes')||null,created_by:user.id,visibility:'private'});if(error)return alert(error.message);recipeDialog.close();e.target.reset();await loadData();};
 document.querySelector('#menuForm').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target),{data:{user}}=await supabase.auth.getUser();if(!user)return;const {error}=await supabase.from('cc_menus').insert({name:f.get('name'),menu_date:f.get('date')||null,guest_count:f.get('guests')?Number(f.get('guests')):null,occasion:f.get('occasion')||null,notes:f.get('notes')||null,visibility:'private',created_by:user.id});if(error)return alert(error.message);menuDialog.close();e.target.reset();await loadData();view='menus';};
+
 document.querySelector('#addRecipeBtn').onclick=()=>recipeDialog.showModal();
+// Explicitly close the Add Recipe dialog without submitting the form. The form's
+// onsubmit handler intercepts dialog submissions, so the X and Cancel controls
+// must close it directly and discard the unsaved fields.
+const closeRecipeDialog=()=>{recipeDialog.close();document.querySelector('#recipeForm').reset();};
+document.querySelector('#recipeForm .close').onclick=e=>{e.preventDefault();closeRecipeDialog();};
+document.querySelector('#recipeForm .dialog-actions button[value="cancel"]').onclick=e=>{e.preventDefault();closeRecipeDialog();};
+
 // Import Inbox, upload, and review are owned by the dedicated import modules.
 // Keeping the legacy handlers here caused two competing review/upload paths on iOS.
 document.querySelector('#importBtn').onclick=()=>importDialog.showModal();
@@ -69,7 +72,7 @@ document.querySelector('#fileInput').onchange=e=>queueFiles([...e.target.files])
 document.querySelector('#addUrlBtn').onclick=()=>{const input=document.querySelector('#sourceUrl');const url=input.value.trim();if(!url)return;addImportItem({source_url:url,file_name:url.split('/').pop()||url,mime_type:'text/url'});input.value='';};
 function addImportItem(item){item.localId=crypto.randomUUID();item.status='Queued';importItems.push(item);renderImportQueue();}
 function queueFiles(files){files.forEach(file=>addImportItem({file,file_name:file.name,mime_type:file.type||'application/octet-stream',size:file.size}));}
-function renderImportQueue(){importQueue.innerHTML=importItems.length?'<div class="queue-head"><strong>'+importItems.length+' selected</strong><button class="secondary" id="uploadAll" type="button">Upload all</button></div>'+importItems.map(x=>'<div class="queue-item"><div><strong>'+esc(x.file_name)+'</strong><small>'+esc(x.mime_type||'')+(x.size?' · '+Math.round(x.size/1024)+' KB':'')+'</small></div><span>'+esc(x.status)+'</span></div>').join(''):'<div class="empty compact">Select files or add a URL to begin.</div>';}
+function renderImportQueue(){importQueue.innerHTML=importItems.length?'<div class="queue-head"><strong>'+importItems.length+' selected</strong><button class="secondary" id="uploadAll" type="button">Upload all</button></div>'+importItems.map(x=>'<div class="queue-item"><div><strong>'+esc(x.file_name)+'</strong><small>'+esc(x.mime_type||'')+(x.size?' · '+Math.round(x.size/1024)+' KB':'')}</small></div><span>'+esc(x.status)+'</span></div>').join(''):'<div class="empty compact">Select files or add a URL to begin.</div>';}
 search.oninput=()=>render();
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{view=t.dataset.view;document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===t));render();});
 
