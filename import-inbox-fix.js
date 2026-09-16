@@ -15,4 +15,4 @@ import('./recipe-inheritance.js?v=1.0.0').catch(error=>console.error('Cooking Co
 import('./docx-review-click.js?v=1.0.0').catch(error=>console.error('Cooking Confidential DOCX review module:',error));
 import('./url-review-click.js?v=1.0.0').catch(error=>console.error('Cooking Confidential URL review module:',error));
 import('./original-viewer-layout.js?v=1.0.0').catch(error=>console.error('Cooking Confidential original viewer module:',error));
-import('./docx-single-recipe-fix.js?v=1.0.2').catch(error=>console.error('Cooking Confidential single-recipe DOCX fix:',error));
+import('./docx-single-recipe-fix.js?v=1.0.3').catch(error=>console.error('Cooking Confidential single-recipe DOCX fix:',error));
