@@ -1,6 +1,6 @@
 import { supabase as sb } from './supabase-client-legacy.js?v=1.0.0';
 import * as mammoth from 'https://esm.sh/mammoth@1.6.0';
-import { parseDocx } from './docx-parser.js?v=1.0.2';
+import { parseDocx } from './docx-parser.js?v=1.0.3';
 
 const dialog=document.querySelector('#detailDialog');
 const esc=s=>String(s??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));
@@ -29,7 +29,7 @@ function render(id,x,recipes){
 
 function editOne(id,x,recipes,i){
   const r=recipes[i];
-  dialog.querySelector('#detailContent').innerHTML=`<button class="close" type="button">×</button><p class="eyebrow">REVIEW RECIPE ${i+1} OF ${recipes.length}</p><h2>Check before saving</h2><form id="docxOne"><label>Recipe name<input name="name" required value="${esc(r.name)}"></label><label>Ingredients<textarea name="ingredients" rows="10">${esc(r.ingredients.join('\\n'))}</textarea></label><label>Method / process<textarea name="method" rows="12">${esc(r.method.join('\\n'))}</textarea></label><label>Notes / differences<textarea name="notes" rows="7">${esc(r.notes.join('\\n'))}</textarea></label><div class="detail-actions"><button type="button" class="secondary" id="docxBack">Back to list</button><button class="primary">Save this recipe</button></div></form>`;
+  dialog.querySelector('#detailContent').innerHTML=`<button class="close" type="button">×</button><p class="eyebrow">REVIEW RECIPE ${i+1} OF ${recipes.length}</p><h2>Check before saving</h2><form id="docxOne"><label>Recipe name<input name="name" required value="${esc(r.name)}"></label><label>Ingredients<textarea name="ingredients" rows="10">${esc(r.ingredients.join('\n'))}</textarea></label><label>Method / process<textarea name="method" rows="12">${esc(r.method.join('\n'))}</textarea></label><label>Notes / differences<textarea name="notes" rows="7">${esc(r.notes.join('\n'))}</textarea></label><div class="detail-actions"><button type="button" class="secondary" id="docxBack">Back to list</button><button class="primary">Save this recipe</button></div></form>`;
   dialog.querySelector('.close').onclick=()=>dialog.close();
   dialog.querySelector('#docxBack').onclick=()=>render(id,x,recipes);
   const f=dialog.querySelector('#docxOne');
@@ -47,7 +47,7 @@ async function saveMany(id,x,recipes){
   if(!recipes.length)return alert('Select at least one recipe.');
   let prepared=recipes;
   if(window.ccRecipeInheritance?.applyInheritance)prepared=window.ccRecipeInheritance.applyInheritance(recipes);
-  const rows=prepared.map(r=>({name:clean(r.name),description:clean(r.description)||null,cuisine:clean(r.cuisine)||null,course:clean(r.course)||null,recipe_type:clean(r.recipe_type)||'Dish',servings:clean(r.servings)||null,ingredients:r.ingredients,method:Array.isArray(r.method)?r.method.join('\\n'):clean(r.method),personal_notes:Array.isArray(r.notes)?r.notes.join('\\n')||null:null,source_type:'file',source_url:null,source_title:x.file_name||null,created_by:user.id,visibility:'private'}));
+  const rows=prepared.map(r=>({name:clean(r.name),description:clean(r.description)||null,cuisine:clean(r.cuisine)||null,course:clean(r.course)||null,recipe_type:clean(r.recipe_type)||'Dish',servings:clean(r.servings)||null,ingredients:r.ingredients,method:Array.isArray(r.method)?r.method.join('\n'):clean(r.method),personal_notes:Array.isArray(r.notes)?r.notes.join('\n')||null:null,source_type:'file',source_url:null,source_title:x.file_name||null,created_by:user.id,visibility:'private'}));
   const{error}=await sb.from('cc_recipes').insert(rows);
   if(error)return alert(error.message);
   const{error:ie}=await sb.from('cc_import_items').update({review_status:'approved',extraction_status:'ready',source_title:`${prepared.length} recipes from ${x.file_name||'import'}`}).eq('id',id);
@@ -67,7 +67,7 @@ export async function reviewDocxImport(id){
     let recipes=parseDocx(html,x.file_name||'Imported document');
     if(!recipes.length)throw Error('No recipes could be detected in the DOCX.');
     if(window.ccRecipeInheritance?.applyInheritance)recipes=window.ccRecipeInheritance.applyInheritance(recipes);
-    const{error:ue}=await sb.from('cc_import_items').update({extracted_text:JSON.stringify({version:9,multiple:recipes.length>1,recipes}),source_title:recipes[0]?.name||x.file_name,extraction_status:'ready',review_status:'pending',error_message:null}).eq('id',id);
+    const{error:ue}=await sb.from('cc_import_items').update({extracted_text:JSON.stringify({version:10,multiple:recipes.length>1,recipes}),source_title:recipes[0]?.name||x.file_name,extraction_status:'ready',review_status:'pending',error_message:null}).eq('id',id);
     if(ue)throw ue;
     render(id,x,recipes);
   }catch(e){dialog.close();alert(e?.message||String(e));}
