@@ -2,7 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const SUPABASE_URL = 'https://yiwmtfbqbynimqvwxosu.supabase.co';
 // Use the project's proven browser-safe anon key, matching supabase-client.js.
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlpd210ZmJxYnluaW1xdnd4b3N1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc1ODI3MDYsImV4cCI6MjEwMzE1ODcwNn0.pwfoCI_ajYfrON8kxIV9XWMo9k2GvzCWqwcpsMxI1As';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlpd210ZmJxYnluaW1xdnd4b3N1Iiwicm9sZSI6MTc4NzU4MjcwNiwiZXhwIjoyMTAzMTU4NzA2fQ.pwfoCI_ajYfrON8kxIV9XWMo9k2GvzCWqwcpsMxI1As';
 const APP_URL = 'https://cookingconfidential.in/';
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -23,6 +23,26 @@ let recipes = [], menus = [], view = 'recipes';
 const esc = (s='') => String(s).replace(/[&<>\"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));
 const stars = n => n ? '★'.repeat(n) : '';
 const ingredientsText = r => Array.isArray(r.ingredients) ? r.ingredients.map(x => typeof x === 'string' ? x : [x.quantity,x.unit,x.name].filter(Boolean).join(' ')) : [];
+
+// Standard branded error UI for database/import failures. Keep technical details
+// available for troubleshooting, but present a useful human-readable message first.
+function showUiError(message, title='Something went wrong', onClose=null){
+  const raw=String(message||'Something went wrong');
+  const lower=raw.toLowerCase();
+  let heading=title;
+  let friendly=raw;
+  if(lower.includes('cc_recipes_no_duplicate_names')||lower.includes('duplicate key value violates unique constraint')){
+    heading='Recipe already saved';
+    friendly='A recipe with this name is already in your collection. It was not saved again.';
+  }
+  if(!detailDialog)return console.error(raw);
+  detailDialog.querySelector('#detailContent').innerHTML=`<div class="dialog-card error-card"><button class="close" type="button" aria-label="Close">×</button><p class="eyebrow">COOKING CONFIDENTIAL · ERROR</p><h2>${esc(heading)}</h2><p class="error-message">${esc(friendly)}</p>${friendly!==raw?`<details class="error-details"><summary>Technical details</summary><code>${esc(raw)}</code></details>`:''}<div class="detail-actions"><button class="primary" id="uiErrorClose">Close</button></div></div>`;
+  const close=()=>{detailDialog.close();if(typeof onClose==='function')onClose();};
+  detailDialog.querySelector('.close').onclick=close;
+  detailDialog.querySelector('#uiErrorClose').onclick=close;
+  if(!detailDialog.open)detailDialog.showModal();
+}
+window.ccShowError=showUiError;
 
 async function loadData() {
   content.innerHTML = '<div class="empty">Loading your recipes…</div>';
@@ -50,12 +70,12 @@ function renderMenus(q) {
 async function showRecipe(id) {
   const r = recipes.find(x => x.id === id); if (!r) return;
   detailDialog.querySelector('#detailContent').innerHTML = `<button class="close" onclick="detailDialog.close()">×</button><span class="tag">${esc(r.cuisine||'')} · ${esc(r.course||'Recipe')}</span><h2 class="detail-title">${esc(r.name)}</h2><div class="meta">${stars(r.rating)}</div><div class="detail-section"><h4>Ingredients</h4><ul>${ingredientsText(r).map(i=>'<li>'+esc(i)+'</li>').join('')}</ul></div><div class="detail-section"><h4>Method</h4><p>${esc(r.method||'')}</p></div>${r.personal_notes ? '<div class="detail-section"><h4>My notes</h4><p>'+esc(r.personal_notes)+'</p></div>' : ''}${r.source_url ? '<div class="detail-section"><h4>Source</h4><p><a href="'+esc(r.source_url)+'" target="_blank" rel="noopener">'+esc(r.source_title||r.source_url)+'</a></p></div>' : ''}<div class="detail-actions"><button class="secondary" id="favBtn">${r.is_favourite?'★ Remove favourite':'☆ Add to favourites'}</button></div>`;
-  detailDialog.showModal(); document.querySelector('#favBtn').onclick = async () => { const {error}=await supabase.from('cc_recipes').update({is_favourite:!r.is_favourite}).eq('id',r.id); if(error)return alert(error.message); r.is_favourite=!r.is_favourite; detailDialog.close(); render(); };
+  detailDialog.showModal(); document.querySelector('#favBtn').onclick = async () => { const {error}=await supabase.from('cc_recipes').update({is_favourite:!r.is_favourite}).eq('id',r.id); if(error)return showUiError(error.message,'Could not update favourite'); r.is_favourite=!r.is_favourite; detailDialog.close(); render(); };
 }
-async function copyMenu(id) { const m=menus.find(x=>x.id===id); if(!m)return; const {data:{user}}=await supabase.auth.getUser(); if(!user)return; const {data,error}=await supabase.from('cc_menus').insert({name:m.name+' — Copy',menu_date:null,occasion:m.occasion,guest_count:m.guest_count,notes:m.notes,visibility:'private',created_by:user.id}).select().single(); if(error)return alert(error.message); const items=await supabase.from('cc_menu_items').select('*').eq('menu_id',m.id).order('sort_order'); if(items.error)return alert(items.error.message); if(items.data?.length){const rows=items.data.map(x=>({menu_id:data.id,recipe_id:x.recipe_id,section:x.section,sort_order:x.sort_order,custom_label:x.custom_label}));const ins=await supabase.from('cc_menu_items').insert(rows);if(ins.error)return alert(ins.error.message);} await loadData(); alert('Menu copied. You can now edit the new version without changing the original.'); }
+async function copyMenu(id) { const m=menus.find(x=>x.id===id); if(!m)return; const {data:{user}}=await supabase.auth.getUser(); if(!user)return showUiError('Please sign in again.','Sign-in required'); const {data,error}=await supabase.from('cc_menus').insert({name:m.name+' — Copy',menu_date:null,occasion:m.occasion,guest_count:m.guest_count,notes:m.notes,visibility:'private',created_by:user.id}).select().single(); if(error)return showUiError(error.message,'Could not copy menu'); const items=await supabase.from('cc_menu_items').select('*').eq('menu_id',m.id).order('sort_order'); if(items.error)return showUiError(items.error.message,'Could not copy menu items'); if(items.data?.length){const rows=items.data.map(x=>({menu_id:data.id,recipe_id:x.recipe_id,section:x.section,sort_order:x.sort_order,custom_label:x.custom_label}));const ins=await supabase.from('cc_menu_items').insert(rows);if(ins.error)return showUiError(ins.error.message,'Could not copy menu items');} await loadData(); showUiError('The menu has been copied. You can now edit the new version without changing the original.','Menu copied'); }
 loginForm.onsubmit=async e=>{e.preventDefault();const button=loginForm.querySelector('button');if(!button||button.disabled)return;const email=document.querySelector('#emailInput').value.trim();button.disabled=true;button.textContent='Sending…';loginMessage.textContent='Sending sign-in link…';const {error}=await supabase.auth.signInWithOtp({email,options:{emailRedirectTo:APP_URL}});if(error){const message=String(error.message||'').toLowerCase();loginMessage.textContent=message.includes('rate limit')?'Please wait about 60 seconds before requesting another sign-in link.':'We could not send the sign-in link right now. Please try again in a moment.';button.disabled=false;button.textContent='Send me a sign-in link';}else loginMessage.textContent='Check your email for the sign-in link.';};
-document.querySelector('#recipeForm').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target),{data:{user}}=await supabase.auth.getUser();if(!user)return;const ingredients=String(f.get('ingredients')).split('\n').map(x=>x.trim()).filter(Boolean);const {error}=await supabase.from('cc_recipes').insert({name:f.get('name'),cuisine:f.get('cuisine')||null,course:f.get('course')||null,ingredients,method:f.get('method')||null,personal_notes:f.get('notes')||null,created_by:user.id,visibility:'private'});if(error)return alert(error.message);recipeDialog.close();e.target.reset();await loadData();};
-document.querySelector('#menuForm').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target),{data:{user}}=await supabase.auth.getUser();if(!user)return;const {error}=await supabase.from('cc_menus').insert({name:f.get('name'),menu_date:f.get('date')||null,guest_count:f.get('guests')?Number(f.get('guests')):null,occasion:f.get('occasion')||null,notes:f.get('notes')||null,visibility:'private',created_by:user.id});if(error)return alert(error.message);menuDialog.close();e.target.reset();await loadData();view='menus';};
+document.querySelector('#recipeForm').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target),{data:{user}}=await supabase.auth.getUser();if(!user)return showUiError('Please sign in again.','Sign-in required');const ingredients=String(f.get('ingredients')).split('\n').map(x=>x.trim()).filter(Boolean);const {error}=await supabase.from('cc_recipes').insert({name:f.get('name'),cuisine:f.get('cuisine')||null,course:f.get('course')||null,ingredients,method:f.get('method')||null,personal_notes:f.get('notes')||null,created_by:user.id,visibility:'private'});if(error)return showUiError(error.message,'Could not save recipe');recipeDialog.close();e.target.reset();await loadData();};
+document.querySelector('#menuForm').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target),{data:{user}}=await supabase.auth.getUser();if(!user)return showUiError('Please sign in again.','Sign-in required');const {error}=await supabase.from('cc_menus').insert({name:f.get('name'),menu_date:f.get('date')||null,guest_count:f.get('guests')?Number(f.get('guests')):null,occasion:f.get('occasion')||null,notes:f.get('notes')||null,visibility:'private',created_by:user.id,visibility:'private'});if(error)return showUiError(error.message,'Could not create menu');menuDialog.close();e.target.reset();await loadData();view='menus';};
 
 document.querySelector('#addRecipeBtn').onclick=()=>recipeDialog.showModal();
 // Explicitly close the Add Recipe dialog without submitting the form. The form's
