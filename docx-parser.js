@@ -1,10 +1,10 @@
 const clean=s=>String(s??'').replace(/[\u0000-\u001F\u007F\uFFFD]/g,' ').replace(/\s+/g,' ').trim();
 
-const GENERIC=/^(recipe|recipes|ingredients?|ingredient list|method|directions?|instructions?|preparation|steps?|contents?|index|introduction|notes?|tips?|storage|serving suggestions?|servings?|yield)[:.]?$/i;
+const GENERIC=/^(recipe|recipes|ingredients?|ingredient list|the ingredients|method|the method|directions?|the directions|instructions?|the instructions|preparation|the preparation|steps?|the steps|contents?|index|introduction|notes?|tips?|storage|serving suggestions?|servings?|yield)[:.]?$/i;
 const SECTION={
-  ingredients:/^ingredients?(?:\s+list)?\s*:?$/i,
-  method:/^(?:instructions?|method|directions?|preparation|steps?)\s*:?$/i,
-  notes:/^(?:notes?|storage|serving suggestions?)\s*:?$/i
+  ingredients:/^(?:the\s+)?ingredients?(?:\s+list)?\s*:?$/i,
+  method:/^(?:the\s+)?(?:instructions?|method|directions?|preparation|steps?|stages?)\s*:?$/i,
+  notes:/^(?:the\s+)?(?:notes?|storage|serving suggestions?)\s*:?$/i
 };
 // A component heading can contain descriptive words before the culinary noun.
 const COMPONENT=/^(?:\d+[.)]?\s*)?(?:the\b.*\b(?:marinade|glaze|sauce|rub|dressing|paste|filling|stuffing|topping|mixture|aromatics?|seasoning|spice blend|velveting|brine|batter|coating|garnish|cooking|chicken|beef|pork|fish|vegetables?)\b|for\b.*\b(?:cooking|serving|garnish|sauce|chicken|beef|pork|fish|vegetables?)\b)$/i;
@@ -37,6 +37,16 @@ function titleCaseScore(s){
   return caps>=Math.max(1,Math.ceil(w.length*.35));
 }
 
+// Some DOCX files have no heading styles and introduce the recipe with a sentence
+// such as “Here is the complete Marion-Inspired Twice-Cooked Pork Bites recipe…”.
+// Extract the recipe title from that sentence instead of treating the whole sentence
+// as the recipe name.
+function embeddedTitle(s){
+  const x=clean(s);
+  const m=x.match(/\b(?:complete|full|featured|following)\s+(.+?)\s+recipe\b/i);
+  return m?clean(m[1].replace(/[,:;.!?]+$/,'')):'';
+}
+
 function makeRecipe(name){return {name:clean(name)||'Imported recipe',description:'',cuisine:'',course:'',recipe_type:'Dish',servings:'',ingredients:[],method:[],notes:[]};}
 
 export function parseDocx(html,fileName='Imported document'){
@@ -46,8 +56,8 @@ export function parseDocx(html,fileName='Imported document'){
     .filter(n=>n.text);
   if(!nodes.length)return[];
 
-  // Only headings that are outside an Ingredients/Method/Notes section can start
-  // a new recipe. Culinary component headings inside those sections never do.
+  // Section aliases such as “The Ingredients” and “The Steps” are common in
+  // exported/generated DOCX files, even when Word heading styles are absent.
   const candidates=[]; let section='';
   for(let i=0;i<nodes.length;i++){
     const t=nodes[i].text;
@@ -55,7 +65,8 @@ export function parseDocx(html,fileName='Imported document'){
     if(SECTION.method.test(t)){section='method';continue;}
     if(SECTION.notes.test(t)){section='notes';continue;}
     if(section&&COMPONENT.test(t))continue;
-    if(titleCaseScore(t)){
+    if(embeddedTitle(t))candidates.push(i);
+    else if(titleCaseScore(t)){
       if(!section || section==='method' || section==='notes')candidates.push(i);
     }
   }
@@ -64,12 +75,26 @@ export function parseDocx(html,fileName='Imported document'){
     const end=pos+1<candidates.length?candidates[pos+1]:nodes.length;
     return nodes.slice(idx+1,end).some(n=>SECTION.ingredients.test(n.text)||SECTION.method.test(n.text));
   });
-  if(!recipeHeads.length)return[];
+
+  // If the document starts directly with a descriptive recipe sentence followed
+  // by “The Ingredients”, the embedded-title candidate above is enough. As a
+  // fallback for simple single-recipe DOCX files, use the first content node
+  // before the first recognised section as the recipe title.
+  let heads=recipeHeads;
+  if(!heads.length){
+    const firstSection=nodes.findIndex(n=>SECTION.ingredients.test(n.text)||SECTION.method.test(n.text));
+    if(firstSection>0){
+      const titleIndex=nodes.slice(0,firstSection).findIndex(n=>!GENERIC.test(n.text)&&!META.test(n.text));
+      if(titleIndex>=0)heads=[titleIndex];
+    }
+  }
+  if(!heads.length)return[];
 
   const recipes=[];
-  for(let h=0;h<recipeHeads.length;h++){
-    const start=recipeHeads[h],end=h+1<recipeHeads.length?recipeHeads[h+1]:nodes.length;
-    const r=makeRecipe(nodes[start].text);
+  for(let h=0;h<heads.length;h++){
+    const start=heads[h],end=h+1<heads.length?heads[h+1]:nodes.length;
+    const sourceTitle=nodes[start].text;
+    const r=makeRecipe(embeddedTitle(sourceTitle)||sourceTitle);
     let current='';
     for(const n of nodes.slice(start+1,end)){
       const t=n.text;
