@@ -13,3 +13,4 @@ document.addEventListener('click',event=>{const b=event.target?.closest?.('#impo
 const detailDialog=document.querySelector('#detailDialog');if(detailDialog)detailDialog.addEventListener('close',()=>{if(importDialog?.open)setTimeout(loadInbox,150)});window.ccReloadImportInbox=loadInbox;
 import('./recipe-inheritance.js?v=1.0.0').catch(error=>console.error('Cooking Confidential inheritance module:',error));
 import('./docx-review-click.js?v=1.0.0').catch(error=>console.error('Cooking Confidential DOCX review module:',error));
+import('./url-review-click.js?v=1.0.0').catch(error=>console.error('Cooking Confidential URL review module:',error));
