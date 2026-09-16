@@ -1,13 +1,11 @@
 import { supabase as sb } from './supabase-client-legacy.js?v=1.0.0';
 
-// Generic bridge for DOCX imports. The original multi-recipe dialog can render
-// before its older post-processing hook runs. For DOCX files, rerun the actual
-// DOCX review parser immediately with the same import id; that parser now
-// distinguishes one recipe with culinary component headings from true multi-recipe files.
+// DOCX imports must use the shared structural parser before the legacy multi-recipe
+// renderer gets a chance to classify culinary component headings as recipes.
 async function rerouteDocx(id){
   const{data:item,error}=await sb.from('cc_import_items').select('file_name').eq('id',id).single();
   if(error||!item||!/\.docx$/i.test(item.file_name||''))return false;
-  const mod=await import('./docx-import-review.js?v=1.0.2');
+  const mod=await import('./docx-import-review.js?v=1.0.3');
   if(typeof mod.reviewDocxImport!=='function')throw Error('DOCX review module could not be loaded.');
   await mod.reviewDocxImport(id);
   return true;
@@ -19,13 +17,16 @@ const timer=setInterval(()=>{
   wrapped=true;clearInterval(timer);
   const original=window.ccMultiReview;
   window.ccMultiReview=async id=>{
-    await original(id);
-    try{await rerouteDocx(id);}catch(e){console.error('Cooking Confidential DOCX parser reroute:',e);}
+    try{
+      // If this is a DOCX, do not call the legacy renderer at all.
+      if(await rerouteDocx(id))return;
+    }catch(e){console.error('Cooking Confidential DOCX parser reroute:',e);}
+    return original(id);
   };
 },50);
 
-// Cover callers that render the multi-recipe dialog directly without the global hook.
-// This is deliberately limited to a pending DOCX item and does not affect image/text imports.
+// Also cover callers that render the multi-recipe dialog directly without the global hook.
+// This is limited to the newest pending DOCX import and is only a fallback.
 let observed=false;
 const observer=new MutationObserver(async()=>{
   if(observed)return;
