@@ -1,5 +1,5 @@
 import { supabase } from './supabase-client.js?v=1.0.1';
-import { createGenericEditor, editorValue } from './generic-editor.js?v=1.0.1';
+import { createGenericEditor, editorValue } from './generic-editor.js?v=1.0.2';
 const dialog=document.querySelector('#detailDialog');
 const esc=s=>String(s??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));
 const clean=s=>String(s??'').replace(/\s*\[\s\d,;,-]+\s*/g,' ').replace(/\s+/g,' ').trim();
