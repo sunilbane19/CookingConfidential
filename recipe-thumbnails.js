@@ -1,6 +1,6 @@
 // Recipe card thumbnail layer.
 // Uses a small, verified Unsplash image pool and selects a relevant image when possible.
-import './library-ui-fix-v2.js?v=1.0.2';
+import './library-ui-fix-v2.js?v=1.0.3';
 import { supabase } from './supabase-client.js?v=1.0.1';
 const img=(id,alt)=>({url:`https://images.unsplash.com/${id}?auto=format&fit=crop&fm=jpg&q=82&w=900`,alt});
 const IMAGES={
