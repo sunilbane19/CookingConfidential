@@ -1,118 +1,26 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-
-const SUPABASE_URL = 'https://yiwmtfbqbynimqvwxosu.supabase.co';
-// Use the project's proven browser-safe anon key, matching supabase-client.js.
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlpd210ZmJxYnluaW1xdnd4b3N1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc1ODI3MDYsImV4cCI6MjEwMzE1ODcwNn0.pwfoCI_ajYfrON9XWMo9k2GvzCWqwcpsMxI1As';
-const APP_URL = 'https://cookingconfidential.in/';
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-const content = document.querySelector('#content');
-const search = document.querySelector('#searchInput');
-const loginPanel = document.querySelector('#loginPanel');
-const appPanel = document.querySelector('#appPanel');
-const userBadge = document.querySelector('#userBadge');
-const loginForm = document.querySelector('#loginForm');
-const loginMessage = document.querySelector('#loginMessage');
-const recipeDialog = document.querySelector('#recipeDialog');
-const menuDialog = document.querySelector('#menuDialog');
-const detailDialog = document.querySelector('#detailDialog');
-const importDialog = document.querySelector('#importDialog');
-const importQueue = document.querySelector('#importQueue');
-let importItems = [];
-let recipes = [], menus = [], view = 'recipes';
-const esc = (s='') => String(s).replace(/[&<>\"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));
-const stars = n => n ? '★'.repeat(n) : '';
-const ingredientsText = r => Array.isArray(r.ingredients) ? r.ingredients.map(x => typeof x === 'string' ? x : [x.quantity,x.unit,x.name].filter(Boolean).join(' ')) : [];
-
-function showUiError(message, title='Something went wrong', onClose=null){
-  const raw=String(message||'Something went wrong');
-  const lower=raw.toLowerCase();
-  let heading=title;
-  let friendly=raw;
-  if(lower.includes('cc_recipes_no_duplicate_names')||lower.includes('duplicate key value violates unique constraint')){
-    heading='Recipe already saved';
-    friendly='A recipe with this name is already in your collection. It was not saved again.';
-  }
-  if(!detailDialog)return console.error(raw);
-  detailDialog.querySelector('#detailContent').innerHTML=`<div class="dialog-card error-card"><button class="close" type="button" aria-label="Close">×</button><p class="eyebrow">COOKING CONFIDENTIAL · ERROR</p><h2>${esc(heading)}</h2><p class="error-message">${esc(friendly)}</p>${friendly!==raw?`<details class="error-details"><summary>Technical details</summary><code>${esc(raw)}</code></details>`:''}<div class="detail-actions"><button class="primary" id="uiErrorClose">Close</button></div></div>`;
-  const close=()=>{detailDialog.close();if(typeof onClose==='function')onClose();};
-  detailDialog.querySelector('.close').onclick=close;
-  detailDialog.querySelector('#uiErrorClose').onclick=close;
-  if(!detailDialog.open)detailDialog.showModal();
-}
+const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
+const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlpd210ZmJxYnluaW1xdnd4b3N1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc1ODI3MDYsImV4cCI6MjEwMzE1ODcwNn0.pwfoCI_ajYfrON9XWMo9k2GvzCWqwcpsMxI1As';
+const APP_URL='https://cookingconfidential.in/';
+const supabase=createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+const content=document.querySelector('#content'),search=document.querySelector('#searchInput'),loginPanel=document.querySelector('#loginPanel'),appPanel=document.querySelector('#appPanel'),userBadge=document.querySelector('#userBadge'),loginForm=document.querySelector('#loginForm'),loginMessage=document.querySelector('#loginMessage'),recipeDialog=document.querySelector('#recipeDialog'),menuDialog=document.querySelector('#menuDialog'),detailDialog=document.querySelector('#detailDialog'),importDialog=document.querySelector('#importDialog'),importQueue=document.querySelector('#importQueue');
+let importItems=[],recipes=[],menus=[],view='recipes';
+const esc=(s='')=>String(s).replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));
+const stars=n=>n?'★'.repeat(n):'';
+const safeRichHtml=s=>{const raw=String(s??'');const doc=new DOMParser().parseFromString(`<div>${raw}</div>`,'text/html');const allowed=new Set(['B','STRONG','I','EM','U','UL','OL','LI','BR','P','DIV']);const cleanNode=node=>{if(node.nodeType===Node.TEXT_NODE)return document.createTextNode(node.nodeValue||'');if(node.nodeType!==Node.ELEMENT_NODE)return document.createTextNode('');if(!allowed.has(node.tagName)){const f=document.createDocumentFragment();[...node.childNodes].forEach(x=>f.appendChild(cleanNode(x)));return f}const el=document.createElement(node.tagName.toLowerCase());[...node.childNodes].forEach(x=>el.appendChild(cleanNode(x)));return el};const out=document.createElement('div');[...(doc.body.firstElementChild?.childNodes||[])].forEach(x=>out.appendChild(cleanNode(x)));return out.innerHTML};
+const ingredientsHtml=r=>{const a=r?.ingredients;if(a&&typeof a==='object'&&!Array.isArray(a)&&typeof a.html==='string')return safeRichHtml(a.html);if(Array.isArray(a))return a.map(x=>{const t=typeof x==='string'?x:[x?.quantity,x?.unit,x?.name].filter(Boolean).join(' ');return esc(t)}).join('<br>');return esc(a||'')};
+const ingredientsPlain=r=>{const a=r?.ingredients;if(a&&typeof a==='object'&&!Array.isArray(a)&&typeof a.html==='string')return a.html.replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim();if(Array.isArray(a))return a.map(x=>typeof x==='string'?x:[x?.quantity,x?.unit,x?.name].filter(Boolean).join(' ')).join(' ');return String(a||'')};
+function showUiError(message,title='Something went wrong',onClose=null){const raw=String(message||'Something went wrong'),lower=raw.toLowerCase();let heading=title,friendly=raw;if(lower.includes('cc_recipes_no_duplicate_names')||lower.includes('duplicate key value violates unique constraint')){heading='Recipe already saved';friendly='A recipe with this name is already in your collection. It was not saved again.'}if(!detailDialog)return console.error(raw);detailDialog.querySelector('#detailContent').innerHTML=`<div class="dialog-card error-card"><button class="close" type="button" aria-label="Close">×</button><p class="eyebrow">COOKING CONFIDENTIAL · ERROR</p><h2>${esc(heading)}</h2><p class="error-message">${esc(friendly)}</p>${friendly!==raw?`<details class="error-details"><summary>Technical details</summary><code>${esc(raw)}</code></details>`:''}<div class="detail-actions"><button class="primary" id="uiErrorClose">Close</button></div></div>`;const close=()=>{detailDialog.close();if(typeof onClose==='function')onClose()};detailDialog.querySelector('.close').onclick=close;detailDialog.querySelector('#uiErrorClose').onclick=close;if(!detailDialog.open)detailDialog.showModal()}
 window.ccShowError=showUiError;
-
-async function loadData() {
-  content.innerHTML = '<div class="empty">Loading your recipes…</div>';
-  const recipesResult = await supabase.from('cc_recipes').select('*').order('updated_at',{ascending:false});
-  if (recipesResult.error) throw new Error(recipesResult.error.message);
-  recipes = recipesResult.data || [];
-  window.ccRecipes = recipes;
-  window.dispatchEvent(new CustomEvent('cc:recipes-loaded'));
-  render();
-  try {
-    const menusResult = await supabase.from('cc_menus').select('*').order('menu_date',{ascending:false,nullsFirst:false}).order('created_at',{ascending:false});
-    if (!menusResult.error) menus = menusResult.data || [];
-  } catch (_) { menus = []; }
-}
-function recipeCard(r) { return `<article class="card" data-id="${r.id}"><div class="card-image">🍽</div><div class="card-body"><span class="tag">${esc(r.cuisine||'Uncategorised')}</span><h3>${esc(r.name)}</h3><div class="meta">${esc(r.course||'Recipe')} · ${stars(r.rating)}</div></div></article>`; }
-function render() {
-  const q = search.value.trim().toLowerCase(); if (view === 'menus') return renderMenus(q);
-  let list = recipes.filter(r => view !== 'favourites' || r.is_favourite).filter(r => (r.name+' '+(r.cuisine||'')+' '+(r.country||'')+' '+(r.region||'')+' '+(r.course||'')+' '+ingredientsText(r).join(' ')+' '+(r.personal_notes||'')).toLowerCase().includes(q));
-  content.innerHTML = `<div class="section-head"><h2>${view==='favourites'?'Favourites':'Your recipes'}</h2><span class="count">${list.length} recipes</span></div>${list.length ? '<div class="grid">'+list.map(recipeCard).join('')+'</div>' : '<div class="empty">No recipes found. Try another ingredient, cuisine or dish.</div>'}`;
-  content.querySelectorAll('.card').forEach(c => c.onclick = () => showRecipe(+c.dataset.id));
-}
-function renderMenus(q) {
-  const list = menus.filter(m => (m.name+' '+(m.occasion||'')+' '+(m.notes||'')).toLowerCase().includes(q));
-  content.innerHTML = `<div class="section-head"><h2>Your menus</h2><span class="count">${list.length} menus</span></div><button class="primary" id="newMenuBtn">＋ New menu</button><div style="margin-top:18px">${list.length ? list.map(m => `<article class="menu-card"><span class="tag">${m.guest_count ? m.guest_count+' guests' : 'Menu'} ${m.menu_date ? '· '+esc(m.menu_date) : ''}</span><h3>${esc(m.name)}</h3><div class="menu-items">${esc(m.occasion||'')}</div><button class="tab copy-menu" data-id="${m.id}">Copy & modify</button></article>`).join('') : '<div class="empty">No menus yet. Create one from a blank page.</div>'}</div>`;
-  document.querySelector('#newMenuBtn').onclick = () => menuDialog.showModal(); content.querySelectorAll('.copy-menu').forEach(b => b.onclick = () => copyMenu(+b.dataset.id));
-}
-async function showRecipe(id) {
-  const r = recipes.find(x => x.id === id); if (!r) return;
-  window.ccCurrentRecipe = r;
-  detailDialog.querySelector('#detailContent').innerHTML = `<button class="close" onclick="detailDialog.close()">×</button><span class="tag">${esc(r.cuisine||'')} · ${esc(r.course||'Recipe')}</span><h2 class="detail-title">${esc(r.name)}</h2><div class="meta">${stars(r.rating)}</div><div class="detail-section"><h4>Ingredients</h4><ul>${ingredientsText(r).map(i=>'<li>'+esc(i)+'</li>').join('')}</ul></div><div class="detail-section"><h4>Method</h4><p>${esc(r.method||'')}</p></div>${r.personal_notes ? '<div class="detail-section"><h4>My notes</h4><p>'+esc(r.personal_notes)+'</p></div>' : ''}${r.source_url ? '<div class="detail-section"><h4>Source</h4><p><a href="'+esc(r.source_url)+'" target="_blank" rel="noopener">'+esc(r.source_title||r.source_url)+'</a></p></div>' : ''}<div class="detail-actions"><button class="secondary" id="favBtn">${r.is_favourite?'★ Remove favourite':'☆ Add to favourites'}</button></div>`;
-  detailDialog.showModal(); document.querySelector('#favBtn').onclick = async () => { const {error}=await supabase.from('cc_recipes').update({is_favourite:!r.is_favourite}).eq('id',r.id); if(error)return showUiError(error.message,'Could not update favourite'); r.is_favourite=!r.is_favourite; detailDialog.close(); render(); };
-}
-async function copyMenu(id) { const m=menus.find(x=>x.id===id); if(!m)return; const {data:{user}}=await supabase.auth.getUser(); if(!user)return showUiError('Please sign in again.','Sign-in required'); const {data,error}=await supabase.from('cc_menus').insert({name:m.name+' — Copy',menu_date:null,occasion:m.occasion,guest_count:m.guest_count,notes:m.notes,visibility:'private',created_by:user.id}).select().single(); if(error)return showUiError(error.message,'Could not copy menu'); const items=await supabase.from('cc_menu_items').select('*').eq('menu_id',m.id).order('sort_order'); if(items.error)return showUiError(items.error.message,'Could not copy menu items'); if(items.data?.length){const rows=items.data.map(x=>({menu_id:data.id,recipe_id:x.recipe_id,section:x.section,sort_order:x.sort_order,custom_label:x.custom_label}));const ins=await supabase.from('cc_menu_items').insert(rows);if(ins.error)return showUiError(ins.error.message,'Could not copy menu items');} await loadData(); }
-loginForm.onsubmit=async e=>{e.preventDefault();const button=loginForm.querySelector('button');if(!button||button.disabled)return;const email=document.querySelector('#emailInput').value.trim();button.disabled=true;button.textContent='Sending…';loginMessage.textContent='Sending sign-in link…';const {error}=await supabase.auth.signInWithOtp({email,options:{emailRedirectTo:APP_URL}});if(error){const message=String(error.message||'').toLowerCase();loginMessage.textContent=message.includes('rate limit')?'Please wait about 60 seconds before requesting another sign-in link.':'We could not send the sign-in link right now. Please try again in a moment.';button.disabled=false;button.textContent='Send me a sign-in link';}else loginMessage.textContent='Check your email for the sign-in link.';};
-document.querySelector('#recipeForm').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target),{data:{user}}=await supabase.auth.getUser();if(!user)return showUiError('Please sign in again.','Sign-in required');const ingredients=String(f.get('ingredients')).split('\n').map(x=>x.trim()).filter(Boolean);const {error}=await supabase.from('cc_recipes').insert({name:f.get('name'),cuisine:f.get('cuisine')||null,course:f.get('course')||null,ingredients,method:f.get('method')||null,personal_notes:f.get('notes')||null,created_by:user.id,visibility:'private'});if(error)return showUiError(error.message,'Could not save recipe');recipeDialog.close();e.target.reset();await loadData();};
-document.querySelector('#menuForm').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target),{data:{user}}=await supabase.auth.getUser();if(!user)return showUiError('Please sign in again.','Sign-in required');const {error}=await supabase.from('cc_menus').insert({name:f.get('name'),menu_date:f.get('date')||null,guest_count:f.get('guests')?Number(f.get('guests')):null,occasion:f.get('occasion')||null,notes:f.get('notes')||null,visibility:'private',created_by:user.id});if(error)return showUiError(error.message,'Could not create menu');menuDialog.close();e.target.reset();await loadData();view='menus';};
-
-document.querySelector('#addRecipeBtn').onclick=()=>recipeDialog.showModal();
-const closeRecipeDialog=()=>{recipeDialog.close();document.querySelector('#recipeForm').reset();};
-document.querySelector('#recipeForm .close').onclick=e=>{e.preventDefault();closeRecipeDialog();};
-document.querySelector('#recipeForm .dialog-actions button[value="cancel"]').onclick=e=>{e.preventDefault();closeRecipeDialog();};
-
-document.querySelector('#importBtn').onclick=()=>importDialog.showModal();
-document.querySelector('#closeImport').onclick=()=>importDialog.close();
-document.querySelector('#fileInput').onchange=e=>queueFiles([...e.target.files]);
-document.querySelector('#addUrlBtn').onclick=()=>{const input=document.querySelector('#sourceUrl');const url=input.value.trim();if(!url)return;addImportItem({source_url:url,file_name:url.split('/').pop()||url,mime_type:'text/url'});input.value='';};
-function addImportItem(item){item.localId=crypto.randomUUID();item.status='Queued';importItems.push(item);renderImportQueue();}
-function queueFiles(files){files.forEach(file=>addImportItem({file,file_name:file.name,mime_type:file.type||'application/octet-stream',size:file.size}));}
-function renderImportQueue(){importQueue.innerHTML=importItems.length?'<div class="queue-head"><strong>'+importItems.length+' selected</strong><button class="secondary" id="uploadAll" type="button">Upload all</button></div>'+importItems.map(x=>'<div class="queue-item"><div><strong>'+esc(x.file_name)+'</strong><small>'+esc(x.mime_type||'')+(x.size?' · '+Math.round(x.size/1024)+' KB':'')+'</div><span>'+esc(x.status)+'</span></div>').join(''):'<div class="empty compact">Select files or add a URL to begin.</div>';}
-search.oninput=()=>render();
-document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{view=t.dataset.view;document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===t));render();});
-
-async function boot(sessionOverride=null){
-  let session=sessionOverride;
-  if(!session){
-    const {data:{session:currentSession}}=await supabase.auth.getSession();
-    session=currentSession;
-  }
-  if(!session){loginPanel.hidden=false;appPanel.hidden=true;return;}
-  loginPanel.hidden=true;
-  appPanel.hidden=false;
-  userBadge.textContent=session.user.email||'Signed in';
-  try{await loadData();}catch(e){content.innerHTML='<div class="empty">'+esc(e.message)+'</div>';}
-}
-
-supabase.auth.onAuthStateChange((_event,session)=>{
-  if(session){
-    setTimeout(()=>boot(session),0);
-  } else {
-    loginPanel.hidden=false;
-    appPanel.hidden=true;
-  }
-});
-
-boot();
+async function loadData(){content.innerHTML='<div class="empty">Loading your recipes…</div>';const recipesResult=await supabase.from('cc_recipes').select('*').order('updated_at',{ascending:false});if(recipesResult.error)throw new Error(recipesResult.error.message);recipes=recipesResult.data||[];window.ccRecipes=recipes;window.dispatchEvent(new CustomEvent('cc:recipes-loaded'));render();try{const menusResult=await supabase.from('cc_menus').select('*').order('menu_date',{ascending:false,nullsFirst:false}).order('created_at',{ascending:false});if(!menusResult.error)menus=menusResult.data||[]}catch(_){menus=[]}}
+function recipeCard(r){return `<article class="card" data-id="${r.id}"><div class="card-image">🍽</div><div class="card-body"><span class="tag">${esc(r.cuisine||'Uncategorised')}</span><h3>${esc(r.name)}</h3><div class="meta">${esc(r.course||'Recipe')} · ${stars(r.rating)}</div></div></article>`}
+function render(){const q=search.value.trim().toLowerCase();if(view==='menus')return renderMenus(q);let list=recipes.filter(r=>view!=='favourites'||r.is_favourite).filter(r=>(r.name+' '+(r.cuisine||'')+' '+(r.country||'')+' '+(r.region||'')+' '+(r.course||'')+' '+ingredientsPlain(r)+' '+(r.personal_notes||'')).toLowerCase().includes(q));content.innerHTML=`<div class="section-head"><h2>${view==='favourites'?'Favourites':'Your recipes'}</h2><span class="count">${list.length} recipes</span></div>${list.length?'<div class="grid">'+list.map(recipeCard).join('')+'</div>':'<div class="empty">No recipes found. Try another ingredient, cuisine or dish.</div>'}`;content.querySelectorAll('.card').forEach(c=>c.onclick=()=>showRecipe(+c.dataset.id))}
+function renderMenus(q){const list=menus.filter(m=>(m.name+' '+(m.occasion||'')+' '+(m.notes||'')).toLowerCase().includes(q));content.innerHTML=`<div class="section-head"><h2>Your menus</h2><span class="count">${list.length} menus</span></div><button class="primary" id="newMenuBtn">＋ New menu</button><div style="margin-top:18px">${list.length?list.map(m=>`<article class="menu-card"><span class="tag">${m.guest_count?m.guest_count+' guests':'Menu'} ${m.menu_date?'· '+esc(m.menu_date):''}</span><h3>${esc(m.name)}</h3><div class="menu-items">${esc(m.occasion||'')}</div><button class="tab copy-menu" data-id="${m.id}">Copy & modify</button></article>`).join(''):'<div class="empty">No menus yet. Create one from a blank page.</div>'}</div>`;document.querySelector('#newMenuBtn').onclick=()=>menuDialog.showModal();content.querySelectorAll('.copy-menu').forEach(b=>b.onclick=()=>copyMenu(+b.dataset.id))}
+async function showRecipe(id){const r=recipes.find(x=>x.id===id);if(!r)return;window.ccCurrentRecipe=r;detailDialog.querySelector('#detailContent').innerHTML=`<button class="close" onclick="detailDialog.close()">×</button><span class="tag">${esc(r.cuisine||'')} · ${esc(r.course||'Recipe')}</span><h2 class="detail-title">${esc(r.name)}</h2><div class="meta">${stars(r.rating)}</div><div class="detail-section"><h4>Ingredients</h4><div class="rich-display">${ingredientsHtml(r)||'—'}</div></div><div class="detail-section"><h4>Method</h4><div class="rich-display">${safeRichHtml(r.method||'')||'—'}</div></div>${r.personal_notes?'<div class="detail-section"><h4>My notes</h4><div class="rich-display">'+safeRichHtml(r.personal_notes)+'</div></div>':''}${r.source_url?'<div class="detail-section"><h4>Source</h4><p><a href="'+esc(r.source_url)+'" target="_blank" rel="noopener">'+esc(r.source_title||r.source_url)+'</a></p></div>':''}<div class="detail-actions"><button class="secondary" id="favBtn">${r.is_favourite?'★ Remove favourite':'☆ Add to favourites'}</button></div>`;detailDialog.showModal();document.querySelector('#favBtn').onclick=async()=>{const{error}=await supabase.from('cc_recipes').update({is_favourite:!r.is_favourite}).eq('id',r.id);if(error)return showUiError(error.message,'Could not update favourite');r.is_favourite=!r.is_favourite;detailDialog.close();render()}}
+async function copyMenu(id){const m=menus.find(x=>x.id===id);if(!m)return;const{data:{user}}=await supabase.auth.getUser();if(!user)return showUiError('Please sign in again.','Sign-in required');const{data,error}=await supabase.from('cc_menus').insert({name:m.name+' — Copy',menu_date:null,occasion:m.occasion,guest_count:m.guest_count,notes:m.notes,visibility:'private',created_by:user.id}).select().single();if(error)return showUiError(error.message,'Could not copy menu');const items=await supabase.from('cc_menu_items').select('*').eq('menu_id',m.id).order('sort_order');if(items.error)return showUiError(items.error.message,'Could not copy menu items');if(items.data?.length){const rows=items.data.map(x=>({menu_id:data.id,recipe_id:x.recipe_id,section:x.section,sort_order:x.sort_order,custom_label:x.custom_label}));const ins=await supabase.from('cc_menu_items').insert(rows);if(ins.error)return showUiError(ins.error.message,'Could not copy menu items')}await loadData()}
+loginForm.onsubmit=async e=>{e.preventDefault();const button=loginForm.querySelector('button');if(!button||button.disabled)return;const email=document.querySelector('#emailInput').value.trim();button.disabled=true;button.textContent='Sending…';loginMessage.textContent='Sending sign-in link…';const{error}=await supabase.auth.signInWithOtp({email,options:{emailRedirectTo:APP_URL}});if(error){const message=String(error.message||'').toLowerCase();loginMessage.textContent=message.includes('rate limit')?'Please wait about 60 seconds before requesting another sign-in link.':'We could not send the sign-in link right now. Please try again in a moment.';button.disabled=false;button.textContent='Send me a sign-in link'}else loginMessage.textContent='Check your email for the sign-in link.'};
+document.querySelector('#recipeForm').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target),{data:{user}}=await supabase.auth.getUser();if(!user)return showUiError('Please sign in again.','Sign-in required');const ingredients=String(f.get('ingredients')).split('\n').map(x=>x.trim()).filter(Boolean);const{error}=await supabase.from('cc_recipes').insert({name:f.get('name'),cuisine:f.get('cuisine')||null,course:f.get('course')||null,ingredients,method:f.get('method')||null,personal_notes:f.get('notes')||null,created_by:user.id,visibility:'private'});if(error)return showUiError(error.message,'Could not save recipe');recipeDialog.close();e.target.reset();await loadData()};
+document.querySelector('#menuForm').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target),{data:{user}}=await supabase.auth.getUser();if(!user)return showUiError('Please sign in again.','Sign-in required');const{error}=await supabase.from('cc_menus').insert({name:f.get('name'),menu_date:f.get('date')||null,guest_count:f.get('guests')?Number(f.get('guests')):null,occasion:f.get('occasion')||null,notes:f.get('notes')||null,visibility:'private',created_by:user.id});if(error)return showUiError(error.message,'Could not create menu');menuDialog.close();e.target.reset();await loadData();view='menus'};
+document.querySelector('#addRecipeBtn').onclick=()=>recipeDialog.showModal();const closeRecipeDialog=()=>{recipeDialog.close();document.querySelector('#recipeForm').reset()};document.querySelector('#recipeForm .close').onclick=e=>{e.preventDefault();closeRecipeDialog()};document.querySelector('#recipeForm .dialog-actions button[value="cancel"]').onclick=e=>{e.preventDefault();closeRecipeDialog()};document.querySelector('#importBtn').onclick=()=>importDialog.showModal();document.querySelector('#closeImport').onclick=()=>importDialog.close();document.querySelector('#fileInput').onchange=e=>queueFiles([...e.target.files]);document.querySelector('#addUrlBtn').onclick=()=>{const input=document.querySelector('#sourceUrl'),url=input.value.trim();if(!url)return;addImportItem({source_url:url,file_name:url.split('/').pop()||url,mime_type:'text/url'});input.value=''};function addImportItem(item){item.localId=crypto.randomUUID();item.status='Queued';importItems.push(item);renderImportQueue()}function queueFiles(files){files.forEach(file=>addImportItem({file,file_name:file.name,mime_type:file.type||'application/octet-stream',size:file.size}))}function renderImportQueue(){importQueue.innerHTML=importItems.length?'<div class="queue-head"><strong>'+importItems.length+' selected</strong><button class="secondary" id="uploadAll" type="button">Upload all</button></div>'+importItems.map(x=>'<div class="queue-item"><div><strong>'+esc(x.file_name)+'</strong><small>'+esc(x.mime_type||'')+(x.size?' · '+Math.round(x.size/1024)+' KB':'')+'</div><span>'+esc(x.status)+'</span></div>').join(''):'<div class="empty compact">Select files or add a URL to begin.</div>'}search.oninput=()=>render();document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{view=t.dataset.view;document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===t));render()});
+async function boot(sessionOverride=null){let session=sessionOverride;if(!session){const{data:{session:currentSession}}=await supabase.auth.getSession();session=currentSession}if(!session){loginPanel.hidden=false;appPanel.hidden=true;return}loginPanel.hidden=true;appPanel.hidden=false;userBadge.textContent=session.user.email||'Signed in';try{await loadData()}catch(e){content.innerHTML='<div class="empty">'+esc(e.message)+'</div>'}}
+supabase.auth.onAuthStateChange((_event,session)=>{if(session)setTimeout(()=>boot(session),0);else{loginPanel.hidden=false;appPanel.hidden=true}});boot();
