@@ -11,7 +11,7 @@ function fieldMarkup(f){
     const custom=f.allowCustom&&value&&!known;
     return `<label${cls}>${esc(f.label)}<select name="${esc(f.name)}">${options.map(o=>`<option value="${esc(o)}" ${o===value?'selected':''}>${esc(o||'Select…')}</option>`).join('')}${f.allowCustom?`<option value="__custom__" ${custom?'selected':''}>Other / custom…</option>`:''}</select>${f.allowCustom?`<input name="${esc(f.name)}_custom" placeholder="Enter category" style="display:${custom?'block':'none'};margin-top:8px" value="${custom?esc(value):''}">`:''}</label>`;
   }
-  return `<label${cls}>${esc(f.label)}<input name="${esc(f.name)}" type="${esc(f.type||'text')}" value="${esc(value)}"${required}${f.placeholder?` placeholder="${esc(f.placeholder)}"`:''}></label>`;
+  return `<label${cls}><${f.type==='number'?'span':'span'}>${esc(f.label)}</span><input name="${esc(f.name)}" type="${esc(f.type||'text')}" value="${esc(value)}"${required}${f.placeholder?` placeholder="${esc(f.placeholder)}"`:''}></label>`;
 }
 
 function groupMarkup(group){
@@ -21,12 +21,8 @@ function groupMarkup(group){
 export function createGenericEditor({dialog, eyebrow='EDIT', title='Edit', sourceHtml='', fields=[], actions={}, onSave}){
   if(!dialog)throw new Error('Editor dialog not found');
   const content=dialog.querySelector('#detailContent');
-  const normalFields=[];
-  const groups=[];
-  fields.forEach(f=>f.group?groups.push(f.group):normalFields.push(f));
   const body=[];
-  normalFields.forEach(f=>body.push(fieldMarkup(f)));
-  groups.forEach(g=>body.push(groupMarkup(g)));
+  fields.forEach(f=>body.push(f.group?groupMarkup(f.group):fieldMarkup(f)));
   content.innerHTML=`<button class="close" type="button" id="ccGenericEditorClose">×</button><p class="eyebrow">${esc(eyebrow)}</p><h2>${esc(title)}</h2>${sourceHtml||''}<form id="ccGenericEditorForm">${body.join('')}<div class="detail-actions"><button class="secondary" type="button" id="ccGenericEditorCancel">${esc(actions.cancelLabel||'Cancel')}</button>${actions.delete?`<button class="secondary" type="button" id="ccGenericEditorDelete">${esc(actions.deleteLabel||'Delete')}</button>`:''}<button class="primary" type="submit">${esc(actions.saveLabel||'Save changes')}</button></div></form>`;
   content.scrollTop=0;
   dialog.showModal();
