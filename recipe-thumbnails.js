@@ -1,6 +1,6 @@
 // Recipe card thumbnail layer.
 // Restores the proven image-selection approach used before the recent thumbnail changes.
-import './library-ui-fix-v2.js?v=1.0.0';
+import './library-ui-fix-v2.js?v=1.0.1';
 import { supabase } from './supabase-client.js?v=1.0.1';
 const img=(id,alt)=>({url:`https://images.unsplash.com/${id}?auto=format&fit=crop&fm=jpg&q=82&w=900`,alt});
 const IMAGES={
