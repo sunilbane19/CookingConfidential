@@ -27,7 +27,7 @@ export function createGenericEditor({dialog, eyebrow='EDIT', title='Edit', sourc
   const body=[];
   normalFields.forEach(f=>body.push(fieldMarkup(f)));
   groups.forEach(g=>body.push(groupMarkup(g)));
-  content.innerHTML=`<button class="close" type="button" id="ccGenericEditorClose">×</button><p class="eyebrow">${esc(eyebrow)}</p><h2>${esc(title)}</h2>${sourceHtml||''}<form id="ccGenericEditorForm">${body.join('')}<div class="detail-actions"><button class="secondary" type="button" id="ccGenericEditorCancel">${esc(actions.cancelLabel||'Cancel')}</button>${actions.delete?`<button class="secondary" type="button" id="ccGenericEditorDelete">${esc(actions.deleteLabel||'Delete')}`:''}<button class="primary" type="submit">${esc(actions.saveLabel||'Save changes')}</button></div></form>`;
+  content.innerHTML=`<button class="close" type="button" id="ccGenericEditorClose">×</button><p class="eyebrow">${esc(eyebrow)}</p><h2>${esc(title)}</h2>${sourceHtml||''}<form id="ccGenericEditorForm">${body.join('')}<div class="detail-actions"><button class="secondary" type="button" id="ccGenericEditorCancel">${esc(actions.cancelLabel||'Cancel')}</button>${actions.delete?`<button class="secondary" type="button" id="ccGenericEditorDelete">${esc(actions.deleteLabel||'Delete')}</button>`:''}<button class="primary" type="submit">${esc(actions.saveLabel||'Save changes')}</button></div></form>`;
   content.scrollTop=0;
   dialog.showModal();
   content.scrollTop=0;
