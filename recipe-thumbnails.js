@@ -18,7 +18,10 @@ const IMAGES={
  rawGarlic:img('photo-1690983330536-3b0089d07cf9','Steak with garlic and herbs'),
  marinatedBeef:img('photo-1785636883701-bd4f9e3173c4','Marinated beef on a grill'),
  streetTacos:img('photo-1648437595587-e6a8b0cdf1f9','Street tacos with lime'),
- carneTacos:img('photo-1579633711380-ad5922a56153','Carne asada tacos with salsa')
+ carneTacos:img('photo-1579633711380-ad5922a56153','Carne asada tacos'),
+ fallbackFood:img('photo-1504674900247-0877df9cc836','Food on a table'),
+ fallbackFood2:img('photo-1547592180-85f173990554','Prepared food'),
+ fallbackFood3:img('photo-1498837167922-ddd27525d352','Fresh food ingredients')
 };
 const pool=Object.values(IMAGES),used=new Set();
 let recipes=[];
@@ -40,6 +43,7 @@ function candidates(r){const t=textOf(r),out=[];const add=k=>{if(IMAGES[k]&&!out
  add('steakHerbs');add('carneTacos');
  return out.concat(pool.filter(x=>!out.includes(x)));}
 function choose(r){for(const c of candidates(r))if(!used.has(c.url)){used.add(c.url);return c}const fallback=candidates(r)[0];if(fallback)used.add(fallback.url);return fallback}
-function apply(){used.clear();const cards=[...document.querySelectorAll('.card')];cards.forEach(card=>{const box=card.querySelector('.card-image');if(!box)return;const r=recipes.find(x=>Number(x.id)===Number(card.dataset.id));if(!r)return;const chosen=choose(r);if(!chosen)return;const current=box.querySelector('img')?.getAttribute('src')||'';if(current===chosen.url)return;box.dataset.ccThumb='1';box.innerHTML=`<img src="${chosen.url}" alt="${chosen.alt}" loading="lazy">`;});}
+function setImage(box,candidatesList,index=0){const chosen=candidatesList[index];if(!chosen)return;const imgEl=document.createElement('img');imgEl.alt=chosen.alt;imgEl.loading='lazy';imgEl.src=chosen.url;imgEl.onload=()=>{box.innerHTML='';box.appendChild(imgEl)};imgEl.onerror=()=>setImage(box,candidatesList,index+1);}
+function apply(){used.clear();const cards=[...document.querySelectorAll('.card')];cards.forEach(card=>{const box=card.querySelector('.card-image');if(!box)return;const r=recipes.find(x=>Number(x.id)===Number(card.dataset.id));if(!r)return;const list=candidates(r);const current=box.querySelector('img')?.getAttribute('src')||'';if(current&&list.some(x=>x.url===current))return;const start=choose(r);const ordered=[start,...list.filter(x=>x.url!==start?.url)];setImage(box,ordered);});}
 new MutationObserver(()=>apply()).observe(document.body,{subtree:true,childList:true});
 load();
