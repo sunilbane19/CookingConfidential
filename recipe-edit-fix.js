@@ -1,5 +1,5 @@
 import { supabase } from './supabase-client.js?v=1.0.1';
-import { createGenericEditor, editorValue } from './generic-editor.js?v=1.0.2';
+import { createGenericEditor, editorValue, sanitizeRichHtml } from './generic-editor.js?v=1.3.0';
 const dialog=document.querySelector('#detailDialog');
 const esc=s=>String(s??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));
 const clean=s=>String(s??'').replace(/\s*\[\s\d,;,-]+\s*/g,' ').replace(/\s+/g,' ').trim();
@@ -33,10 +33,10 @@ async function openEditor(r){
     {label:'Recipe type',name:'recipe_type',value:r.recipe_type,type:'select',options:types,allowCustom:true},
     {label:'Servings',name:'servings',value:r.servings},
     {label:'Ingredients',name:'ingredients',value:ingredientsText(r),type:'textarea',rows:8},
-    {label:'Method',name:'method',value:r.method,type:'textarea',rows:9},
-    {label:'My notes',name:'notes',value:r.personal_notes,type:'textarea',rows:4}
+    {label:'Method',name:'method',value:sanitizeRichHtml(r.method||''),type:'richtext'},
+    {label:'My notes',name:'notes',value:sanitizeRichHtml(r.personal_notes||''),type:'richtext'}
   ],actions:{delete:true,deleteLabel:'Delete recipe'},onSave:async f=>{
-    const updates={name:clean(editorValue(f,'name')),cuisine:clean(editorValue(f,'cuisine'))||null,course:editorValue(f,'course',true)||null,recipe_type:editorValue(f,'recipe_type',true)||null,servings:clean(editorValue(f,'servings'))||null,ingredients:String(f.get('ingredients')||'').split(/\r?\n/).map(clean).filter(Boolean),method:cleanMultiline(f.get('method')),personal_notes:cleanMultiline(f.get('notes'))||null};
+    const updates={name:clean(editorValue(f,'name')),cuisine:clean(editorValue(f,'cuisine'))||null,course:editorValue(f,'course',true)||null,recipe_type:editorValue(f,'recipe_type',true)||null,servings:clean(editorValue(f,'servings'))||null,ingredients:String(f.get('ingredients')||'').split(/\r?\n/).map(clean).filter(Boolean),method:sanitizeRichHtml(f.get('method')||''),personal_notes:sanitizeRichHtml(f.get('notes')||'')||null};
     const q=await supabase.from('cc_recipes').update(updates).eq('id',r.id);if(q.error)return window.ccShowError(q.error.message,'Could not save recipe changes');dialog.close();window.location.reload();
   }});
   editor.form.querySelector('#ccGenericEditorDelete').onclick=async()=>{if(!confirm('Delete this recipe permanently?'))return;const q=await supabase.from('cc_recipes').delete().eq('id',r.id);if(q.error)return window.ccShowError(q.error.message,'Could not delete recipe');dialog.close();window.location.reload()};
