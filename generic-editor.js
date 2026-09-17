@@ -11,7 +11,7 @@ function fieldMarkup(f){
     const custom=f.allowCustom&&value&&!known;
     return `<label${cls}>${esc(f.label)}<select name="${esc(f.name)}">${options.map(o=>`<option value="${esc(o)}" ${o===value?'selected':''}>${esc(o||'Select…')}</option>`).join('')}${f.allowCustom?`<option value="__custom__" ${custom?'selected':''}>Other / custom…</option>`:''}</select>${f.allowCustom?`<input name="${esc(f.name)}_custom" placeholder="Enter category" style="display:${custom?'block':'none'};margin-top:8px" value="${custom?esc(value):''}">`:''}</label>`;
   }
-  return `<label${cls}><${f.type==='number'?'span':'span'}>${esc(f.label)}</span><input name="${esc(f.name)}" type="${esc(f.type||'text')}" value="${esc(value)}"${required}${f.placeholder?` placeholder="${esc(f.placeholder)}"`:''}></label>`;
+  return `<label${cls}>${esc(f.label)}<input name="${esc(f.name)}" type="${esc(f.type||'text')}" value="${esc(value)}"${required}${f.placeholder?` placeholder="${esc(f.placeholder)}"`:''}></label>`;
 }
 
 function groupMarkup(group){
