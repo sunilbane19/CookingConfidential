@@ -1,0 +1,1 @@
+Phase 1A formatting is implemented on a separate branch pending review. Rich formatting is intended for Method and My notes; Ingredients remain plain text/structured.
