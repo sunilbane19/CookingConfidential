@@ -1,7 +1,6 @@
 // Recipe card thumbnail layer.
 // Uses a small stable pool of food photography and avoids repeating an image
 // across visible cards where possible. Recipe data and schema are unchanged.
-import { supabase } from './supabase-client.js?v=1.0.1';
 const img=(id,alt)=>({url:`https://images.unsplash.com/${id}?auto=format&fit=crop&fm=jpg&q=82&w=900`,alt});
 const IMAGES={
  food:img('photo-1504674900247-0877df9cc836','Prepared food on a table'),
@@ -31,7 +30,7 @@ function candidates(r){const t=textOf(r),out=[];const add=k=>{if(IMAGES[k]&&!out
  return out.concat(pool.filter(x=>!out.includes(x)));}
 function choose(r){for(const c of candidates(r))if(!used.has(c.url)){used.add(c.url);return c}const fallback=candidates(r)[0];if(fallback)used.add(fallback.url);return fallback}
 function setImage(box,candidatesList,index=0){const chosen=candidatesList[index];if(!chosen)return;const image=document.createElement('img');image.alt=chosen.alt;image.loading='lazy';image.decoding='async';image.src=chosen.url;image.onload=()=>{box.innerHTML='';box.appendChild(image)};image.onerror=()=>setImage(box,candidatesList,index+1)}
-function apply(){used.clear();const cards=[...document.querySelectorAll('.card')];cards.forEach(card=>{const box=card.querySelector('.card-image');if(!box)return;const r=recipes.find(x=>Number(x.id)===Number(card.dataset.id));if(!r)return;const list=candidates(r);const current=box.querySelector('img')?.getAttribute('src')||'';if(current&&list.some(x=>x.url===current))return;const start=choose(r);const ordered=[start,...list.filter(x=>x.url!==start?.url)];setImage(box,ordered);})}
-async function load(){try{const q=await supabase.from('cc_recipes').select('id,name,cuisine,course,ingredients');if(q.error)throw q.error;recipes=q.data||[];apply()}catch(e){console.warn('Recipe thumbnails:',e)}}
+function apply(){used.clear();const source=Array.isArray(window.ccRecipes)?window.ccRecipes:[];recipes=source;const cards=[...document.querySelectorAll('.card')];cards.forEach(card=>{const box=card.querySelector('.card-image');if(!box)return;const r=recipes.find(x=>Number(x.id)===Number(card.dataset.id));if(!r)return;const list=candidates(r);const current=box.querySelector('img')?.getAttribute('src')||'';if(current&&list.some(x=>x.url===current))return;const start=choose(r);const ordered=[start,...list.filter(x=>x.url!==start?.url)];setImage(box,ordered);})}
+window.addEventListener('cc:recipes-loaded',apply);
 new MutationObserver(()=>apply()).observe(document.body,{subtree:true,childList:true});
-load();
+apply();
