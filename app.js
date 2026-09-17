@@ -2,7 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const SUPABASE_URL = 'https://yiwmtfbqbynimqvwxosu.supabase.co';
 // Use the project's proven browser-safe anon key, matching supabase-client.js.
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlpd210ZmJxYnluaW1xdnd4b3N1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc1ODI3MDYsImV4cCI6MjEwMzE1ODcwNn0.pwfoCI_ajYfrON8kxIV9XWMo9k2GvzCWqwcpsMxI1As';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ5aXdfbWtfZmJxYnluaW1xdnd4b3N1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc1ODI3MDYsImV4cCI6MjEwMzE1ODcwNn0.pwfoCI9k2GvzCWqwcpsMxI1As';
 const APP_URL = 'https://cookingconfidential.in/';
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -24,8 +24,6 @@ const esc = (s='') => String(s).replace(/[&<>\"']/g, c => ({'&':'&amp;','<':'&lt
 const stars = n => n ? '★'.repeat(n) : '';
 const ingredientsText = r => Array.isArray(r.ingredients) ? r.ingredients.map(x => typeof x === 'string' ? x : [x.quantity,x.unit,x.name].filter(Boolean).join(' ')) : [];
 
-// Standard branded error UI for database/import failures. Keep technical details
-// available for troubleshooting, but present a useful human-readable message first.
 function showUiError(message, title='Something went wrong', onClose=null){
   const raw=String(message||'Something went wrong');
   const lower=raw.toLowerCase();
@@ -69,6 +67,7 @@ function renderMenus(q) {
 }
 async function showRecipe(id) {
   const r = recipes.find(x => x.id === id); if (!r) return;
+  window.ccCurrentRecipe = r;
   detailDialog.querySelector('#detailContent').innerHTML = `<button class="close" onclick="detailDialog.close()">×</button><span class="tag">${esc(r.cuisine||'')} · ${esc(r.course||'Recipe')}</span><h2 class="detail-title">${esc(r.name)}</h2><div class="meta">${stars(r.rating)}</div><div class="detail-section"><h4>Ingredients</h4><ul>${ingredientsText(r).map(i=>'<li>'+esc(i)+'</li>').join('')}</ul></div><div class="detail-section"><h4>Method</h4><p>${esc(r.method||'')}</p></div>${r.personal_notes ? '<div class="detail-section"><h4>My notes</h4><p>'+esc(r.personal_notes)+'</p></div>' : ''}${r.source_url ? '<div class="detail-section"><h4>Source</h4><p><a href="'+esc(r.source_url)+'" target="_blank" rel="noopener">'+esc(r.source_title||r.source_url)+'</a></p></div>' : ''}<div class="detail-actions"><button class="secondary" id="favBtn">${r.is_favourite?'★ Remove favourite':'☆ Add to favourites'}</button></div>`;
   detailDialog.showModal(); document.querySelector('#favBtn').onclick = async () => { const {error}=await supabase.from('cc_recipes').update({is_favourite:!r.is_favourite}).eq('id',r.id); if(error)return showUiError(error.message,'Could not update favourite'); r.is_favourite=!r.is_favourite; detailDialog.close(); render(); };
 }
@@ -78,15 +77,10 @@ document.querySelector('#recipeForm').onsubmit=async e=>{e.preventDefault();cons
 document.querySelector('#menuForm').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target),{data:{user}}=await supabase.auth.getUser();if(!user)return showUiError('Please sign in again.','Sign-in required');const {error}=await supabase.from('cc_menus').insert({name:f.get('name'),menu_date:f.get('date')||null,guest_count:f.get('guests')?Number(f.get('guests')):null,occasion:f.get('occasion')||null,notes:f.get('notes')||null,visibility:'private',created_by:user.id});if(error)return showUiError(error.message,'Could not create menu');menuDialog.close();e.target.reset();await loadData();view='menus';};
 
 document.querySelector('#addRecipeBtn').onclick=()=>recipeDialog.showModal();
-// Explicitly close the Add Recipe dialog without submitting the form. The form's
-// onsubmit handler intercepts dialog submissions, so the X and Cancel controls
-// must close it directly and discard the unsaved fields.
 const closeRecipeDialog=()=>{recipeDialog.close();document.querySelector('#recipeForm').reset();};
 document.querySelector('#recipeForm .close').onclick=e=>{e.preventDefault();closeRecipeDialog();};
 document.querySelector('#recipeForm .dialog-actions button[value="cancel"]').onclick=e=>{e.preventDefault();closeRecipeDialog();};
 
-// Import Inbox, upload, and review are owned by the dedicated import modules.
-// Keeping the legacy handlers here caused two competing review/upload paths on iOS.
 document.querySelector('#importBtn').onclick=()=>importDialog.showModal();
 document.querySelector('#closeImport').onclick=()=>importDialog.close();
 document.querySelector('#fileInput').onchange=e=>queueFiles([...e.target.files]);
