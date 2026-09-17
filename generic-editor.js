@@ -1,9 +1,45 @@
 const esc=s=>String(s??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));
 
+const RICH_TAGS=new Set(['B','STRONG','I','EM','U','UL','OL','LI','BR','P','DIV']);
+export function sanitizeRichHtml(input=''){
+  const raw=String(input??'');
+  const parser=new DOMParser();
+  const doc=parser.parseFromString(`<div>${raw}</div>`,'text/html');
+  const cleanNode=node=>{
+    if(node.nodeType===Node.TEXT_NODE)return document.createTextNode(node.nodeValue||'');
+    if(node.nodeType!==Node.ELEMENT_NODE)return document.createTextNode('');
+    if(!RICH_TAGS.has(node.tagName)){
+      const frag=document.createDocumentFragment();
+      [...node.childNodes].forEach(child=>frag.appendChild(cleanNode(child)));
+      return frag;
+    }
+    const el=document.createElement(node.tagName.toLowerCase());
+    [...node.childNodes].forEach(child=>el.appendChild(cleanNode(child)));
+    return el;
+  };
+  const holder=doc.body.firstElementChild;
+  const out=document.createElement('div');
+  [...(holder?.childNodes||[])].forEach(node=>out.appendChild(cleanNode(node)));
+  return out.innerHTML.trim();
+}
+
+function plainToRichHtml(value=''){
+  const text=String(value??'');
+  if(/<\/?[a-z][\s\S]*>/i.test(text))return sanitizeRichHtml(text);
+  return esc(text).replace(/\r\n?/g,'\n').replace(/\n/g,'<br>');
+}
+
+function richFieldMarkup(f){
+  const value=plainToRichHtml(f.value||'');
+  const commands=[['bold','B','Bold'],['italic','I','Italic'],['underline','U','Underline'],['insertUnorderedList','•','Bulleted list'],['insertOrderedList','1.','Numbered list']];
+  return `<label class="rich-field${f.className?` ${esc(f.className)}`:''}">${esc(f.label)}<div class="rich-toolbar" role="toolbar" aria-label="${esc(f.label)} formatting">${commands.map(([cmd,label,title])=>`<button type="button" class="rich-tool" data-command="${cmd}" title="${esc(title)}" aria-label="${esc(title)}">${label}</button>`).join('')}</div><div class="rich-editor" contenteditable="true" role="textbox" aria-multiline="true" data-rich-name="${esc(f.name)}">${value}</div><textarea name="${esc(f.name)}" hidden aria-hidden="true">${esc(value)}</textarea></label>`;
+}
+
 function fieldMarkup(f){
   const value=String(f.value??'');
   const required=f.required?' required':'';
   const cls=f.className?` class="${esc(f.className)}"`:'';
+  if(f.type==='richtext')return richFieldMarkup(f);
   if(f.type==='textarea')return `<label${cls}>${esc(f.label)}<textarea name="${esc(f.name)}" rows="${f.rows||6}"${required}${f.placeholder?` placeholder="${esc(f.placeholder)}"`:''}>${esc(value)}</textarea></label>`;
   if(f.type==='select'){
     const options=Array.isArray(f.options)?f.options:[];
@@ -37,7 +73,18 @@ export function createGenericEditor({dialog, eyebrow='EDIT', title='Edit', sourc
     const sync=()=>{custom.style.display=sel.value==='__custom__'?'block':'none';if(sel.value!=='__custom__')custom.value=''};
     sel.addEventListener('change',sync);sync();
   });
-  form.onsubmit=async e=>{e.preventDefault();await onSave(new FormData(form),form)};
+  content.querySelectorAll('.rich-editor').forEach(editor=>{
+    const name=editor.dataset.richName,hidden=form.querySelector(`textarea[name="${CSS.escape(name)}"]`);
+    const sync=()=>{if(hidden)hidden.value=sanitizeRichHtml(editor.innerHTML)};
+    editor.addEventListener('input',sync);
+    editor.addEventListener('blur',sync);
+    editor.querySelectorAll('a').forEach(a=>a.removeAttribute('href'));
+    editor.parentElement.querySelectorAll('.rich-tool').forEach(button=>{
+      button.addEventListener('mousedown',e=>e.preventDefault());
+      button.addEventListener('click',()=>{editor.focus();document.execCommand(button.dataset.command,false,null);sync();});
+    });
+  });
+  form.onsubmit=async e=>{e.preventDefault();content.querySelectorAll('.rich-editor').forEach(editor=>{const hidden=form.querySelector(`textarea[name="${CSS.escape(editor.dataset.richName)}"]`);if(hidden)hidden.value=sanitizeRichHtml(editor.innerHTML)});await onSave(new FormData(form),form)};
   return {form,close};
 }
 
