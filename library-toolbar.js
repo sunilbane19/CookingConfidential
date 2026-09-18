@@ -5,7 +5,7 @@ css.textContent=`#importBtn,#addRecipeBtn{display:none!important}#ccLibraryTools
 document.head.appendChild(css);
 const esc=(s='')=>String(s).replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));
 const values=field=>[...new Set((window.ccRecipes||[]).map(r=>String(r?.[field]||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
-const filterFields=()=>[['latest','Latest'],['favourite','Favourites'],['cuisine','Cuisine'],['course','Course'],['recipe_type','Recipe type'],['country','Country / Region'],['region','Region']];
+const filterFields=()=>[['latest','Latest'],['favourite','Favourites'],['cuisine','Cuisine'],['course','Course'],['recipe_type','Recipe type']];
 function selectedValue(){const [kind,...rest]=state.filter.split(':');return{kind,value:rest.join(':')}}
 function valueOptions(kind){
   if(kind==='latest')return[['','All recipes']];
