@@ -17,4 +17,4 @@ let favouriteSyncPromise=null;async function syncFavouriteStates(){if(favouriteS
 window.ccOpenRecipeEditor=openEditor;window.ccOpenNewRecipeEditor=openNewRecipeEditor;
 const style=document.createElement('style');style.textContent='.card{display:flex;flex-direction:column}.card-body{display:flex;flex-direction:column;flex:1}.cc-card-actions{margin-top:auto!important}.cc-card-actions button{width:100%;min-width:0}.cc-card-actions .cc-favourite{font-size:22px;line-height:1;padding:9px 6px}.detail-actions #ccGenericEditorDelete{min-height:50px}';document.head.appendChild(style);
 const addRecipeBtn=document.querySelector('#addRecipeBtn');if(addRecipeBtn)addRecipeBtn.addEventListener('click',e=>{e.preventDefault();e.stopImmediatePropagation();openNewRecipeEditor()},true);
-const observer=new MutationObserver(addEditButtons);observer.observe(document.body,{subtree:true,childList:true});addEditButtons();
+window.addEventListener('cc:recipes-rendered',()=>addEditButtons());addEditButtons();
