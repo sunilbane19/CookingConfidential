@@ -1,5 +1,5 @@
 // Event-driven recipe thumbnail layer. Local asset only; no MutationObserver.
-const LOCAL_IMAGE={url:'https://thumb.wikimedia.org/wikipedia/commons/thumb/d/d0/Pasta_%281%29.jpg/640px-Pasta_%281%29.jpg',alt:'Food photograph'};
+const LOCAL_IMAGE={url:'https://images.unsplash.com/photo-1551183053-bf91a1d81141?auto=format&fit=crop&w=900&q=80',alt:'Food photograph'};
 let recipes=[];
 function plainIngredients(r){const a=r?.ingredients;if(Array.isArray(a))return a.map(x=>typeof x==='string'?x:[x?.quantity,x?.unit,x?.name].filter(Boolean).join(' ')).join(' ');if(a&&typeof a==='object'&&typeof a.html==='string')return a.html.replace(/<[^>]*>/g,' ');return String(a||'')}
 function textOf(r){return[r?.name,r?.cuisine,r?.course,r?.recipe_type,plainIngredients(r)].join(' ').toLowerCase()}
