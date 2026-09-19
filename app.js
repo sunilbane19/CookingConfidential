@@ -1,7 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlpd210ZmJxYnluaW1xdnd4b3N1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc1ODI3MDYsImV4cCI6MjEwMzE1ODcwNn0.pwfoCI_ajYfrON8kxIV9XWMo9k2GvzCWqwcpsMxI1As';
-const APP_URL='https://cookingconfidential.in/';
+const APP_URL=`${window.location.origin}${window.location.pathname}`;
 const supabase=createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
 const content=document.querySelector('#content'),search=document.querySelector('#searchInput'),loginPanel=document.querySelector('#loginPanel'),appPanel=document.querySelector('#appPanel'),userBadge=document.querySelector('#userBadge'),loginForm=document.querySelector('#loginForm'),loginMessage=document.querySelector('#loginMessage'),recipeDialog=document.querySelector('#recipeDialog'),menuDialog=document.querySelector('#menuDialog'),detailDialog=document.querySelector('#detailDialog'),importDialog=document.querySelector('#importDialog'),importQueue=document.querySelector('#importQueue');
 let importItems=[],recipes=[],menus=[],view='recipes';
