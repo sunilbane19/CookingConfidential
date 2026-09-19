@@ -124,7 +124,7 @@ async function saveOne(id,x,r,recipes){
   if(!user)return window.ccShowError('Please sign in again.','Sign-in required');
   const prepared=window.ccRecipeInheritance?.applyInheritance?window.ccRecipeInheritance.applyInheritance([r]):[r];
   const p=prepared[0];
-  const row={name:clean(p.name),description:clean(p.description)||null,cuisine:clean(p.cuisine)||null,course:clean(p.course)||null,recipe_type:clean(p.recipe_type)||'Dish',servings:clean(p.servings)||null,ingredients:p.ingredients,method:Array.isArray(p.method)?p.method.join('\n'):clean(p.method),personal_notes:Array.isArray(p.notes)?p.notes.join('\n')||null:null,source_type:'file',source_url:null,source_title:x.file_name||null,image_url:clean(p.image_url)||null,created_by:user.id,visibility:'private'};
+  const row={name:clean(p.name),description:sanitizeRichHtml(p.description||'')||null,cuisine:clean(p.cuisine)||null,course:clean(p.course)||null,recipe_type:clean(p.recipe_type)||'Dish',servings:clean(p.servings)||null,ingredients:p.ingredients,method:typeof p.method==='string'?sanitizeRichHtml(p.method):Array.isArray(p.method)?p.method.join('\n'):clean(p.method),personal_notes:typeof p.notes==='string'?(sanitizeRichHtml(p.notes)||null):Array.isArray(p.notes)?p.notes.join('\n')||null:null,source_type:'file',source_url:null,source_title:x.file_name||null,image_url:clean(p.image_url)||null,created_by:user.id,visibility:'private'};
   const{error}=await sb.from('cc_recipes').insert([row]);
   if(error)return window.ccShowError(error.message,'Could not save recipe');
   r._saved=true;
