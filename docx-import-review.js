@@ -9,9 +9,8 @@ const clean=s=>String(s??'').replace(/[\u0000-\u001F\u007F\uFFFD]/g,' ').replace
 const lines=s=>String(s??'').replace(/\\n/g,'\n').replace(/\r/g,'').split('\n').map(clean).filter(Boolean);
 
 async function loadOriginal(x){
-  const{data:u,error}=await sb.storage.from('cooking-confidential').createSignedUrl(x.file_path,600);
-  if(error||!u?.signedUrl)throw Error(error?.message||'Could not read the original file.');
-  const res=await fetch(u.signedUrl);
+  const signedUrl=await getCachedSignedUrl(sb,'cooking-confidential',x.file_path);
+  const res=await fetch(signedUrl);
   if(!res.ok)throw Error('Could not load the original file.');
   return res.blob();
 }
