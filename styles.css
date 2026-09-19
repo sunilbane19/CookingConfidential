@@ -5,3 +5,5 @@
 .queue-select-all input,.queue-select input{width:17px;height:17px;margin:0;accent-color:var(--accent)}
 .queue-select span{min-width:0}.queue-select strong{font-weight:600;overflow:hidden;text-overflow:ellipsis;display:block;max-width:430px}.queue-head{gap:12px}
 @media(max-width:760px){.queue-select strong{max-width:270px}}
+
+.import-kind{display:inline-block;font-size:.68rem;letter-spacing:.08em;font-weight:700;opacity:.72;margin-right:.35rem}.import-source-link{display:block;max-width:58ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.78rem;margin-top:.18rem}.import-source-link:hover{text-decoration:underline}
