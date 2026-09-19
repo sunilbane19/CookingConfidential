@@ -30,9 +30,9 @@ async function uploadObject(path,file){const{error}=await sb.storage.from('cooki
 async function startImageReview(itemId){message('Upload completed. Starting image recipe detection…');setStatus('Reading image…');const mod=await import('./generic-image-review.js?v=1.0.6');if(typeof mod.reviewImage!=='function')throw new Error('Image recipe reviewer could not be loaded.');await mod.reviewImage(itemId)}
 async function uploadSelected(){
   if(running)return;
-  const queued=Array.isArray(window.ccImportItems)?window.ccImportItems.filter(x=>x&&x.status==='Queued'):[];
+  const queued=Array.isArray(window.ccImportItems)?window.ccImportItems.filter(x=>x&&x.status==='Queued'&&x.selected):[];
   const files=selectedFiles();
-  const items=queued.length?queued:files.map(file=>({file,file_name:file.name,mime_type:file.type||'application/octet-stream',status:'Queued'}));
+  const items=queued.length?queued:files.map(file=>({file,file_name:file.name,mime_type:file.type||'application/octet-stream',status:'Queued',selected:true}));
   if(!items.length){message('Please add a recipe file or URL first.');return}
   running=true;
   const button=document.querySelector('#uploadAll');
