@@ -32,11 +32,11 @@ function imagePicker(form,recipeName,initialUrl){
   if(!input)return;
   input.type='hidden';
   const wrap=document.createElement('div');
-  wrap.className='cc-docx-image-picker';
-  wrap.innerHTML='<label>Recipe photo</label><input class="cc-docx-image-search" type="text" placeholder="Search by recipe title or keywords"><button type="button" class="secondary cc-docx-image-search-btn">Search images</button><div class="cc-docx-image-selected"></div><div class="cc-docx-image-results"></div>';
+  wrap.className='cc-import-image-picker';
+  wrap.innerHTML='<label>Recipe photo</label><input class="cc-import-image-search" type="text" placeholder="Search by recipe title or keywords"><button type="button" class="secondary cc-import-image-search-btn">Search images</button><div class="cc-import-image-selected"></div><div class="cc-import-image-results"></div>';
   input.parentElement.replaceWith(wrap);
   wrap.appendChild(input);
-  const search=wrap.querySelector('.cc-docx-image-search'),btn=wrap.querySelector('.cc-docx-image-search-btn'),selected=wrap.querySelector('.cc-docx-image-selected'),results=wrap.querySelector('.cc-docx-image-results');
+  const search=wrap.querySelector('.cc-import-image-search'),btn=wrap.querySelector('.cc-import-image-search-btn'),selected=wrap.querySelector('.cc-import-image-selected'),results=wrap.querySelector('.cc-import-image-results');
   search.value=recipeName&&recipeName!=='Imported recipe'?recipeName:'';
   if(initialUrl)input.value=initialUrl;
   btn.disabled=search.value.trim().length<3;
@@ -56,12 +56,12 @@ function imagePicker(form,recipeName,initialUrl){
       const pages=Object.values(data.query?.pages||{}).filter(p=>p.imageinfo?.[0]?.thumburl||p.imageinfo?.[0]?.url).slice(0,5);
       results.innerHTML=pages.length?pages.map((p,i)=>{
         const u=p.imageinfo[0].thumburl||p.imageinfo[0].url;
-        return '<button type="button" class="cc-docx-image-option" data-u="'+esc(u)+'"><img src="'+esc(u)+'" alt="Food image '+(i+1)+'"><span>Use image '+(i+1)+'</span></button>';
+        return '<button type="button" class="cc-import-image-option" data-u="'+esc(u)+'"><img src="'+esc(u)+'" alt="Food image '+(i+1)+'"><span>Use image '+(i+1)+'</span></button>';
       }).join(''):'<p class="small-note">No matching images found. Try fewer words.</p>';
-      results.querySelectorAll('.cc-docx-image-option').forEach(b=>b.onclick=()=>{
+      results.querySelectorAll('.cc-import-image-option').forEach(b=>b.onclick=()=>{
         input.value=b.dataset.u;
         show();
-        results.querySelectorAll('.cc-docx-image-option').forEach(x=>x.classList.remove('selected'));
+        results.querySelectorAll('.cc-import-image-option').forEach(x=>x.classList.remove('selected'));
         b.classList.add('selected');
       });
     }catch(e){
