@@ -5,7 +5,7 @@ import { supabase as sb } from './supabase-client-legacy.js?v=1.0.0';
 async function rerouteDocx(id){
   const{data:item,error}=await sb.from('cc_import_items').select('file_name').eq('id',id).single();
   if(error||!item||!/\.docx$/i.test(item.file_name||''))return false;
-  const mod=await import('./docx-import-review.js?v=1.0.3');
+  const mod=await import('./docx-import-review.js?v=1.0.6');
   if(typeof mod.reviewDocxImport!=='function')throw Error('DOCX review module could not be loaded.');
   await mod.reviewDocxImport(id);
   return true;
