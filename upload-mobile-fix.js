@@ -9,7 +9,7 @@ function selectedFiles(){return[...(document.querySelector('#fileInput')?.files|
 const MAX_IMAGE_EDGE=2400;
 const JPEG_QUALITY=.86;
 async function optimizeImageForUpload(file){
-  if(!String(file.type||'').startsWith('image/')||/^(image\\/(?:gif|svg\\+xml))$/i.test(file.type||''))return{file,storedName:file.name,mimeType:file.type||'application/octet-stream'};
+  if(!String(file.type||'').startsWith('image/')||['image/gif','image/svg+xml'].includes(String(file.type||'').toLowerCase()))return{file,storedName:file.name,mimeType:file.type||'application/octet-stream'};
   try{
     const bitmap=await createImageBitmap(file),maxEdge=Math.max(bitmap.width,bitmap.height);
     if(maxEdge<=MAX_IMAGE_EDGE&&file.size<=3*1024*1024){bitmap.close();return{file,storedName:file.name,mimeType:file.type||'image/jpeg'}}
@@ -18,7 +18,7 @@ async function optimizeImageForUpload(file){
     const ctx=canvas.getContext('2d',{alpha:false});ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.drawImage(bitmap,0,0,canvas.width,canvas.height);bitmap.close();
     const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',JPEG_QUALITY));canvas.width=1;canvas.height=1;
     if(!blob||blob.size>=file.size*.95)return{file,storedName:file.name,mimeType:file.type||'image/jpeg'};
-    const base=file.name.replace(/\\.[^.]+$/,'')||'recipe-image',optimized=new File([blob],base+'.jpg',{type:'image/jpeg',lastModified:file.lastModified});
+    const base=file.name.replace(/\.[^.]+$/,'')||'recipe-image',optimized=new File([blob],base+'.jpg',{type:'image/jpeg',lastModified:file.lastModified});
     return{file:optimized,storedName:optimized.name,mimeType:optimized.type};
   }catch(error){console.warn('Cooking Confidential image optimization skipped:',error);return{file,storedName:file.name,mimeType:file.type||'application/octet-stream'}}
 }
