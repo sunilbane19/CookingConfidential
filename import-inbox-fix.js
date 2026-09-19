@@ -1,7 +1,7 @@
-import { supabase as sb } from './supabase-client-legacy.js?v=1.0.0';
+import { supabase as sb } from './supabase-client.js?v=1.0.1';
 const importDialog=document.querySelector('#importDialog'),importQueue=document.querySelector('#importQueue'),importInbox=document.querySelector('#importInbox');
 const esc=s=>String(s??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));let busy=false;
-async function openInbox(){if(!importDialog||!importInbox)return;if(!importDialog.open)importDialog.showModal();importInbox.innerHTML='<div class="queue-head"><strong>Import Inbox</strong><span>Loading…</span></div>';await loadInbox()}
+async function openInbox(){if(!importDialog||!importInbox)return;if(!importDialog.open)importDialog.showModal();importInbox.innerHTML='<div class="queue-head"><strong>Import Inbox</strong><span>Loading…</span></div>';await loadInbox();setTimeout(()=>loadInbox(),350)}
 async function loadInbox(){if(busy)return;busy=true;if(importInbox)importInbox.innerHTML='<div class="empty compact">Loading import inbox…</div>';try{const{data,error}=await sb.from('cc_import_items').select('*').order('created_at',{ascending:false}).limit(50);if(error)throw Error(error.message||'Could not load the import inbox.');renderInbox(data||[])}catch(e){if(importInbox)importInbox.innerHTML=`<div class="empty compact">${esc(e.message||'Could not load the import inbox.')}</div>`}finally{busy=false}}
 function statusText(x){return `${x.extraction_status||'pending'} · ${x.review_status||'pending'}`}
 function shortUrl(url){try{const u=new URL(url);const p=(u.pathname||'').replace(/\\/+$/,'');const text=u.host+p;return text.length>58?text.slice(0,55)+'…':text}catch{return String(url||'').length>58?String(url).slice(0,55)+'…':String(url||'')}}
