@@ -33,7 +33,7 @@ async function uploadSelected(){
   const queued=Array.isArray(window.ccImportItems)?window.ccImportItems.filter(x=>x&&x.status==='Queued'&&x.selected):[];
   const files=selectedFiles();
   const items=queued.length?queued:files.map(file=>({file,file_name:file.name,mime_type:file.type||'application/octet-stream',status:'Queued',selected:true}));
-  if(!items.length){message('Please add a recipe file or URL first.');return}
+  if(!items.length){message('There are no new imports selected. Use Review on an uploaded item below.');return}
   running=true;
   const button=document.querySelector('#uploadAll');
   if(button){button.disabled=true;button.textContent='Uploading…'}
@@ -89,14 +89,14 @@ async function uploadSelected(){
       if(isImage){setStatusForName(displayName,'Reading image…');await startImageReview(itemRow.id)}
       else{setStatusForName(displayName,'Uploaded — review from inbox');message('Upload completed. Open Review in the Import Inbox to extract the recipe.')}
     }
-    if(button){button.disabled=false;button.textContent='Upload all'}
+    if(button){button.disabled=false;button.textContent='Upload selected'}
     if(typeof window.ccReloadImportInbox==='function')await window.ccReloadImportInbox();
   }catch(error){
     console.error('Cooking Confidential upload:',error);
     const failed=items.find(x=>x.status!=='Uploaded');
     if(failed)setStatusForName(failed.file_name||failed.source_url||'Recipe import','Failed');
     message('Upload failed: '+(error.message||'Please try again.'));
-    if(button){button.disabled=false;button.textContent='Upload all'}
+    if(button){button.disabled=false;button.textContent='Upload selected'}
   }finally{running=false}
 }
 function setStatusForName(name,text){
