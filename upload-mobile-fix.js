@@ -28,10 +28,83 @@ function authToken(){try{for(let i=0;i<localStorage.length;i++){const k=localSto
 async function api(path,options={}){const token=authToken();if(!token)throw new Error('Your sign-in session is not ready. Please close and reopen Cooking Confidential, then try again.');const headers=new Headers(options.headers||{});headers.set('apikey',SUPABASE_PUBLISHABLE_KEY);headers.set('Authorization','Bearer '+token);const response=await fetch(SUPABASE_URL+path,{...options,headers});if(!response.ok){let detail='Request failed ('+response.status+')';try{const b=await response.json();detail=b.message||b.error_description||b.error||detail}catch{}throw new Error(detail)}const text=await response.text();return text?JSON.parse(text):null}
 async function uploadObject(path,file){const{error}=await sb.storage.from('cooking-confidential').upload(path,file,{contentType:file.type||'application/octet-stream',cacheControl:'86400',upsert:false});if(error)throw new Error(error.message||'Storage upload failed.')}
 async function startImageReview(itemId){message('Upload completed. Starting image recipe detection…');setStatus('Reading image…');const mod=await import('./generic-image-review.js?v=1.0.6');if(typeof mod.reviewImage!=='function')throw new Error('Image recipe reviewer could not be loaded.');await mod.reviewImage(itemId)}
-async function uploadSelected(){if(running)return;const files=selectedFiles();if(!files.length){message('Please choose a recipe file first.');return}running=true;const button=document.querySelector('#uploadAll');if(button){button.disabled=true;button.textContent='Uploading…'}message('Uploading recipe file…');try{const token=authToken();if(!token)throw new Error('Your sign-in session is not ready. Please close and reopen Cooking Confidential, then try again.');const sessionPayload=JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))),userId=sessionPayload.sub;if(!userId)throw new Error('Could not read your sign-in session.');for(const file of files){setStatus('Uploading…');const imports=await api('/rest/v1/cc_imports?select=id',{method:'POST',headers:{'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify({source_type:'file',source_url:null,original_file_path:null,created_by:userId})}),importRow=imports?.[0];if(!importRow?.id)throw new Error('Could not create the import record.');const optimized=await optimizeImageForUpload(file),safeName=optimized.storedName.replace(/[^a-zA-Z0-9._-]/g,'_'),path=userId+'/'+Date.now()+'-'+safeName;await uploadObject('originals/'+path,optimized.file);setStatus('Saving…');const items=await api('/rest/v1/cc_import_items?select=id',{method:'POST',headers:{'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify({import_id:importRow.id,file_name:file.name,mime_type:optimized.mimeType,source_url:null,file_path:'originals/'+path,created_by:userId,extraction_status:'pending',review_status:'pending'})}),item=items?.[0];if(!item?.id)throw new Error('Could not save the uploaded recipe.');const isImage=/\.(png|jpe?g|webp)$/i.test(file.name)||String(file.type||'').startsWith('image/');if(isImage)await startImageReview(item.id);else{setStatus('Uploaded — review from inbox');message('Upload completed. Open Review in the Import Inbox to extract the recipe.')}}
+async function uploadSelected(){
+  if(running)return;
+  const queued=Array.isArray(window.ccImportItems)?window.ccImportItems.filter(x=>x&&x.status==='Queued'):[];
+  const files=selectedFiles();
+  const items=queued.length?queued:files.map(file=>({file,file_name:file.name,mime_type:file.type||'application/octet-stream',status:'Queued'}));
+  if(!items.length){message('Please add a recipe file or URL first.');return}
+  running=true;
+  const button=document.querySelector('#uploadAll');
+  if(button){button.disabled=true;button.textContent='Uploading…'}
+  try{
+    const token=authToken();
+    if(!token)throw new Error('Your sign-in session is not ready. Please close and reopen Cooking Confidential, then try again.');
+    const sessionPayload=JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))),userId=sessionPayload.sub;
+    if(!userId)throw new Error('Could not read your sign-in session.');
+    for(const item of items){
+      const sourceUrl=String(item.source_url||'').trim();
+      const displayName=item.file_name||sourceUrl||'Recipe import';
+      setStatusForName(displayName,'Uploading…');
+      if(sourceUrl){
+        const imports=await api('/rest/v1/cc_imports?select=id',{
+          method:'POST',
+          headers:{'Content-Type':'application/json','Prefer':'return=representation'},
+          body:JSON.stringify({source_type:'social_url',source_url:sourceUrl,original_file_path:null,created_by:userId})
+        });
+        const importRow=imports?.[0];
+        if(!importRow?.id)throw new Error('Could not create the URL import record.');
+        const itemsResult=await api('/rest/v1/cc_import_items?select=id',{
+          method:'POST',
+          headers:{'Content-Type':'application/json','Prefer':'return=representation'},
+          body:JSON.stringify({import_id:importRow.id,file_name:displayName,mime_type:'text/url',source_url:sourceUrl,file_path:null,created_by:userId,extraction_status:'pending',review_status:'pending'})
+        });
+        const itemRow=itemsResult?.[0];
+        if(!itemRow?.id)throw new Error('Could not save the recipe URL.');
+        item.status='Uploaded';
+        setStatusForName(displayName,'Uploaded — review from inbox');
+        continue;
+      }
+      const file=item.file;
+      if(!file){item.status='Failed';setStatusForName(displayName,'Failed');continue}
+      const imports=await api('/rest/v1/cc_imports?select=id',{
+        method:'POST',
+        headers:{'Content-Type':'application/json','Prefer':'return=representation'},
+        body:JSON.stringify({source_type:'file',source_url:null,original_file_path:null,created_by:userId})
+      });
+      const importRow=imports?.[0];
+      if(!importRow?.id)throw new Error('Could not create the import record.');
+      const optimized=await optimizeImageForUpload(file),safeName=optimized.storedName.replace(/[^a-zA-Z0-9._-]/g,'_'),path=userId+'/'+Date.now()+'-'+safeName;
+      await uploadObject('originals/'+path,optimized.file);
+      setStatusForName(displayName,'Saving…');
+      const itemsResult=await api('/rest/v1/cc_import_items?select=id',{
+        method:'POST',
+        headers:{'Content-Type':'application/json','Prefer':'return=representation'},
+        body:JSON.stringify({import_id:importRow.id,file_name:file.name,mime_type:optimized.mimeType,source_url:null,file_path:'originals/'+path,created_by:userId,extraction_status:'pending',review_status:'pending'})
+      });
+      const itemRow=itemsResult?.[0];
+      if(!itemRow?.id)throw new Error('Could not save the uploaded recipe.');
+      const isImage=/\.(png|jpe?g|webp)$/i.test(file.name)||String(file.type||'').startsWith('image/');
+      item.status='Uploaded';
+      if(isImage){setStatusForName(displayName,'Reading image…');await startImageReview(itemRow.id)}
+      else{setStatusForName(displayName,'Uploaded — review from inbox');message('Upload completed. Open Review in the Import Inbox to extract the recipe.')}
+    }
     if(button){button.disabled=false;button.textContent='Upload all'}
     if(typeof window.ccReloadImportInbox==='function')await window.ccReloadImportInbox();
-  }catch(error){console.error('Cooking Confidential mobile upload:',error);setStatus('Failed');message('Upload failed: '+(error.message||'Please try again.'));if(button){button.disabled=false;button.textContent='Upload all'}}finally{running=false}}
+  }catch(error){
+    console.error('Cooking Confidential upload:',error);
+    const failed=items.find(x=>x.status!=='Uploaded');
+    if(failed)setStatusForName(failed.file_name||failed.source_url||'Recipe import','Failed');
+    message('Upload failed: '+(error.message||'Please try again.'));
+    if(button){button.disabled=false;button.textContent='Upload all'}
+  }finally{running=false}
+}
+function setStatusForName(name,text){
+  const q=queue();if(!q)return;
+  const target=String(name||'');
+  const row=[...q.querySelectorAll('.queue-item,.review-item')].find(x=>x.querySelector('strong')?.textContent===target);
+  if(row){const span=row.querySelector(':scope > span');if(span)span.textContent=text;else{const small=row.querySelector('small');if(small)small.textContent=text}}
+}
 function intercept(event){const target=event.target?.closest?.('#uploadAll');if(!target)return;event.preventDefault();event.stopImmediatePropagation();uploadSelected()}
 document.addEventListener('pointerup',intercept,true);document.addEventListener('touchend',intercept,true);document.addEventListener('click',intercept,true);
 const style=document.createElement('style');style.textContent='.cc-mobile-upload-message{margin:12px 0;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#f8f5ee;font-size:14px;line-height:1.4}';document.head.appendChild(style);
