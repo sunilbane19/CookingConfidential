@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import * as mammoth from 'https://esm.sh/mammoth@1.6.0';
+import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
 
 const URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 const KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
@@ -45,8 +46,8 @@ async function extractAndShow(id){
  const {data:x,error}=await sb.from('cc_import_items').select('*').eq('id',id).single();if(error||!x)return fail(error?.message||'Import item not found.');
  try{
   if(!x.file_path)throw Error('No original file is attached to this import.');
-  const {data:u,error:ue}=await sb.storage.from('cooking-confidential').createSignedUrl(x.file_path,300);if(ue||!u?.signedUrl)throw Error(ue?.message||'Could not read the original file.');
-  const res=await fetch(u.signedUrl);if(!res.ok)throw Error('Could not load the original file.');
+  const signedUrl=await getCachedSignedUrl(sb,'cooking-confidential',x.file_path);
+  const res=await fetch(signedUrl);if(!res.ok)throw Error('Could not load the original file.');
   const blob=await res.blob();let html='';
   if(/\.docx$/i.test(x.file_name||'')) html=(await mammoth.convertToHtml({arrayBuffer:await blob.arrayBuffer()})).value||''; else if((x.mime_type||'').startsWith('text/')) html=`<p>${esc(await blob.text())}</p>`; else throw Error('This extraction fallback currently supports DOCX and text files.');
   if(!html.trim())throw Error('The original file contained no readable text.');
@@ -64,5 +65,5 @@ function renderReview(x,id){
  form.onsubmit=async e=>{e.preventDefault();const {data:{user}}=await sb.auth.getUser();if(!user)return alert('Please sign in again.');const chosenCourse=cs.value==='__custom__'?cc.value:cs.value,chosenType=ts.value==='__custom__'?ct.value:ts.value;const payload={name:clean(form.elements.name.value),description:clean(form.elements.description.value)||null,cuisine:clean(form.elements.cuisine.value)||null,course:clean(chosenCourse)||null,recipe_type:clean(chosenType)||'Dish',servings:clean(form.elements.servings.value)||null,ingredients:cleanLines(form.elements.ingredients.value),method:cleanLines(form.elements.method.value).join('\n'),personal_notes:cleanLines(form.elements.notes.value).join('\n')||null,source_type:'file',source_url:null,source_title:x.file_name||null,created_by:user.id,visibility:'private'};let rid=x.recipe_id||null;if(!rid){const {data:m}=await sb.from('cc_recipes').select('id').eq('created_by',user.id).eq('source_type','file').eq('source_title',x.file_name).limit(1);if(m?.[0])rid=m[0].id;}const result=rid?await sb.from('cc_recipes').update(payload).eq('id',rid):await sb.from('cc_recipes').insert(payload).select('id').single();if(result.error)return alert(result.error.message);const saved=rid||result.data?.id;const {error:ie}=await sb.from('cc_import_items').update({recipe_id:saved,review_status:'approved',extraction_status:'ready'}).eq('id',id);if(ie)return alert(ie.message);detail.close();location.reload();};
  detail.querySelector('#ccFallbackCancel').onclick=()=>detail.close();detail.querySelector('#ccFallbackOriginal').onclick=()=>showOriginal(x);
 }
-async function showOriginal(x){const {data:u,error}=await sb.storage.from('cooking-confidential').createSignedUrl(x.file_path,300);if(error||!u?.signedUrl)return alert(error?.message||'Could not open original.');const r=await fetch(u.signedUrl);if(!r.ok)return alert('Could not load original.');const b=await r.blob();const n=x.file_name||'';if(/\.docx$/i.test(n)){const q=await mammoth.convertToHtml({arrayBuffer:await b.arrayBuffer()});detail.querySelector('#detailContent').innerHTML=`<button class="close" type="button">×</button><p class="eyebrow">ORIGINAL RECIPE</p><h2>${esc(n)}</h2><div class="original-viewer">${q.value||'<p>No readable content found.</p>'}</div>`;detail.querySelector('.close').onclick=()=>renderReview(x,x.id);}else alert('Original viewer currently supports DOCX.');}
+async function showOriginal(x){let signedUrl;try{signedUrl=await getCachedSignedUrl(sb,'cooking-confidential',x.file_path)}catch(error){return alert(error?.message||'Could not open original.')}const r=await fetch(signedUrl);if(!r.ok)return alert('Could not load original.');const b=await r.blob();const n=x.file_name||'';if(/\.docx$/i.test(n)){const q=await mammoth.convertToHtml({arrayBuffer:await b.arrayBuffer()});detail.querySelector('#detailContent').innerHTML=`<button class="close" type="button">×</button><p class="eyebrow">ORIGINAL RECIPE</p><h2>${esc(n)}</h2><div class="original-viewer">${q.value||'<p>No readable content found.</p>'}</div>`;detail.querySelector('.close').onclick=()=>renderReview(x,x.id);}else alert('Original viewer currently supports DOCX.');}
 window.addEventListener('click',e=>{const b=e.target.closest('.review-btn');if(!b)return;e.preventDefault();e.stopImmediatePropagation();extractAndShow(Number(b.dataset.id));},true);
