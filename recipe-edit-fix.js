@@ -1,5 +1,5 @@
 import { supabase } from './supabase-client.js?v=1.0.1';
-import { createGenericEditor, editorValue, sanitizeRichHtml } from './generic-editor.js?v=1.3.2';
+import { createGenericEditor, editorValue, sanitizeRichHtml } from './generic-editor.js?v=1.3.3';
 import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
 const dialog=document.querySelector('#detailDialog');
 const esc=s=>String(s??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));
