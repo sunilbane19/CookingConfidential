@@ -7,3 +7,7 @@
 @media(max-width:760px){.queue-select strong{max-width:270px}}
 
 .import-kind{display:inline-block;font-size:.68rem;letter-spacing:.08em;font-weight:700;opacity:.72;margin-right:.35rem}.import-source-link{display:block;max-width:58ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.78rem;margin-top:.18rem}.import-source-link:hover{text-decoration:underline}
+
+/* Import Inbox visibility */
+.import-inbox-panel{margin-top:18px;padding-top:12px;border-top:1px solid var(--line);max-height:230px;overflow:auto}.import-inbox-panel .queue-head{padding-bottom:8px}.import-inbox-panel .review-item{background:var(--card)}
+#importDialog .dialog-card{max-height:82vh;overflow:auto}
