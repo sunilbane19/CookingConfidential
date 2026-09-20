@@ -22,8 +22,8 @@ export async function reviewImportFixed(id){window.ccReturnToImportInbox=true;im
     try{
       const cached=JSON.parse(x.extracted_text);
       const cachedName=String(cached?.recipe?.name||'').trim();
-      if(cached?.scanned_pdf&&/^[-=]{2,}\s*Page\s+\d+\s*[-=]{2,}$/i.test(cachedName)){
-        const mod=await import('./scanned-pdf-ocr.js?v=1.0.7');
+      if(cached?.scanned_pdf&&(/^[-=]{2,}\s*Page\s+\d+\s*[-=]{2,}$/i.test(cachedName)||!String(cached?.recipe?.method||'').trim())){
+        const mod=await import('./scanned-pdf-ocr.js?v=1.0.8');
         const out=await mod.ocrScannedPdf(id);
         x=out.item;
       }
