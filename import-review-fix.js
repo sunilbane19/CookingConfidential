@@ -24,7 +24,7 @@ export async function reviewImportFixed(id){window.ccReturnToImportInbox=true;im
     try{
       // Always rerun scanned-PDF OCR when opening Review. This guarantees that
       // an item extracted by an older OCR parser is refreshed before display.
-      const mod=await import('./scanned-pdf-ocr.js?v=1.0.9');
+      const mod=await import('./scanned-pdf-ocr.js?v=1.0.11');
       const out=await mod.ocrScannedPdf(id);
       x=out.item;
     }catch(e){console.warn('Cooking Confidential scanned PDF refresh:',e)}
