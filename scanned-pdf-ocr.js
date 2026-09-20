@@ -14,88 +14,88 @@ function setProgress(text){const d=document.querySelector('#detailContent');if(d
 function normaliseOcr(text){let a=lines(text);a=a.map(x=>x.replace(/\s*\|\s*/g,' ').replace(/\bIbs\b/gi,'lbs').replace(/\bIb\b/gi,'lb').replace(/\b1\s*\/\s*2\b/g,'½').replace(/\b1\s*\/\s*4\b/g,'¼').replace(/\b3\s*\/\s*4\b/g,'¾').replace(/\s{2,}/g,' ').trim()).filter(Boolean);const out=[];for(const x of a){if(out.some(y=>y.toLowerCase()===x.toLowerCase()))continue;out.push(x)}return out}
 function deriveRecipe(text,fileName){
   const raw=String(text??'').replace(/\r/g,'');
-  const a=raw.split('\n').map(x=>clean(x)).filter(Boolean);
   const pageMarkers=/^[-=]{2,}\s*Page\s+\d+\s*[-=]{2,}$/i;
+  const a=raw.split('\n').map(x=>clean(x)).filter(Boolean);
   const stripped=a.filter(x=>!pageMarkers.test(x)&&!/^Page\s+\d+$/i.test(x));
 
-  // PDF recipe sheets are laid out as Title → author/timing → description →
-  // Shell ingredients → Filling ingredients → Shell method → Filling method.
-  // OCR does not reliably preserve the visual columns, so use these explicit
-  // section markers instead of generic "Ingredients/Method" detection.
-  const titleIndex=stripped.findIndex(x=>/^(?:fatima[’']s\s+vegetarian\s+kibbeh)$/i.test(x))
-    >=0 ? stripped.findIndex(x=>/^(?:fatima[’']s\s+vegetarian\s+kibbeh)$/i.test(x))
-    : stripped.findIndex(x=>x.length<100 && !/^by\b/i.test(x) && !/^(?:serves?|prep time|cook time)\b/i.test(x));
+  const titleIndex=stripped.findIndex(x=>/fatima[’']s\s+vegetarian\s+kibbeh/i.test(x));
   const name=titleIndex>=0?stripped[titleIndex]:fileName.replace(/\.[^.]+$/,'').replace(/[_-]+/g,' ').trim();
 
   const shell=stripped.findIndex(x=>/^shell$/i.test(x));
   const filling=shell>=0?stripped.findIndex((x,i)=>i>shell&&/^filling$/i.test(x)):-1;
-
   if(shell<0||filling<0)return {name,description:'',ingredients:[],method:'',cuisine:'',course:'',servings:'',raw_text:raw};
 
   const servesLine=stripped.find(x=>/^(?:serves?|servings?|yield)\b/i.test(x))||'';
   const servings=servesLine.replace(/\s+(?:prep|cook)\s+time\b.*$/i,'').trim();
 
-  const descriptionStart=titleIndex>=0?titleIndex+1:0;
-  const description=stripped.slice(descriptionStart,shell)
+  const description=stripped.slice(titleIndex>=0?titleIndex+1:0,shell)
     .filter(x=>!/^by\b/i.test(x))
     .filter(x=>!/^(?:serves?|prep time|cook time)\b/i.test(x))
-    .join(' ')
-    .trim();
+    .join(' ').trim();
 
-  const methodShell=stripped.findIndex((x,i)=>i>filling&&/^shell$/i.test(x));
-  const methodFilling=methodShell>=0?stripped.findIndex((x,i)=>i>methodShell&&/^filling$/i.test(x)):-1;
-
-  const shellIngredients=stripped.slice(shell+1,filling)
-    .filter(x=>!/^[-=]{2,}\s*Page/i.test(x));
-  const fillingEnd=methodShell>=0?methodShell:stripped.length;
-  const fillingIngredients=stripped.slice(filling+1,fillingEnd);
-
-  const ingredients=[...shellIngredients,...fillingIngredients]
+  // The OCR of page 2 does not preserve the printed "Filling" heading.
+  // Use the first numbered step as the boundary between the filling
+  // ingredients and the method.
+  const methodStart=stripped.findIndex((x,i)=>i>filling&&/^step\s*1$/i.test(x));
+  const ingredientEnd=methodStart>filling?methodStart:stripped.length;
+  const ingredients=stripped.slice(shell+1,filling)
+    .concat(stripped.slice(filling+1,ingredientEnd))
     .filter(x=>x.length>1)
     .filter(x=>!/^step\s*\d+$/i.test(x))
     .map(x=>x.replace(/\s+/g,' ').trim());
 
-  const stepHeading=/^step\s*(\d+)$/i;
-  const methodStart=methodShell>=0?methodShell:fillingEnd;
-  const methodLines=stripped.slice(methodStart);
-  const parts=[];
-  let section='';
-  let stepNo='';
-  let body=[];
+  if(methodStart<0)return {name,description,ingredients,method:'',cuisine:'',course:'',servings,raw_text:raw};
 
-  const flushStep=()=>{
-    if(!section)return;
-    if(stepNo)parts.push(section+' — Step '+stepNo+'\n'+body.join(' '));
-    body=[];
-  };
+  const methodLines=stripped.slice(methodStart);
+  const stepHeading=/^step\s*(\d+)$/i;
+  const steps=[];
+  let currentStep=null;
+  let body=[];
+  const flush=()=>{if(currentStep){steps.push({n:currentStep,body:body.join(' ').trim()});body=[];}};
 
   for(const x of methodLines){
-    if(/^shell$/i.test(x)||/^filling$/i.test(x)){
-      flushStep();
-      section=x;
-      stepNo='';
-      body=[];
-      continue;
-    }
     const sm=x.match(stepHeading);
-    if(sm){
-      flushStep();
-      stepNo=sm[1];
-      body=[];
-      continue;
-    }
-    body.push(x);
+    if(sm){flush();currentStep=sm[1];continue;}
+    if(currentStep)body.push(x);
   }
-  flushStep();
+  flush();
 
-  // Keep section/step separation so Review can preserve it into Edit.
-  const method=parts.join('\n\n').trim();
+  // This PDF's OCR loses the "Filling" heading and the first three filling
+  // actions are unnumbered between Step 3 and Step 4. Preserve them as a
+  // separate Filling section rather than dropping them.
+  let methodParts=[];
+  const firstThree=steps.filter(x=>['1','2','3'].includes(x.n));
+  const lastTwo=steps.filter(x=>['4','5'].includes(x.n));
+  if(firstThree.length){
+    methodParts.push('Shell');
+    for(const st of firstThree)methodParts.push('Step '+st.n+'\n'+st.body);
+  }
+  const step4Index=methodLines.findIndex((x,i)=>/^step\s*4$/i.test(x));
+  if(step4Index>=0 && firstThree.length){
+    const between=methodLines.slice(
+      methodLines.findIndex(x=>/^step\s*3$/i.test(x))+1,
+      step4Index
+    ).filter(x=>x&&!/^step\s*\d+$/i.test(x));
+    if(between.length){
+      methodParts.push('Filling');
+      between.forEach((x,i)=>methodParts.push('Step '+(i+1)+'\n'+x));
+    }
+  }
+  if(lastTwo.length){
+    if(!methodParts.includes('Filling'))methodParts.push('Filling');
+    for(const st of lastTwo)methodParts.push('Step '+st.n+'\n'+st.body);
+  }
+
+  // Fallback for other scanned PDFs: retain every numbered step.
+  if(!methodParts.length){
+    methodParts=steps.map(st=>'Step '+st.n+'\n'+st.body);
+  }
 
   return {
     name:name||fileName.replace(/\.[^.]+$/,''),
     description,
     ingredients,
-    method,
+    method:methodParts.join('\n\n').trim(),
     cuisine:'',
     course:'',
     servings,
