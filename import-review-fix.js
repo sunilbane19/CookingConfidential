@@ -1,9 +1,8 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { supabase } from './supabase-client-legacy.js?v=1.0.0';
 import * as mammoth from 'https://esm.sh/mammoth@1.6.0';
 import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
-const SUPABASE_PUBLISHABLE_KEY='sb_publishable_EG30cid4BVU1vr6EeM3f9g_hztA7Wpu';
-const supabase=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
+
 const detailDialog=document.querySelector('#detailDialog'),importDialog=document.querySelector('#importDialog');
 const esc=(s='')=>String(s).replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));
 const clean=s=>String(s??'').replace(/\s*\[[\s\d,;,-]+\]\s*/g,' ').replace(/[\u0000-\u001F\u007F\uFFFD]/g,' ').replace(/[^\S\r\n]+/g,' ').replace(/\s+/g,' ').trim();
