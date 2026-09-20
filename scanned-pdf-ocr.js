@@ -42,60 +42,32 @@ function deriveRecipe(text,fileName){
     .concat(stripped.slice(filling+1,ingredientEnd))
     .filter(x=>x.length>1)
     .filter(x=>!/^step\s*\d+$/i.test(x))
+    .filter(x=>!/^shell$/i.test(x)&&!/^filling$/i.test(x))
     .map(x=>x.replace(/\s+/g,' ').trim());
 
   if(methodStart<0)return {name,description,ingredients,method:'',cuisine:'',course:'',servings,raw_text:raw};
 
   const methodLines=stripped.slice(methodStart);
   const stepHeading=/^step\s*(\d+)$/i;
-  const steps=[];
+  const methodParts=[];
+  let section='Shell';
   let currentStep=null;
   let body=[];
-  const flush=()=>{if(currentStep){steps.push({n:currentStep,body:body.join(' ').trim()});body=[];}};
-
+  const flush=()=>{if(currentStep){methodParts.push(section+'|'+currentStep+'|'+body.join(' ').trim());body=[];}};
   for(const x of methodLines){
+    if(/^filling$/i.test(x)){flush();section='Filling';currentStep=null;body=[];continue;}
     const sm=x.match(stepHeading);
-    if(sm){flush();currentStep=sm[1];continue;}
+    if(sm){flush();currentStep=sm[1];body=[];continue;}
     if(currentStep)body.push(x);
   }
   flush();
-
-  // This PDF's OCR loses the "Filling" heading and the first three filling
-  // actions are unnumbered between Step 3 and Step 4. Preserve them as a
-  // separate Filling section rather than dropping them.
-  let methodParts=[];
-  const firstThree=steps.filter(x=>['1','2','3'].includes(x.n));
-  const lastTwo=steps.filter(x=>['4','5'].includes(x.n));
-  if(firstThree.length){
-    methodParts.push('Shell');
-    for(const st of firstThree)methodParts.push('Step '+st.n+'\n'+st.body);
-  }
-  const step4Index=methodLines.findIndex((x,i)=>/^step\s*4$/i.test(x));
-  if(step4Index>=0 && firstThree.length){
-    const between=methodLines.slice(
-      methodLines.findIndex(x=>/^step\s*3$/i.test(x))+1,
-      step4Index
-    ).filter(x=>x&&!/^step\s*\d+$/i.test(x));
-    if(between.length){
-      methodParts.push('Filling');
-      between.forEach((x,i)=>methodParts.push('Step '+(i+1)+'\n'+x));
-    }
-  }
-  if(lastTwo.length){
-    if(!methodParts.includes('Filling'))methodParts.push('Filling');
-    for(const st of lastTwo)methodParts.push('Step '+st.n+'\n'+st.body);
-  }
-
-  // Fallback for other scanned PDFs: retain every numbered step.
-  if(!methodParts.length){
-    methodParts=steps.map(st=>'Step '+st.n+'\n'+st.body);
-  }
+  const method=methodParts.map(x=>{const p=x.split('|');return p[0]+'\n\nStep '+p[1]+'\n'+p.slice(2).join('|');}).join('\n\n').trim();
 
   return {
     name:name||fileName.replace(/\.[^.]+$/,''),
     description,
     ingredients,
-    method:methodParts.join('\n\n').trim(),
+    method,
     cuisine:'',
     course:'',
     servings,
