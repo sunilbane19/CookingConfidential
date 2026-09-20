@@ -61,7 +61,14 @@ function deriveRecipe(text,fileName){
     if(currentStep)body.push(x);
   }
   flush();
-  const method=methodParts.map(x=>{const p=x.split('|');return p[0]+'\n\nStep '+p[1]+'\n'+p.slice(2).join('|');}).join('\n\n').trim();
+  let currentSection='';
+  const rendered=[];
+  for(const x of methodParts){
+    const p=x.split('|');
+    if(p[0]!==currentSection){currentSection=p[0];rendered.push(currentSection);}
+    rendered.push('Step '+p[1]+'\n'+p.slice(2).join('|'));
+  }
+  const method=rendered.join('\n\n').trim();
 
   return {
     name:name||fileName.replace(/\.[^.]+$/,''),
