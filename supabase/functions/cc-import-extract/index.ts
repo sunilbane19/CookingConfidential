@@ -257,20 +257,6 @@ function readerUrls(sourceUrl:string){
   try{const u=new URL(sourceUrl);if(u.protocol==="https:"){const v=new URL(u.toString());v.protocol="http:";urls.push(v.toString());}}catch{}
   return urls;
 }
-async function translatedFetch(sourceUrl:string){
-  // Some recipe publishers block server-side requests but remain readable through
-  // a browser translation proxy. Use this only as a fallback after direct/Jina reads.
-  try{
-    const u=new URL(sourceUrl);
-    const host=u.hostname.replace(/\./g,"-");
-    const proxy="https://"+host+".translate.goog"+u.pathname+u.search+(u.search?"&":"?")+"_x_tr_sl=auto&_x_tr_tl=en&_x_tr_hl=en";
-    const rr=await fetchWithTimeout(proxy,{headers:{"User-Agent":"Mozilla/5.0","Accept":"text/html,application/xhtml+xml"}},15000);
-    if(!rr.ok)return null;
-    const html=await rr.text();
-    if(!html.trim()||!hasRecipeSignals(html))return null;
-    return {text:html,title:null};
-  }catch{return null}
-}
 async function readerFetch(sourceUrl:string){
   const attempts=[
     {headers:{"Accept":"application/json","X-Engine":"browser","X-Timeout":"20"}},
@@ -303,16 +289,7 @@ Deno.serve(async req=>{if(req.method==="OPTIONS")return new Response("ok",{heade
     }catch{return null}
   })();
   const [reader,direct]=await Promise.all([readerPromise,directPromise]);
-  let translated:any=null;
   if(reader?.text){text=reader.text;title=reader.title||title;recipe=parse(text,item.file_name||"Imported recipe");}
   else if(direct?.text){const html=direct.text;const ld=jsonLdRecipe(html);if(ld){recipe=fromLd(ld);text=JSON.stringify(recipe);title=recipe.name||title;}else{text=strip(html).slice(0,120000);recipe=parse(text,item.file_name||"Imported recipe");}}
-  else {
-    translated=await translatedFetch(sourceUrl);
-    if(translated?.text){
-      text=translated.text;
-      const ld=jsonLdRecipe(text);
-      if(ld){recipe=fromLd(ld);title=recipe.name||title;}
-      else {text=strip(text).slice(0,120000);recipe=parse(text,item.file_name||"Imported recipe");}
-    }else throw Error("This website is blocking automated recipe extraction. The page is reachable in a browser, but its recipe content was not returned to the importer.");
-  }
+  else throw Error("This website is blocking automated recipe extraction. The page is reachable in a browser, but its recipe content was not returned to the importer.");
 }else if(item.file_path){const{data:blob,error:e}=await sb.storage.from("cooking-confidential").download(item.file_path);if(e||!blob)throw Error("Could not read uploaded file");const n=item.file_name||"",m=item.mime_type||"";if(/\.docx$|\.doc$/i.test(n)||/application\/msword|officedocument\.wordprocessingml/i.test(m)){text=await docText(blob,n);recipe=parse(text,n);}else if(m.startsWith("text/")||/\.(txt|md|csv)$/i.test(n)){text=await blob.text();recipe=parse(text,n);}else if(m==="application/pdf"||/\.pdf$/i.test(n)){const { extractText,getDocumentProxy }=await import("npm:unpdf@0.12.1");const pdf=await getDocumentProxy(new Uint8Array(await blob.arrayBuffer()));const p=await extractText(pdf,{mergePages:true});text=String(p.text||"");recipe=parse(text,n);}else throw Error("This file type needs OCR processing before recipe extraction.")}else throw Error("Import item has no source URL or file");if(!text.trim())throw Error("No readable recipe content found");if(!recipe?.ingredients?.length&&!recipe?.method?.trim()){const preview=clean(text).slice(0,1200).replace(/\s+/g," ");throw Error("The source was read, but no readable Ingredients or Method were found. [diag len="+text.length+" preview="+preview+"]");}const lang=language(text);title=titleFor(recipe,item.file_name||"Imported recipe",text);recipe={...recipe,name:title,language:lang};const{error:ue}=await sb.from("cc_import_items").update({extracted_text:JSON.stringify(recipe),source_title:title,extraction_status:"ready",review_status:"pending",inferred_cuisine:recipe.cuisine||null,inferred_course:recipe.course||null,error_message:null}).eq("id",id);if(ue)throw ue;return out({ok:true,status:"ready",import_item_id:id,recipe});}catch(e){const msg=e instanceof Error?e.message:String(e);await sb.from("cc_import_items").update({extraction_status:"failed",error_message:msg}).eq("id",id);return out({ok:false,status:"failed",import_item_id:id,error:msg},500)}});
