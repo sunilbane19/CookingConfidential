@@ -9,8 +9,8 @@ const decodeEntities=s=>{let v=String(s??'');for(let i=0;i<2;i++){const t=docume
 const clean=s=>decodeEntities(String(s??'').replace(/\s*\[[\s\d,;,-]+\]\s*/g,' ').replace(/[\u0000-\u001F\u007F\uFFFD]/g,' ')).replace(/[^\S\r\n]+/g,' ').replace(/[ \t]+\n/g,'\n').replace(/\n{3,}/g,'\n\n').trim();
 const cleanMethod=s=>clean(s);
 const sanitizeRichHtml=s=>String(s??'')
-  .replace(/<(script|style|iframe|object|embed|form)[^>]*>[\\s\\S]*?<\\/\\1>/gi,'')
-  .replace(/\\s+on[a-z]+\\s*=\\s*(?:"[^"]*"|'[^']*'|[^\\s>]+)/gi,'')
+  .replace(/<(script|style|iframe|object|embed|form)[^>]*>[\s\S]*?<\/\1>/gi,'')
+  .replace(/\s+on[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi,'')
   .replace(/javascript:/gi,'')
   .trim();
 const textToRichHtml=s=>String(s??'').split(/\n/).map(v=>decodeEntities(v).trim()).map(v=>v?`<div>${esc(v)}</div>`:'<div><br></div>').join('');
