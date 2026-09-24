@@ -102,7 +102,23 @@ function parse(text:string,file:string){
   if(/\.pdf$/i.test(file)){const pdfRecipe=parsePdfRecipe(text,file);if(pdfRecipe)return pdfRecipe;}
   const markdown=parseMarkdownSections(text,file); if(markdown)return markdown;
   const structured=structuredRecipe(text);
-  if(structured?.ingredients?.length && structured.method)return structured;
+  if(structured?.ingredients?.length && structured.method){
+    // Some sources begin with a literal "Description" label. structuredRecipe
+    // can otherwise mistake that label for the recipe title.
+    if(/^description\s*:?$/i.test(String(structured.name||""))){
+      const sl=raw.split("\n").map(x=>x.trim()).filter(Boolean);
+      const ingIdx=sl.findIndex((x,idx)=>idx>1&&/^(?:ingredients?|ingredient list|what you need|ingredients required|shopping list)\b/i.test(x));
+      const methodIdx=sl.findIndex((x,idx)=>idx>ingIdx&&/^(?:method|directions?|instructions?|preparation|preparations|steps?|recipe method|cooking method|procedure)\b/i.test(x));
+      if(ingIdx>1&&methodIdx>ingIdx){
+        const name=clean(sl[1]);
+        const description=clean(sl.slice(2,ingIdx).join(" "));
+        if(name){
+          return {...structured,name,description:description||null};
+        }
+      }
+    }
+    return structured;
+  }
   const raw=String(text||"").replace(/\r/g,"").replace(/\u00a0/g," ");
   const fileTitle=clean(file.replace(/\.[^.]+$/i,"").replace(/[_-]+/g," "));
   const strip=(s:string)=>s.replace(/^\s*#{1,6}\s*/,"").replace(/^\s*[-*+•·]\s*/,"").replace(/^\s*\d+[.)]\s*/,"").replace(/^\s*(?:\*\*|__)/,"").replace(/(?:\*\*|__)\s*$/,"").trim();
