@@ -107,6 +107,24 @@ function parse(text:string,file:string){
   const fileTitle=clean(file.replace(/\.[^.]+$/i,"").replace(/[_-]+/g," "));
   const strip=(s:string)=>s.replace(/^\s*#{1,6}\s*/,"").replace(/^\s*[-*+•·]\s*/,"").replace(/^\s*\d+[.)]\s*/,"").replace(/^\s*(?:\*\*|__)/,"").replace(/(?:\*\*|__)\s*$/,"").trim();
   const sourceLines=raw.split("\n").map(x=>x.trim()).filter(Boolean);
+  // Some publishers place a literal "Description" label before the recipe title.
+  // Treat that label as metadata, not as the recipe name.
+  if(/^description\s*:?$/i.test(sourceLines[0]||"")){
+    const ingIdx=sourceLines.findIndex((x,idx)=>idx>1&&/^(?:ingredients?|ingredient list|what you need|ingredients required|shopping list)\b/i.test(x));
+    if(ingIdx>2){
+      const name=clean(sourceLines[1]);
+      const description=clean(sourceLines.slice(2,ingIdx).join(" "));
+      const methodIdx=sourceLines.findIndex((x,idx)=>idx>ingIdx&&/^(?:method|directions?|instructions?|preparation|preparations|steps?|recipe method|cooking method|procedure)\b/i.test(x));
+      if(methodIdx>ingIdx){
+        const ingredients=sourceLines.slice(ingIdx+1,methodIdx).map(x=>strip(x)).filter(x=>x.length>1);
+        const method=sourceLines.slice(methodIdx+1).map(x=>strip(x)).filter(x=>x.length>1).join("\n");
+        const servingsMatch=raw.match(/(?:serves?|serving|servings|yield)\s*[:\-–—]?\s*(?:about\s+)?\d[^\n]*/i);
+        if(name&&ingredients.length&&method.trim()){
+          return {name,description:description||null,ingredients:ingredients.slice(0,200),method:clean(method),cuisine:null,course:null,servings:servingsMatch?clean(servingsMatch[0]):null};
+        }
+      }
+    }
+  }
   const heading=(s:string)=>strip(s).replace(/[:\-–—]+\s*$/,"").trim();
   const isIngredients=(s:string)=>/^(?:ingredients?|ingredient list|what you need|ingredients required|shopping list)\b/i.test(heading(s));
   const isMethod=(s:string)=>/^(?:method|directions?|instructions?|preparation|preparations|steps?|recipe method|cooking method|procedure)\b/i.test(heading(s));
