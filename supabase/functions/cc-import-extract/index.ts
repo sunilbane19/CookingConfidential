@@ -20,6 +20,52 @@ function structuredRecipe(text:string){
   const method=Array.isArray(r.recipeInstructions)?r.recipeInstructions.map((x:any)=>typeof x==="string"?x:x?.text||x?.name||"").filter(Boolean).join("\n"):String(r.recipeInstructions||"");
   return {name:clean(r.name||""),description:clean(r.description||"")||null,ingredients:r.recipeIngredient.map((x:any)=>clean(x)).filter(Boolean),method:clean(method),cuisine:r.recipeCuisine||null,course:r.recipeCategory||null,servings:r.recipeYield||null};
 }
+function parseLabeledSections(text:string,file:string){
+  const raw=String(text||"").replace(/\r/g,"").replace(/\u00a0/g," ");
+  const src=raw.split("\n").map(x=>x.trim()).filter(Boolean);
+  if(src.length<5)return null;
+  const isSection=(x:string,re:RegExp)=>re.test(x.replace(/^#{1,6}\s*/,"").replace(/^\*\*|\*\*$/g,"").trim());
+  const descRe=/^description\s*[:\-–—]?\s*$/i;
+  const ingRe=/^(?:ingredients?|ingredient list|what you need|ingredients required|shopping list)\s*[:\-–—]?\s*$/i;
+  const methRe=/^(?:method|directions?|instructions?|preparation|preparations|steps?|recipe method|cooking method|procedure)\s*[:\-–—]?\s*$/i;
+  const di=src.findIndex(x=>isSection(x,descRe));
+  const ii=src.findIndex(x=>isSection(x,ingRe));
+  const mi=src.findIndex(x=>isSection(x,methRe));
+  if(ii<0||mi<=ii)return null;
+
+  let name="";
+  let description="";
+  if(di>=0&&di<ii){
+    if(di===0){
+      // Our normal text export: Description / Recipe name / description / Ingredients / Method.
+      name=clean(src[1]||"");
+      description=clean(src.slice(2,ii).join(" "));
+    }else{
+      // Title before the Description heading.
+      name=clean(src[di-1]||"");
+      description=clean(src.slice(di+1,ii).join(" "));
+    }
+  }else{
+    // No explicit Description section: use the first useful line as title.
+    name=clean(src[0]||file.replace(/\.[^.]+$/i,"").replace(/[_-]+/g," "));
+  }
+  const strip=(s:string)=>s
+    .replace(/^\s*#{1,6}\s*/,"")
+    .replace(/^\s*[-*+•·]\s*/,"")
+    .replace(/^\s*\d+[.)]\s*/,"")
+    .replace(/^\s*(?:\*\*|__)/,"")
+    .replace(/(?:\*\*|__)\s*$/,"")
+    .trim();
+  const ingredients=src.slice(ii+1,mi).map(strip)
+    .filter(x=>x&&!ingRe.test(x)&&!descRe.test(x));
+  const method=src.slice(mi+1).map(strip)
+    .filter(x=>x&&!methRe.test(x)&&!descRe.test(x))
+    .join("\n");
+  if(!name||ingredients.length<2||!method.trim())return null;
+  const sm=raw.match(/(?:serves?|servings?|yield)\s*[:\-–—]?\s*([^\n]+)/i);
+  return {name,description:description||null,ingredients:ingredients.slice(0,200),method:clean(method),cuisine:null,course:null,servings:sm?clean(sm[0]):null};
+}
+
 function parseMarkdownSections(text:string,file:string){
   const raw=String(text||"").replace(/\r/g,"").replace(/\u00a0/g," ");
   const im=raw.search(/(?:^|\n)\s*#{1,6}\s*Ingredients?\b[^\n]*/im);
@@ -100,25 +146,10 @@ function parsePdfRecipe(text:string,file:string){
 
 function parse(text:string,file:string){
   if(/\.pdf$/i.test(file)){const pdfRecipe=parsePdfRecipe(text,file);if(pdfRecipe)return pdfRecipe;}
+  const labeled=parseLabeledSections(text,file); if(labeled)return labeled;
   const markdown=parseMarkdownSections(text,file); if(markdown)return markdown;
   const structured=structuredRecipe(text);
-  if(structured?.ingredients?.length && structured.method){
-    // Some sources begin with a literal "Description" label. structuredRecipe
-    // can otherwise mistake that label for the recipe title.
-    if(/^description\s*:?$/i.test(String(structured.name||""))){
-      const sl=raw.split("\n").map(x=>x.trim()).filter(Boolean);
-      const ingIdx=sl.findIndex((x,idx)=>idx>1&&/^(?:ingredients?|ingredient list|what you need|ingredients required|shopping list)\b/i.test(x));
-      const methodIdx=sl.findIndex((x,idx)=>idx>ingIdx&&/^(?:method|directions?|instructions?|preparation|preparations|steps?|recipe method|cooking method|procedure)\b/i.test(x));
-      if(ingIdx>1&&methodIdx>ingIdx){
-        const name=clean(sl[1]);
-        const description=clean(sl.slice(2,ingIdx).join(" "));
-        if(name){
-          return {...structured,name,description:description||null};
-        }
-      }
-    }
-    return structured;
-  }
+  if(structured?.ingredients?.length && structured.method)return structured;
   const raw=String(text||"").replace(/\r/g,"").replace(/\u00a0/g," ");
   const fileTitle=clean(file.replace(/\.[^.]+$/i,"").replace(/[_-]+/g," "));
   const strip=(s:string)=>s.replace(/^\s*#{1,6}\s*/,"").replace(/^\s*[-*+•·]\s*/,"").replace(/^\s*\d+[.)]\s*/,"").replace(/^\s*(?:\*\*|__)/,"").replace(/(?:\*\*|__)\s*$/,"").trim();
