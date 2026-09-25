@@ -15,7 +15,10 @@ const isPageNoise=(s:string)=>{
     || /^(?:ratings?|reviews?)\s*[:\-]?\s*\d+$/i.test(x);
 };
 const cleanDescription=(s:any)=>{
-  const v=String(s??"").split(/\n+/).map(x=>clean(x)).filter(Boolean).filter(x=>!isPageNoise(x)).join(" ").trim();
+  const v=String(s??"").split(/\n+/).map(x=>clean(x)).filter(Boolean).filter(x=>!isPageNoise(x))
+    .filter(x=>!/<\/?(?:script|style|noscript|iframe)\b/i.test(x))
+    .filter(x=>/(?:window\.|document\.|google_(?:tags|analytics)|gtag\s*\(|dataLayer|__NEXT_DATA__|googletagmanager|pagead|doubleclick|ojra\.net|bat\.bing\.com)/i.test(x)===false)
+    .join(" ").trim();
   return v&&v.length<500?v:null;
 };
 const lines=(s:string)=>clean(s).split("\n").map(x=>x.replace(/^\s*>\s*/,"").replace(/^\s*#{1,6}\s*/,"").replace(/^\s*[-*+•·]\s*/,"").replace(/^\s*\d+[.)]\s*/,"").replace(/^\s*(?:\\*\\*|__)(.+?)(?:\\*\\*|__)\s*$/,"$1").trim()).filter(Boolean);
@@ -156,8 +159,33 @@ function parsePdfRecipe(text:string,file:string){
   };
 }
 
+function htmlTextForParsing(input:string){
+  return String(input||"")
+    .replace(/<script\\b[^>]*>[\\s\\S]*?<\\/script>/gi," ")
+    .replace(/<style\\b[^>]*>[\\s\\S]*?<\\/style>/gi," ")
+    .replace(/<noscript\\b[^>]*>[\\s\\S]*?<\\/noscript>/gi," ")
+    .replace(/<template\\b[^>]*>[\\s\\S]*?<\\/template>/gi," ")
+    .replace(/<!--[\\s\\S]*?-->/g," ")
+    .replace(/<[^>]+>/g," ")
+    .replace(/&nbsp;/gi," ")
+    .replace(/&amp;/gi,"&")
+    .replace(/&quot;/gi,'"')
+    .replace(/&#39;|&apos;/gi,"'")
+    .replace(/&lt;/gi,"<")
+    .replace(/&gt;/gi,">")
+    .replace(/\\s{2,}/g," ")
+    .replace(/\\n\\s*\\n\\s*\\n+/g,"\\n\\n")
+    .trim();
+}
 function parse(text:string,file:string,isUrl=false){
   if(/\.pdf$/i.test(file)){const pdfRecipe=parsePdfRecipe(text,file);if(pdfRecipe)return pdfRecipe;}
+  // URL readers may return raw publisher HTML. Try JSON-LD first, then strip
+  // executable/page markup before any text parser sees the content.
+  if(isUrl){
+    const structured=structuredRecipe(text);
+    if(structured?.ingredients?.length && structured.method)return structured;
+    text=htmlTextForParsing(text);
+  }
   const labeled=parseLabeledSections(text,file); if(labeled)return labeled;
   const markdown=parseMarkdownSections(text,file); if(markdown)return markdown;
   const structured=structuredRecipe(text);
