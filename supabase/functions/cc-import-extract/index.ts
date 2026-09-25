@@ -43,6 +43,9 @@ function recipeTitleFromSource(text:string,file:string,sectionStart?:number){
   const candidates=lines(before).filter(x=>!isPageNoise(x)&&!blocked.test(x)&&!/^serves?\b/i.test(x)&&!/^prep(?:aration)?\s*[:\-]?/i.test(x)&&!/^cook(?:ing)?\s*time\b/i.test(x)&&!/^total\s*time\b/i.test(x)&&!/^(?:\d+(?:\.\d+)?\s*(?:out of|ratings?|reviews?))/i.test(x));
   return cleanRecipeLine(candidates[0]||fileTitle)||fileTitle;
 }
+function isBadUrlTitle(s:string){
+  return /^(?:skip to main content|home|recipes?|save recipe|print|share|ad|advertisement|good food team|easy|alternatives?|complete the dish|nutrition|loading)$/i.test(cleanRecipeLine(s));
+}
 function structuredRecipe(text:string){
   const re=/<script[^>]*>([\s\S]*?)<\/script>/gi;
   const candidates:any[]=[];
@@ -51,7 +54,9 @@ function structuredRecipe(text:string){
   const r=candidates.find(x=>Array.isArray(x.recipeIngredient)&&x.recipeIngredient.length&&x.recipeInstructions);
   if(!r)return null;
   const method=Array.isArray(r.recipeInstructions)?r.recipeInstructions.map((x:any)=>typeof x==="string"?x:x?.text||x?.name||"").filter(Boolean).join("\n"):String(r.recipeInstructions||"");
-  return {name:cleanRecipeLine(r.name||""),description:cleanDescription(r.description),ingredients:r.recipeIngredient.map((x:any)=>cleanRecipeLine(x)).filter(Boolean),method:clean(method.split("\n").map(cleanRecipeLine).join("\n")),cuisine:r.recipeCuisine||null,course:r.recipeCategory||null,servings:r.recipeYield||null};
+  const structuredName=cleanRecipeLine(r.name||"");
+  const name=structuredName&&!isBadUrlTitle(structuredName)?structuredName:recipeTitleFromSource(text,"Imported recipe");
+  return {name,description:cleanDescription(r.description),ingredients:r.recipeIngredient.map((x:any)=>cleanRecipeLine(x)).filter(Boolean),method:clean(method.split("\n").map(cleanRecipeLine).join("\n")),cuisine:r.recipeCuisine||null,course:r.recipeCategory||null,servings:cleanRecipeLine(r.recipeYield||"")||null};
 }
 function parseLabeledSections(text:string,file:string,isUrl=false){
   const raw=String(text||"").replace(/\r/g,"").replace(/\u00a0/g," ");
@@ -96,7 +101,7 @@ function parseLabeledSections(text:string,file:string,isUrl=false){
     .join("\n");
   if(!name||ingredients.length<2||!method.trim())return null;
   const sm=raw.match(/(?:serves?|servings?|yield)\s*[:\-–—]?\s*([^\n]+)/i);
-  return {name,description:description||null,ingredients:ingredients.slice(0,200),method:clean(method),cuisine:null,course:null,servings:sm?clean(sm[0]):null};
+  return {name,description:description||null,ingredients:ingredients.slice(0,200),method:clean(method),cuisine:null,course:null,servings:sm?cleanRecipeLine(sm[0]):null};
 }
 
 function parseMarkdownSections(text:string,file:string,isUrl=false){
@@ -117,7 +122,7 @@ function parseMarkdownSections(text:string,file:string,isUrl=false){
   if(ingredients.length<2||!method)return null;
   const title=isUrl?recipeTitleFromSource(raw,file,im):clean((raw.match(/(?:^|\n)\s*#\s+([^\n]+)/)||[])[1]||file.replace(/\.[^.]+$/i,"").replace(/[_-]+/g," "));
   const sm=raw.match(/(?:serves?|servings?|yield)\s*[:\-–—]?\s*([^\n]+)/i);
-  return {name:title,description:null,ingredients:ingredients.slice(0,200),method:clean(method),cuisine:null,course:null,servings:sm?clean(sm[0]):null};
+  return {name:title,description:null,ingredients:ingredients.slice(0,200),method:clean(method),cuisine:null,course:null,servings:sm?cleanRecipeLine(sm[0]):null};
 }
 
 function parsePdfRecipe(text:string,file:string){
