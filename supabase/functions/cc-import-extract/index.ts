@@ -6,6 +6,16 @@ import { Buffer } from "node:buffer";
 const C={"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"authorization,x-client-info,apikey,content-type","Access-Control-Allow-Methods":"POST,OPTIONS"};
 const out=(x:any,s=200)=>new Response(JSON.stringify(x),{status:s,headers:{...C,"Content-Type":"application/json"}});
 const clean=(s:any)=>String(s??"").replace(/\r/g,"").replace(/[ \t]+/g," ").replace(/\n{3,}/g,"\n\n").trim();
+const cleanMarkdown=(s:any)=>String(s??"")
+  .replace(/!\[([^\]]*)\]\([^)]*\)/g,"$1")
+  .replace(/\[([^\]]+)\]\((?:[^)(]|\([^)(]*\))*\)/g,"$1")
+  .replace(/\[([^\]]+)\]\s*\[[^\]]*\]/g,"$1")
+  .trim();
+const cleanRecipeLine=(s:any)=>clean(cleanMarkdown(s))
+  .replace(/^\s*#{1,6}\s*/,"")
+  .replace(/^\s*(?:[-*+•·])\s*/,"")
+  .replace(/^\s*\d+[.)]\s*/,"")
+  .trim();
 const isPageNoise=(s:string)=>{
   const x=String(s??"").replace(/\s+/g," ").trim();
   if(!x)return true;
@@ -21,10 +31,18 @@ const cleanDescription=(s:any)=>{
     .join(" ").trim();
   return v&&v.length<500?v:null;
 };
-const lines=(s:string)=>clean(s).split("\n").map(x=>x.replace(/^\s*>\s*/,"").replace(/^\s*#{1,6}\s*/,"").replace(/^\s*[-*+•·]\s*/,"").replace(/^\s*\d+[.)]\s*/,"").replace(/^\s*(?:\\*\\*|__)(.+?)(?:\\*\\*|__)\s*$/,"$1").trim()).filter(Boolean);
+const lines=(s:string)=>clean(s).split("\n").map(x=>cleanRecipeLine(x).replace(/^\s*>\s*/,"").replace(/^\s*(?:\*\*|__)(.+?)(?:\*\*|__)\s*$/,"$1").trim()).filter(Boolean);
 const ih=/^(ingredients?|ingredient list|what you need|ingredients required|साहित्य)\s*[:\-–—,]?\s*$/i;
 const mh=/^(method|directions?|instructions?|preparation|preparations|steps?|recipe method|cooking method|procedure|प्रक्रिया)\s*[:\-–—,]?\s*$/i;
 function language(t:string){if(/[ऀ-ॿ]/.test(t))return /ळ|ऱ|ऍ|ऑ|ॲ/.test(t)?"Marathi":"Hindi";if(/[\u0980-\u09FF]/.test(t))return"Bengali";if(/[\u0A80-\u0AFF]/.test(t))return"Gujarati";if(/[\u0A00-\u0A7F]/.test(t))return"Punjabi";if(/[\u0B80-\u0BFF]/.test(t))return"Tamil";if(/[\u0C00-\u0C7F]/.test(t))return"Telugu";if(/[\u0C80-\u0CFF]/.test(t))return"Kannada";if(/[\u0D00-\u0D7F]/.test(t))return"Malayalam";if(/[\u0600-\u06FF]/.test(t))return"Arabic";if(/[\u0400-\u04FF]/.test(t))return"Russian";if(/[\u0370-\u03FF]/.test(t))return"Greek";return"English";}
+function recipeTitleFromSource(text:string,file:string,sectionStart?:number){
+  const raw=String(text||"");
+  const before=sectionStart==null?raw:raw.slice(0,sectionStart);
+  const fileTitle=clean(file.replace(/\.[^.]+$/i,"").replace(/[_-]+/g," "));
+  const blocked=/^(?:skip to main content|home|recipes?|save recipe|print|share|ad|advertisement|good food team|easy|alternatives?|complete the dish|nutrition|loading|rate|rate now|comments?|questions?|tips?)$/i;
+  const candidates=lines(before).filter(x=>!isPageNoise(x)&&!blocked.test(x)&&!/^serves?\b/i.test(x)&&!/^prep(?:aration)?\s*[:\-]?/i.test(x)&&!/^cook(?:ing)?\s*time\b/i.test(x)&&!/^total\s*time\b/i.test(x)&&!/^(?:\d+(?:\.\d+)?\s*(?:out of|ratings?|reviews?))/i.test(x));
+  return cleanRecipeLine(candidates[0]||fileTitle)||fileTitle;
+}
 function structuredRecipe(text:string){
   const re=/<script[^>]*>([\s\S]*?)<\/script>/gi;
   const candidates:any[]=[];
@@ -33,9 +51,9 @@ function structuredRecipe(text:string){
   const r=candidates.find(x=>Array.isArray(x.recipeIngredient)&&x.recipeIngredient.length&&x.recipeInstructions);
   if(!r)return null;
   const method=Array.isArray(r.recipeInstructions)?r.recipeInstructions.map((x:any)=>typeof x==="string"?x:x?.text||x?.name||"").filter(Boolean).join("\n"):String(r.recipeInstructions||"");
-  return {name:clean(r.name||""),description:cleanDescription(r.description),ingredients:r.recipeIngredient.map((x:any)=>clean(x)).filter(Boolean),method:clean(method),cuisine:r.recipeCuisine||null,course:r.recipeCategory||null,servings:r.recipeYield||null};
+  return {name:cleanRecipeLine(r.name||""),description:cleanDescription(r.description),ingredients:r.recipeIngredient.map((x:any)=>cleanRecipeLine(x)).filter(Boolean),method:clean(method.split("\n").map(cleanRecipeLine).join("\n")),cuisine:r.recipeCuisine||null,course:r.recipeCategory||null,servings:r.recipeYield||null};
 }
-function parseLabeledSections(text:string,file:string){
+function parseLabeledSections(text:string,file:string,isUrl=false){
   const raw=String(text||"").replace(/\r/g,"").replace(/\u00a0/g," ");
   const src=raw.split("\n").map(x=>x.trim()).filter(Boolean);
   if(src.length<5)return null;
@@ -62,7 +80,7 @@ function parseLabeledSections(text:string,file:string){
     }
   }else{
     // No explicit Description section: use the first useful line as title.
-    name=clean(src[0]||file.replace(/\.[^.]+$/i,"").replace(/[_-]+/g," "));
+    name=isUrl?recipeTitleFromSource(raw,file,raw.indexOf(src[ii])):clean(src[0]||file.replace(/\.[^.]+$/i,"").replace(/[_-]+/g," "));
   }
   const strip=(s:string)=>s
     .replace(/^\s*#{1,6}\s*/,"")
@@ -81,7 +99,7 @@ function parseLabeledSections(text:string,file:string){
   return {name,description:description||null,ingredients:ingredients.slice(0,200),method:clean(method),cuisine:null,course:null,servings:sm?clean(sm[0]):null};
 }
 
-function parseMarkdownSections(text:string,file:string){
+function parseMarkdownSections(text:string,file:string,isUrl=false){
   const raw=String(text||"").replace(/\r/g,"").replace(/\u00a0/g," ");
   const im=raw.search(/(?:^|\n)\s*#{1,6}\s*Ingredients?\b[^\n]*/im);
   if(im<0)return null;
@@ -97,7 +115,7 @@ function parseMarkdownSections(text:string,file:string){
   const ingredients=cleanLines(ingBlock).filter(x=>!/^(?:shell|filling|ingredients?)$/i.test(x));
   const method=cleanLines(methodBlock).filter(x=>!/^(?:shell|filling|directions?|method|instructions?|preparation|steps?)$/i.test(x)).join("\n");
   if(ingredients.length<2||!method)return null;
-  const title=clean((raw.match(/(?:^|\n)\s*#\s+([^\n]+)/)||[])[1]||file.replace(/\.[^.]+$/i,"").replace(/[_-]+/g," "));
+  const title=isUrl?recipeTitleFromSource(raw,file,im):clean((raw.match(/(?:^|\n)\s*#\s+([^\n]+)/)||[])[1]||file.replace(/\.[^.]+$/i,"").replace(/[_-]+/g," "));
   const sm=raw.match(/(?:serves?|servings?|yield)\s*[:\-–—]?\s*([^\n]+)/i);
   return {name:title,description:null,ingredients:ingredients.slice(0,200),method:clean(method),cuisine:null,course:null,servings:sm?clean(sm[0]):null};
 }
@@ -171,6 +189,9 @@ function htmlTextForParsing(input:string){
     .replace(/<\/(?:li|p|div|section|article|header|footer|h[1-6])\s*>/gi,"\n")
     .replace(/<li\b[^>]*>/gi,"\n")
     .replace(/<[^>]+>/g," ")
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g,"$1")
+    .replace(/\[([^\]]+)\]\((?:[^)(]|\([^)(]*\))*\)/g,"$1")
+    .replace(/\[([^\]]+)\]\s*\[[^\]]*\]/g,"$1")
     .replace(/&nbsp;/gi," ")
     .replace(/&amp;/gi,"&")
     .replace(/&quot;/gi,'"')
@@ -191,8 +212,8 @@ function parse(text:string,file:string,isUrl=false){
     if(structured?.ingredients?.length && structured.method)return structured;
     text=htmlTextForParsing(text);
   }
-  const labeled=parseLabeledSections(text,file); if(labeled)return labeled;
-  const markdown=parseMarkdownSections(text,file); if(markdown)return markdown;
+  const labeled=parseLabeledSections(text,file,isUrl); if(labeled)return labeled;
+  const markdown=parseMarkdownSections(text,file,isUrl); if(markdown)return markdown;
   const structured=structuredRecipe(text);
   if(structured?.ingredients?.length && structured.method)return structured;
   const raw=String(text||"").replace(/\r/g,"").replace(/\u00a0/g," ");
