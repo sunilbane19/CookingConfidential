@@ -32,6 +32,16 @@ const cleanDescription=(s:any)=>{
   return v&&v.length<500?v:null;
 };
 const lines=(s:string)=>clean(s).split("\n").map(x=>cleanRecipeLine(x).replace(/^\s*>\s*/,"").replace(/^\s*(?:\*\*|__)(.+?)(?:\*\*|__)\s*$/,"$1").trim()).filter(Boolean);
+const isNutritionNoise=(s:string)=>{
+  const x=String(s??"").replace(/\s+/g," ").trim();
+  return /^(?:nutrition|nutrition:\s*per serving|units?|metric us|keep the screen awake.*|good food app.*|ad|low|high)$/i.test(x)
+    || /^(?:kcal|calories?|fat|saturates?|carbs?|carbohydrates?|sugars?|fibre|fiber|protein|salt)\s*[:]?\s*\d+(?:\.\d+)?\s*[a-z%]*$/i.test(x);
+};
+const cleanUrlMethodLine=(s:string)=>{
+  return cleanRecipeLine(s)
+    .replace(/^step\s+(\d+)\s*[:.)-]?\s*/i,(_m,n)=>'Step '+n+': ')
+    .trim();
+};
 const ih=/^(ingredients?|ingredient list|what you need|ingredients required|साहित्य)\s*[:\-–—,]?\s*$/i;
 const mh=/^(method|directions?|instructions?|preparation|preparations|steps?|recipe method|cooking method|procedure|प्रक्रिया)\s*[:\-–—,]?\s*$/i;
 function language(t:string){if(/[ऀ-ॿ]/.test(t))return /ळ|ऱ|ऍ|ऑ|ॲ/.test(t)?"Marathi":"Hindi";if(/[\u0980-\u09FF]/.test(t))return"Bengali";if(/[\u0A80-\u0AFF]/.test(t))return"Gujarati";if(/[\u0A00-\u0A7F]/.test(t))return"Punjabi";if(/[\u0B80-\u0BFF]/.test(t))return"Tamil";if(/[\u0C00-\u0C7F]/.test(t))return"Telugu";if(/[\u0C80-\u0CFF]/.test(t))return"Kannada";if(/[\u0D00-\u0D7F]/.test(t))return"Malayalam";if(/[\u0600-\u06FF]/.test(t))return"Arabic";if(/[\u0400-\u04FF]/.test(t))return"Russian";if(/[\u0370-\u03FF]/.test(t))return"Greek";return"English";}
@@ -40,15 +50,22 @@ function recipeTitleFromSource(text:string,file:string,sectionStart?:number){
   const beforeRaw=sectionStart==null?raw:raw.slice(0,sectionStart);
   const before=/<(?:html|body|head|script|div|section|article|h[1-6])\b/i.test(beforeRaw)?htmlTextForParsing(beforeRaw):beforeRaw;
   const fileTitle=clean(file.replace(/\.[^.]+$/i,"").replace(/[_-]+/g," "));
-  const blocked=/^(?:skip to main content|home|recipes?|save recipe|print|share|ad|advertisement|good food team|easy|alternatives?|complete the dish|nutrition|loading|rate|rate now|comments?|questions?|tips?|image(?:\s+\d+)?(?::.*)?|good food logo.*)$/i;
-  // Prefer an actual markdown/HTML heading. Publisher pages commonly put the
-  // hero image alt text before the recipe title, so taking the first text line
-  // can incorrectly produce "Image 1: Good Food logo in black".
-  const headingCandidates=beforeRaw.split(/\n+/).map(x=>cleanMarkdown(x).replace(/^\s*#{1,6}\s*/,"").trim())
+  const blocked=/^(?:skip to main content|home|recipes?|save recipe|print|share|ad|advertisement|good food team|easy|alternatives?|complete the dish|nutrition|nutrition:\s*per serving|loading|rate|rate now|comments?|questions?|tips?|image(?:\s+\d+)?(?::.*)?|good food logo.*|subscribe(?: now)?|get .*all access|showing items .* of .*|learn how to .*|freezable|keep the screen awake.*|recipe from .*|units?|metric us)$/i;
+  // Prefer the publisher's actual recipe heading. On sites such as BBC Good
+  // Food there can be CTA text ("Subscribe") between page chrome and title.
+  const rawHeadingCandidates=beforeRaw.split(/\n+/).map(x=>x.trim())
+    .filter(x=>/^#{1,6}\s+/.test(x));
+  const headingCandidates=rawHeadingCandidates
+    .map(x=>cleanMarkdown(x).replace(/^\s*#{1,6}\s*/,"").trim())
     .filter(x=>x&&!blocked.test(x)&&!isPageNoise(x)&&x.length<160)
     .filter(x=>!/^\s*!?\[?image\b/i.test(x))
     .filter(x=>!/^serves?\b/i.test(x)&&!/^prep(?:aration)?\s*[:\-]?/i.test(x)&&!/^cook(?:ing)?\s*time\b/i.test(x)&&!/^total\s*time\b/i.test(x));
   if(headingCandidates.length)return cleanRecipeLine(headingCandidates[0]);
+  const usefulCandidates=beforeRaw.split(/\n+/).map(x=>cleanMarkdown(x).replace(/^\s*#{1,6}\s*/,"").trim())
+    .filter(x=>x&&!blocked.test(x)&&!isPageNoise(x)&&x.length<160)
+    .filter(x=>!/^\s*!?\[?image\b/i.test(x))
+    .filter(x=>!/^serves?\b/i.test(x)&&!/^prep(?:aration)?\s*[:\-]?/i.test(x)&&!/^cook(?:ing)?\s*time\b/i.test(x)&&!/^total\s*time\b/i.test(x));
+  if(usefulCandidates.length)return cleanRecipeLine(usefulCandidates[0]);
   const candidates=lines(before).filter(x=>!isPageNoise(x)&&!blocked.test(x)&&!/^\s*!?\[?image\b/i.test(x)&&!/^serves?\b/i.test(x)&&!/^prep(?:aration)?\s*[:\-]?/i.test(x)&&!/^cook(?:ing)?\s*time\b/i.test(x)&&!/^total\s*time\b/i.test(x)&&!/^(?:\d+(?:\.\d+)?\s*(?:out of|ratings?|reviews?))/i.test(x));
   return cleanRecipeLine(candidates[0]||fileTitle)||fileTitle;
 }
@@ -267,8 +284,13 @@ function parse(text:string,file:string,isUrl=false){
   let i=sourceLines.findIndex(isIngredients);
   let m=sourceLines.findIndex((x,idx)=>idx>i&&isMethod(x));
   if(i>=0&&m>i){
-    const ingredients=sourceLines.slice(i+1,m).map(strip).filter(x=>x.length>1).filter(x=>!/^(?:featured video|see all food52 videos)$/i.test(x));
-    const method=sourceLines.slice(m+1).map(strip).filter(x=>!/^(?:featured video|see all food52 videos)$/i.test(x)).join("\n");
+    const ingredients=sourceLines.slice(i+1,m).map(strip)
+      .filter(x=>x.length>1)
+      .filter(x=>!/^(?:featured video|see all food52 videos)$/i.test(x))
+      .filter(x=>!isNutritionNoise(x));
+    const method=sourceLines.slice(m+1).map(cleanUrlMethodLine)
+      .filter(x=>!/^(?:featured video|see all food52 videos|recipe tips)$/i.test(x))
+      .join("\n");
     // Flattened-reader fallback: some URL readers return the whole page as one line.
   // In that case, locate section labels anywhere in the raw text.
   const ingPos=raw.search(/(?:^|\s)(?:#{1,6}\s*)?Ingredients?\b\s*[:\-–—]?/i);
@@ -280,9 +302,11 @@ function parse(text:string,file:string,isUrl=false){
       const methodPart=afterIng.slice(methMatch.index+methMatch[0].length);
       const ingredients=lines(ingPart)
         .filter(x=>!/^(?:ingredients?|directions?|method|instructions?|preparation|steps?|featured video|see all food52 videos)$/i.test(x))
+        .filter(x=>!isNutritionNoise(x))
         .filter(x=>x.length>1);
       const method=lines(methodPart)
-        .filter(x=>!/^(?:directions?|method|instructions?|preparation|steps?|featured video|see all food52 videos)$/i.test(x))
+        .map(cleanUrlMethodLine)
+        .filter(x=>!/^(?:directions?|method|instructions?|preparation|steps?|featured video|see all food52 videos|recipe tips)$/i.test(x))
         .join("\n");
       if(ingredients.length && method){
         const titleLine=sourceLines[0]||fileTitle;
@@ -303,8 +327,14 @@ function parse(text:string,file:string,isUrl=false){
     const mm=after.search(/(?:^|\n)\s*(?:#{1,6}\s*)?(?:method|directions?|instructions?|preparation|preparations|steps?|recipe method|cooking method|procedure)\s*[:\-–—]?\s*/im);
     if(mm>=0){
       const marker=after.slice(mm).match(/(?:^|\n)\s*(?:#{1,6}\s*)?(?:method|directions?|instructions?|preparation|preparations|steps?|recipe method|cooking method|procedure)\s*[:\-–—]?\s*/im);
-      const ingredients=lines(after.slice(0,mm)).filter(x=>!/^(?:ingredients?|directions?|instructions?|featured video|see all food52 videos)$/i.test(x)).filter(x=>x.length>1);
-      const method=lines(marker?after.slice(mm+marker[0].length):"").filter(x=>!/^(?:directions?|instructions?|featured video|see all food52 videos)$/i.test(x)).join("\n");
+      const ingredients=lines(after.slice(0,mm))
+        .filter(x=>!/^(?:ingredients?|directions?|instructions?|featured video|see all food52 videos)$/i.test(x))
+        .filter(x=>!isNutritionNoise(x))
+        .filter(x=>x.length>1);
+      const method=lines(marker?after.slice(mm+marker[0].length):"")
+        .map(cleanUrlMethodLine)
+        .filter(x=>!/^(?:directions?|instructions?|featured video|see all food52 videos|recipe tips)$/i.test(x))
+        .join("\n");
       if(ingredients.length&&method){
         const servingsMatch=raw.match(/(?:serves?|serving|servings|yield)\s*[:\-–—]?\s*(?:about\s+)?\d[^\n]*/i);
         return {name:clean(sourceLines[0]||fileTitle),description:null,ingredients:ingredients.slice(0,200),method:clean(method),cuisine:null,course:null,servings:servingsMatch?clean(servingsMatch[0]):null};
