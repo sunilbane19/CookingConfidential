@@ -375,13 +375,40 @@ function extractRecipeTips(text:string){
   }
   return out.length?out.join("\n"):null;
 }
+function extractDescriptionAndNotes(sourceText:string){
+  let raw=String(sourceText||"").replace(/\r/g,"").replace(/\u00a0/g," ");
+  if(/<html\\b|<body\\b|<div\\b|<script\\b/i.test(raw)) raw=htmlTextForParsing(raw);
+  const src=raw.split("\n").map(x=>clean(x)).filter(Boolean);
+  const heading=/^#{0,6}\\s*(description|notes?)\\s*[:\\-–—]?\\s*(.*)$/i;
+  const boundary=/^#{0,6}\\s*(?:ingredients?|method|directions?|instructions?|preparation|preparations|steps?|nutrition(?:\\s*[:\\-–—]?\\s*per serving)?|recipe tips?|top tips?|tips?|comments?|questions?\\s+and\\s+tips?|recipe from)\\b/i;
+  let description:string|null=null;
+  let notes:string|null=null;
+  for(let i=0;i<src.length;i++){
+    const m=src[i].match(heading);
+    if(!m)continue;
+    const kind=String(m[1]).toLowerCase();
+    const first=cleanRecipeLine(m[2]||"");
+    const out:string[]=[]; if(first)out.push(first);
+    for(let j=i+1;j<src.length;j++){
+      if(boundary.test(src[j])||heading.test(src[j]))break;
+      if(isPageNoise(src[j])||isNutritionNoise(src[j]))continue;
+      const v=cleanRecipeLine(src[j]); if(v)out.push(v);
+    }
+    const value=clean(out.join("\n"));
+    if(/^description$/i.test(kind)&&value) description=description||value;
+    if(/^notes?$/i.test(kind)&&value) notes=notes||value;
+  }
+  return {description,notes};
+}
 function finalizeParsedRecipe(recipe:any,sourceText:string){
   if(!recipe)return recipe;
+  const meta=extractDescriptionAndNotes(sourceText);
   const tips=extractRecipeTips(sourceText);
-  if(!tips)return recipe;
-  const tipSet=new Set(tips.split("\n").map(x=>cleanRecipeLine(x).toLowerCase()));
-  const method=String(recipe.method||"").split(/\n+/).filter(x=>!tipSet.has(cleanRecipeLine(x).toLowerCase())).join("\n").trim();
-  return {...recipe,method,personal_notes:recipe.personal_notes||tips};
+  const noteParts=[meta.notes,tips].filter(Boolean).map(String);
+  const personalNotes=noteParts.length?noteParts.join("\n"):String(recipe.personal_notes||"").trim();
+  const noteSet=new Set(personalNotes.split("\n").map(x=>cleanRecipeLine(x).toLowerCase()).filter(Boolean));
+  const method=String(recipe.method||"").split(/\n+/).filter(x=>!noteSet.has(cleanRecipeLine(x).toLowerCase())).join("\n").trim();
+  return {...recipe,description:meta.description||recipe.description||null,method,personal_notes:personalNotes||null};
 }
 function parse(text:string,file:string,isUrl=false){
   const recipe=parseRaw(text,file,isUrl);
