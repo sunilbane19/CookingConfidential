@@ -383,6 +383,10 @@ function finalizeParsedRecipe(recipe:any,sourceText:string){
   const method=String(recipe.method||"").split(/\n+/).filter(x=>!tipSet.has(cleanRecipeLine(x).toLowerCase())).join("\n").trim();
   return {...recipe,method,personal_notes:recipe.personal_notes||tips};
 }
+function parse(text:string,file:string,isUrl=false){
+  const recipe=parseRaw(text,file,isUrl);
+  return finalizeParsedRecipe(recipe,text);
+}
 function titleFor(recipe:any,file:string,text:string){const lang=language(text);if(lang==="English")return recipe.name||file.replace(/\.[^.]+$/i,"");const base=file.replace(/\.[^.]+$/i,"").replace(/[_-]+/g," ").trim();return `${base} (${lang})`;}
 async function fetchWithTimeout(input:string|URL,init:RequestInit={},ms=20000){
   const ac=new AbortController();
