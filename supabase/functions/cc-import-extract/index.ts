@@ -127,8 +127,10 @@ function parseLabeledSections(text:string,file:string,isUrl=false){
     .replace(/(?:\*\*|__)\s*$/,"")
     .trim();
   const ingredients=src.slice(ii+1,mi).map(strip)
-    .filter(x=>x&&!ingRe.test(x)&&!descRe.test(x)&&!isPageNoise(x));
-  const method=src.slice(mi+1).map(strip)
+    .filter(x=>x&&!ingRe.test(x)&&!descRe.test(x)&&!isPageNoise(x))
+    .filter(x=>!isUrl||!isNutritionNoise(x));
+  const method=src.slice(mi+1)
+    .map(x=>isUrl?cleanUrlMethodLine(strip(x)):strip(x))
     .filter(x=>x&&!methRe.test(x)&&!descRe.test(x)&&!isPageNoise(x))
     .join("\n");
   if(!name||ingredients.length<2||!method.trim())return null;
@@ -247,7 +249,7 @@ function htmlTextForParsing(input:string){
     .replace(/\n\s*\n\s*\n+/g,"\n\n")
     .trim();
 }
-function parse(text:string,file:string,isUrl=false){
+function parseRaw(text:string,file:string,isUrl=false){
   if(/\.pdf$/i.test(file)){const pdfRecipe=parsePdfRecipe(text,file);if(pdfRecipe)return pdfRecipe;}
   // URL readers may return raw publisher HTML. Try JSON-LD first, then strip
   // executable/page markup before any text parser sees the content.
@@ -355,6 +357,31 @@ function parse(text:string,file:string,isUrl=false){
   for(const x of body){if(mode==="ingredients"&&methodLike(x)&&hi.length>=2){mode="method";hm.push(x);continue;}if(mode==="ingredients"&&ingredientLike(x)){hi.push(x);continue;}if(mode==="ingredients"&&hi.length>=2&&x.length>35){mode="method";hm.push(x);continue;}if(mode==="method")hm.push(x);}
   if(hi.length>=2&&hm.length)return {name,description:clean(description)||null,ingredients:hi.slice(0,200),method:clean(hm.join("\n")),cuisine:null,course:null,servings};
   return {name,description:clean(description)||null,ingredients:[],method:"",cuisine:null,course:null,servings};
+}
+function extractRecipeTips(text:string){
+  const raw=String(text||"").replace(/\\r/g,"").replace(/\\u00a0/g," ");
+  const src=raw.split("\\n").map(x=>x.trim()).filter(Boolean);
+  const start=src.findIndex(x=>/^(?:#{1,6}\\s*)?(?:recipe\\s+tips?|top\\s+tips?|tips?)\\s*[:\\-–—]?\\s*$/i.test(x));
+  if(start<0)return null;
+  const stop=/^(?:#{1,6}\\s*)?(?:nutrition(?:\\s*:\\s*per serving)?|ingredients?|method|directions?|instructions?|preparation|steps?|notes?|comments?,?\\s*questions?\\s+and\\s+tips?|recipe from)\\b/i;
+  const out:string[]=[];
+  for(let i=start+1;i<src.length;i++){
+    const line=src[i];
+    if(stop.test(line))break;
+    if(isPageNoise(line)||isNutritionNoise(line))continue;
+    if(/^(?:ad|advertisement|subscribe(?: now)?|keep the screen awake.*)$/i.test(line))break;
+    const v=cleanRecipeLine(line);
+    if(v)out.push(v);
+  }
+  return out.length?out.join("\\n"):null;
+}
+function finalizeParsedRecipe(recipe:any,sourceText:string){
+  if(!recipe)return recipe;
+  const tips=extractRecipeTips(sourceText);
+  if(!tips)return recipe;
+  const tipSet=new Set(tips.split("\\n").map(x=>cleanRecipeLine(x).toLowerCase()));
+  const method=String(recipe.method||"").split(/\\n+/).filter(x=>!tipSet.has(cleanRecipeLine(x).toLowerCase())).join("\\n").trim();
+  return {...recipe,method,personal_notes:recipe.personal_notes||tips};
 }
 function titleFor(recipe:any,file:string,text:string){const lang=language(text);if(lang==="English")return recipe.name||file.replace(/\.[^.]+$/i,"");const base=file.replace(/\.[^.]+$/i,"").replace(/[_-]+/g," ").trim();return `${base} (${lang})`;}
 async function fetchWithTimeout(input:string|URL,init:RequestInit={},ms=20000){
