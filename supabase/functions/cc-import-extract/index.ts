@@ -34,8 +34,9 @@ const cleanDescription=(s:any)=>{
 const lines=(s:string)=>clean(s).split("\n").map(x=>cleanRecipeLine(x).replace(/^\s*>\s*/,"").replace(/^\s*(?:\*\*|__)(.+?)(?:\*\*|__)\s*$/,"$1").trim()).filter(Boolean);
 const isNutritionNoise=(s:string)=>{
   const x=String(s??"").replace(/\s+/g," ").trim();
-  return /^(?:nutrition|nutrition:\s*per serving|units?|metric us|keep the screen awake.*|good food app.*|ad|low|high)$/i.test(x)
-    || /^(?:kcal|calories?|fat|saturates?|carbs?|carbohydrates?|sugars?|fibre|fiber|protein|salt)\s*[:]?\s*\d+(?:\.\d+)?\s*[a-z%]*$/i.test(x);
+  return /^(?:nutrition\s*:?|nutrition\s*:\s*per serving|units?\s*:?|metric us\s*:?|keep the screen awake.*|good food app.*|ad\s*:?|low|high)$/i.test(x)
+    || /^(?:kcal|calories?|fat|saturates?|carbs?|carbohydrates?|sugars?|fibre|fiber|protein|salt)\s*[:]?\s*\d+(?:\.\d+)?\s*[a-z%]*$/i.test(x)
+    || /^(?:kcal|calories?|fat|saturates?|carbs?|carbohydrates?|sugars?|fibre|fiber|protein|salt)\b/i.test(x);
 };
 const cleanUrlMethodLine=(s:string)=>{
   return cleanRecipeLine(s)
@@ -82,9 +83,11 @@ function structuredRecipe(text:string,isUrl=false){
   const method=Array.isArray(r.recipeInstructions)?r.recipeInstructions.map((x:any)=>typeof x==="string"?x:x?.text||x?.name||"").filter(Boolean).join("\n"):String(r.recipeInstructions||"");
   const structuredName=isUrl?cleanRecipeLine(r.name||""):clean(r.name||"");
   const name=isUrl?(structuredName&&!isBadUrlTitle(structuredName)?structuredName:recipeTitleFromSource(text,"Imported recipe")):structuredName;
-  const ingredients=r.recipeIngredient.map((x:any)=>isUrl?cleanRecipeLine(x):clean(x)).filter(Boolean);
-  const methodValue=isUrl?clean(method.split("\n").map(cleanRecipeLine).join("\n")):clean(method);
-  return {name,description:cleanDescription(r.description),ingredients,method:methodValue,cuisine:r.recipeCuisine||null,course:r.recipeCategory||null,servings:isUrl?(cleanRecipeLine(r.recipeYield||"")||null):(r.recipeYield||null)};
+  const ingredients=r.recipeIngredient.map((x:any)=>isUrl?cleanRecipeLine(x):clean(x))
+    .filter(Boolean)
+    .filter((x:string)=>!isUrl||!isNutritionNoise(x));
+  const methodValue=isUrl?clean(method.split("\n").map(cleanUrlMethodLine).join("\n")):clean(method);
+  return {name,description:cleanDescription(r.description),ingredients,method:methodValue,cuisine:r.recipeCuisine||null,course:r.recipeCategory||null,servings:isUrl?(cleanRecipeLine(String(r.recipeYield||"").replace(/\*+/g,""))||null):(r.recipeYield||null)};
 }
 function parseLabeledSections(text:string,file:string,isUrl=false){
   const raw=String(text||"").replace(/\r/g,"").replace(/\u00a0/g," ");
