@@ -166,6 +166,10 @@ function htmlTextForParsing(input:string){
     .replace(/<noscript\b[^>]*>[\s\S]*?<\/noscript>/gi," ")
     .replace(/<template\b[^>]*>[\s\S]*?<\/template>/gi," ")
     .replace(/<!--[\s\S]*?-->/g," ")
+    // Preserve the boundaries that matter to recipe parsing before removing HTML.
+    .replace(/<br\s*\/?>/gi,"\n")
+    .replace(/<\/(?:li|p|div|section|article|header|footer|h[1-6])\s*>/gi,"\n")
+    .replace(/<li\b[^>]*>/gi,"\n")
     .replace(/<[^>]+>/g," ")
     .replace(/&nbsp;/gi," ")
     .replace(/&amp;/gi,"&")
@@ -173,7 +177,8 @@ function htmlTextForParsing(input:string){
     .replace(/&#39;|&apos;/gi,"'")
     .replace(/&lt;/gi,"<")
     .replace(/&gt;/gi,">")
-    .replace(/\s{2,}/g," ")
+    .replace(/[ \t]+/g," ")
+    .replace(/\n[ \t]+/g,"\n")
     .replace(/\n\s*\n\s*\n+/g,"\n\n")
     .trim();
 }
@@ -349,14 +354,45 @@ Deno.serve(async req=>{if(req.method==="OPTIONS")return new Response("ok",{heade
     }catch{return null}
   })();
   const [reader,direct]=await Promise.all([readerPromise,directPromise]);
-  if(reader?.text){text=reader.text;title=reader.title||title;recipe=parse(text,item.file_name||"Imported recipe",true);}
-  else if(direct?.text){const html=direct.text;text=html;recipe=parse(html,item.file_name||"Imported recipe",true);}
-  else {
-    const browser=await browserlessFetch(sourceUrl);
-    if(browser?.text){
-      const html=browser.text;
-      text=html;
-      recipe=parse(html,item.file_name||"Imported recipe",true);
-    }else throw Error("This website is blocking automated recipe extraction. The page is reachable in a browser, but its recipe content was not returned to the importer.");
+
+  // A URL fetch is only accepted when it actually produces a recipe.
+  // Some publishers return a large HTML shell containing words such as
+  // "Ingredients" and "Method"; that is not a successful extraction.
+  const tryUrlCandidate=(candidate:any)=>{
+    if(!candidate?.text)return null;
+    try{
+      const parsed=parse(candidate.text,item.file_name||"Imported recipe",true);
+      if(parsed?.ingredients?.length && parsed?.method?.trim()){
+        return {text:candidate.text,title:candidate.title||null,recipe:parsed};
+      }
+    }catch{}
+    return null;
+  };
+
+  let accepted=tryUrlCandidate(reader);
+  if(accepted){
+    text=accepted.text;
+    title=accepted.title||title;
+    recipe=accepted.recipe;
+  }else{
+    accepted=tryUrlCandidate(direct);
+    if(accepted){
+      text=accepted.text;
+      title=accepted.title||title;
+      recipe=accepted.recipe;
+    }else{
+      // Browserless is the rendered-browser fallback. It must be reached
+      // whenever a normal fetch returns HTML but the parser cannot extract
+      // a complete recipe from it.
+      const browser=await browserlessFetch(sourceUrl);
+      accepted=tryUrlCandidate(browser);
+      if(accepted){
+        text=accepted.text;
+        title=accepted.title||title;
+        recipe=accepted.recipe;
+      }else{
+        throw Error("The page was fetched, but no complete recipe could be extracted. Browserless fallback was also unable to produce Ingredients and Method.");
+      }
+    }
   }
 }else if(item.file_path){const{data:blob,error:e}=await sb.storage.from("cooking-confidential").download(item.file_path);if(e||!blob)throw Error("Could not read uploaded file");const n=item.file_name||"",m=item.mime_type||"";if(/\.docx$|\.doc$/i.test(n)||/application\/msword|officedocument\.wordprocessingml/i.test(m)){text=await docText(blob,n);recipe=parse(text,n);}else if(m.startsWith("text/")||/\.(txt|md|csv)$/i.test(n)){text=await blob.text();recipe=parse(text,n);}else if(m==="application/pdf"||/\.pdf$/i.test(n)){const { extractText,getDocumentProxy }=await import("npm:unpdf@0.12.1");const pdf=await getDocumentProxy(new Uint8Array(await blob.arrayBuffer()));const p=await extractText(pdf,{mergePages:true});text=String(p.text||"");recipe=parse(text,n);}else throw Error("This file type needs OCR processing before recipe extraction.")}else throw Error("Import item has no source URL or file");if(!text.trim())throw Error("No readable recipe content found");if(!recipe?.ingredients?.length&&!recipe?.method?.trim()){const preview=clean(text).slice(0,1200).replace(/\s+/g," ");throw Error("The source was read, but no readable Ingredients or Method were found. [diag len="+text.length+" preview="+preview+"]");}const lang=language(text);title=titleFor(recipe,item.file_name||"Imported recipe",text);recipe={...recipe,name:title,language:lang};const{error:ue}=await sb.from("cc_import_items").update({extracted_text:JSON.stringify(recipe),source_title:title,extraction_status:"ready",review_status:"pending",inferred_cuisine:recipe.cuisine||null,inferred_course:recipe.course||null,error_message:null}).eq("id",id);if(ue)throw ue;return out({ok:true,status:"ready",import_item_id:id,recipe});}catch(e){const msg=e instanceof Error?e.message:String(e);await sb.from("cc_import_items").update({extraction_status:"failed",error_message:msg}).eq("id",id);return out({ok:false,status:"failed",import_item_id:id,error:msg},500)}});
