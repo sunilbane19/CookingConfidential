@@ -377,10 +377,10 @@ function extractRecipeTips(text:string){
 }
 function extractDescriptionAndNotes(sourceText:string){
   let raw=String(sourceText||"").replace(/\r/g,"").replace(/\u00a0/g," ");
-  if(/<html\\b|<body\\b|<div\\b|<script\\b/i.test(raw)) raw=htmlTextForParsing(raw);
+  if(/<html\b|<body\b|<div\b|<script\b/i.test(raw)) raw=htmlTextForParsing(raw);
   const src=raw.split("\n").map(x=>clean(x)).filter(Boolean);
-  const heading=/^#{0,6}\\s*(description|notes?)\\s*[:\\-–—]?\\s*(.*)$/i;
-  const boundary=/^#{0,6}\\s*(?:ingredients?|method|directions?|instructions?|preparation|preparations|steps?|nutrition(?:\\s*[:\\-–—]?\\s*per serving)?|recipe tips?|top tips?|tips?|comments?|questions?\\s+and\\s+tips?|recipe from)\\b/i;
+  const heading=/^#{0,6}\s*(description|notes?)\s*[:\-–—]?\s*(.*)$/i;
+  const boundary=/^#{0,6}\s*(?:ingredients?|method|directions?|instructions?|preparation|preparations|steps?|nutrition(?:\s*[:\-–—]?\s*per serving)?|recipe tips?|top tips?|tips?|comments?|questions?\s+and\s+tips?|recipe from)\b/i;
   let description:string|null=null;
   let notes:string|null=null;
   for(let i=0;i<src.length;i++){
@@ -406,7 +406,7 @@ function finalizeParsedRecipe(recipe:any,sourceText:string){
   const tips=extractRecipeTips(sourceText);
   const noteParts=[meta.notes,tips].filter(Boolean).map(String);
   const personalNotes=noteParts.length?noteParts.join("\n"):String(recipe.personal_notes||"").trim();
-  const noteSet=new Set(personalNotes.split("\n").map(x=>cleanRecipeLine(x).toLowerCase()).filter(Boolean));
+  const noteSet=new Set(personalNotes.split(/\n+/).map(x=>cleanRecipeLine(x).toLowerCase()).filter(Boolean));
   const method=String(recipe.method||"").split(/\n+/).filter(x=>!noteSet.has(cleanRecipeLine(x).toLowerCase())).join("\n").trim();
   return {...recipe,description:meta.description||recipe.description||null,method,personal_notes:personalNotes||null};
 }
