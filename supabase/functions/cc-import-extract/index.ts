@@ -34,12 +34,13 @@ const cleanDescription=(s:any)=>{
 const lines=(s:string)=>clean(s).split("\n").map(x=>cleanRecipeLine(x).replace(/^\s*>\s*/,"").replace(/^\s*(?:\*\*|__)(.+?)(?:\*\*|__)\s*$/,"$1").trim()).filter(Boolean);
 const isNutritionNoise=(s:string)=>{
   const x=String(s??"").replace(/\s+/g," ").trim();
-  return /^(?:nutrition\s*:?|nutrition\s*:\s*per serving|units?\s*:?|metric us\s*:?|keep the screen awake.*|good food app.*|ad\s*:?|low|high)$/i.test(x)
+  return /^(?:nutrition(?:\s*:\s*(?:per serving)?)?|units?|metric us|keep the screen awake.*|good food app.*|ad|low|high)\s*:?/i.test(x)
     || /^(?:kcal|calories?|fat|saturates?|carbs?|carbohydrates?|sugars?|fibre|fiber|protein|salt)\s*[:]?\s*\d+(?:\.\d+)?\s*[a-z%]*$/i.test(x)
     || /^(?:kcal|calories?|fat|saturates?|carbs?|carbohydrates?|sugars?|fibre|fiber|protein|salt)\b/i.test(x);
 };
 const cleanUrlMethodLine=(s:string)=>{
   return cleanRecipeLine(s)
+    .replace(/(?:^|\s)#{1,6}\s*step\s+(\d+)\s*[:.)-]?\s*/gi,(_m,n)=>' Step '+n+': ')
     .replace(/^step\s+(\d+)\s*[:.)-]?\s*/i,(_m,n)=>'Step '+n+': ')
     .trim();
 };
