@@ -310,12 +310,11 @@ Deno.serve(async req=>{if(req.method==="OPTIONS")return new Response("ok",{heade
   })();
   const [reader,direct]=await Promise.all([readerPromise,directPromise]);
   if(reader?.text){text=reader.text;title=reader.title||title;recipe=parse(text,item.file_name||"Imported recipe");}
-  else if(direct?.text){const html=direct.text;const ld=jsonLdRecipe(html);if(ld){recipe=fromLd(ld);text=JSON.stringify(recipe);title=recipe.name||title;}else{text=strip(html).slice(0,120000);recipe=parse(text,item.file_name||"Imported recipe");}}
+  else if(direct?.text){const html=direct.text;text=html;recipe=parse(html,item.file_name||"Imported recipe");}
   else {
     const browser=await browserlessFetch(sourceUrl);
     if(browser?.text){
       const html=browser.text;
-      const ld=jsonLdRecipe(html);
       text=html;
       recipe=parse(html,item.file_name||"Imported recipe");
     }else throw Error("This website is blocking automated recipe extraction. The page is reachable in a browser, but its recipe content was not returned to the importer.");
