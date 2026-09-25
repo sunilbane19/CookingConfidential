@@ -359,11 +359,11 @@ function parseRaw(text:string,file:string,isUrl=false){
   return {name,description:clean(description)||null,ingredients:[],method:"",cuisine:null,course:null,servings};
 }
 function extractRecipeTips(text:string){
-  const raw=String(text||"").replace(/\\r/g,"").replace(/\\u00a0/g," ");
-  const src=raw.split("\\n").map(x=>x.trim()).filter(Boolean);
-  const start=src.findIndex(x=>/^(?:#{1,6}\\s*)?(?:recipe\\s+tips?|top\\s+tips?|tips?)\\s*[:\\-–—]?\\s*$/i.test(x));
+  const raw=String(text||"").replace(/\r/g,"").replace(/\u00a0/g," ");
+  const src=raw.split("\n").map(x=>x.trim()).filter(Boolean);
+  const start=src.findIndex(x=>/^(?:#{1,6}\s*)?(?:recipe\s+tips?|top\s+tips?|tips?)\s*[:\-–—]?\s*$/i.test(x));
   if(start<0)return null;
-  const stop=/^(?:#{1,6}\\s*)?(?:nutrition(?:\\s*:\\s*per serving)?|ingredients?|method|directions?|instructions?|preparation|steps?|notes?|comments?,?\\s*questions?\\s+and\\s+tips?|recipe from)\\b/i;
+  const stop=/^(?:#{1,6}\s*)?(?:nutrition(?:\s*:\s*per serving)?|ingredients?|method|directions?|instructions?|preparation|steps?|notes?|comments?,?\s*questions?\s+and\s+tips?|recipe from)\b/i;
   const out:string[]=[];
   for(let i=start+1;i<src.length;i++){
     const line=src[i];
@@ -373,14 +373,14 @@ function extractRecipeTips(text:string){
     const v=cleanRecipeLine(line);
     if(v)out.push(v);
   }
-  return out.length?out.join("\\n"):null;
+  return out.length?out.join("\n"):null;
 }
 function finalizeParsedRecipe(recipe:any,sourceText:string){
   if(!recipe)return recipe;
   const tips=extractRecipeTips(sourceText);
   if(!tips)return recipe;
-  const tipSet=new Set(tips.split("\\n").map(x=>cleanRecipeLine(x).toLowerCase()));
-  const method=String(recipe.method||"").split(/\\n+/).filter(x=>!tipSet.has(cleanRecipeLine(x).toLowerCase())).join("\\n").trim();
+  const tipSet=new Set(tips.split("\n").map(x=>cleanRecipeLine(x).toLowerCase()));
+  const method=String(recipe.method||"").split(/\n+/).filter(x=>!tipSet.has(cleanRecipeLine(x).toLowerCase())).join("\n").trim();
   return {...recipe,method,personal_notes:recipe.personal_notes||tips};
 }
 function titleFor(recipe:any,file:string,text:string){const lang=language(text);if(lang==="English")return recipe.name||file.replace(/\.[^.]+$/i,"");const base=file.replace(/\.[^.]+$/i,"").replace(/[_-]+/g," ").trim();return `${base} (${lang})`;}
