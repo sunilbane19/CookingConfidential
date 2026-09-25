@@ -161,11 +161,11 @@ function parsePdfRecipe(text:string,file:string){
 
 function htmlTextForParsing(input:string){
   return String(input||"")
-    .replace(/<script\\b[^>]*>[\\s\\S]*?<\\/script>/gi," ")
-    .replace(/<style\\b[^>]*>[\\s\\S]*?<\\/style>/gi," ")
-    .replace(/<noscript\\b[^>]*>[\\s\\S]*?<\\/noscript>/gi," ")
-    .replace(/<template\\b[^>]*>[\\s\\S]*?<\\/template>/gi," ")
-    .replace(/<!--[\\s\\S]*?-->/g," ")
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi," ")
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi," ")
+    .replace(/<noscript\b[^>]*>[\s\S]*?<\/noscript>/gi," ")
+    .replace(/<template\b[^>]*>[\s\S]*?<\/template>/gi," ")
+    .replace(/<!--[\s\S]*?-->/g," ")
     .replace(/<[^>]+>/g," ")
     .replace(/&nbsp;/gi," ")
     .replace(/&amp;/gi,"&")
@@ -173,8 +173,8 @@ function htmlTextForParsing(input:string){
     .replace(/&#39;|&apos;/gi,"'")
     .replace(/&lt;/gi,"<")
     .replace(/&gt;/gi,">")
-    .replace(/\\s{2,}/g," ")
-    .replace(/\\n\\s*\\n\\s*\\n+/g,"\\n\\n")
+    .replace(/\s{2,}/g," ")
+    .replace(/\n\s*\n\s*\n+/g,"\n\n")
     .trim();
 }
 function parse(text:string,file:string,isUrl=false){
