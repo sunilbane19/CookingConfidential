@@ -90,12 +90,11 @@ async function uploadSelected(){
       if(multiMode){
         setStatusForName(displayName,'Extracting multiple recipes…');
         window.localStorage.setItem('ccMultiImport:'+itemRow.id,JSON.stringify({expectedCount:window.ccExpectedRecipeCount||null,fileName:displayName}));
-        if(typeof window.ccMultiReview==='function') await window.ccMultiReview(itemRow.id);
-        else {
-          const mod=await import('./multi-recipe-import.js?v=1.3.0');
-          if(typeof mod.reviewMultiImport==='function') await mod.reviewMultiImport(itemRow.id);
-          else throw new Error('Multi-recipe importer could not be loaded.');
+        if(typeof window.ccMultiReview!=='function'){
+          await import('./multi-recipe-import.js?v=1.3.0');
         }
+        if(typeof window.ccMultiReview!=='function') throw new Error('Multi-recipe importer could not be loaded.');
+        await window.ccMultiReview(itemRow.id);
       }else if(isImage){setStatusForName(displayName,'Reading image…');await startImageReview(itemRow.id)}
       else{setStatusForName(displayName,'Uploaded — review from inbox');message('Upload completed. Open Review in the Import Inbox to extract the recipe.')}
     }
