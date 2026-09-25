@@ -1,6 +1,6 @@
 import { supabase as sb } from './supabase-client-legacy.js?v=1.0.0';
 import * as mammoth from 'https://esm.sh/mammoth@1.6.0';
-import { parseDocx } from './docx-parser.js?v=1.0.5';
+import { parseDocx } from './docx-parser.js?v=1.0.6';
 import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
 import { createGenericEditor, editorValue, sanitizeRichHtml } from './generic-editor.js?v=1.3.3';
 
