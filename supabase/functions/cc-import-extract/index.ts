@@ -37,7 +37,8 @@ const mh=/^(method|directions?|instructions?|preparation|preparations|steps?|rec
 function language(t:string){if(/[ऀ-ॿ]/.test(t))return /ळ|ऱ|ऍ|ऑ|ॲ/.test(t)?"Marathi":"Hindi";if(/[\u0980-\u09FF]/.test(t))return"Bengali";if(/[\u0A80-\u0AFF]/.test(t))return"Gujarati";if(/[\u0A00-\u0A7F]/.test(t))return"Punjabi";if(/[\u0B80-\u0BFF]/.test(t))return"Tamil";if(/[\u0C00-\u0C7F]/.test(t))return"Telugu";if(/[\u0C80-\u0CFF]/.test(t))return"Kannada";if(/[\u0D00-\u0D7F]/.test(t))return"Malayalam";if(/[\u0600-\u06FF]/.test(t))return"Arabic";if(/[\u0400-\u04FF]/.test(t))return"Russian";if(/[\u0370-\u03FF]/.test(t))return"Greek";return"English";}
 function recipeTitleFromSource(text:string,file:string,sectionStart?:number){
   const raw=String(text||"");
-  const before=sectionStart==null?raw:raw.slice(0,sectionStart);
+  const beforeRaw=sectionStart==null?raw:raw.slice(0,sectionStart);
+  const before=/<(?:html|body|head|script|div|section|article|h[1-6])\b/i.test(beforeRaw)?htmlTextForParsing(beforeRaw):beforeRaw;
   const fileTitle=clean(file.replace(/\.[^.]+$/i,"").replace(/[_-]+/g," "));
   const blocked=/^(?:skip to main content|home|recipes?|save recipe|print|share|ad|advertisement|good food team|easy|alternatives?|complete the dish|nutrition|loading|rate|rate now|comments?|questions?|tips?)$/i;
   const candidates=lines(before).filter(x=>!isPageNoise(x)&&!blocked.test(x)&&!/^serves?\b/i.test(x)&&!/^prep(?:aration)?\s*[:\-]?/i.test(x)&&!/^cook(?:ing)?\s*time\b/i.test(x)&&!/^total\s*time\b/i.test(x)&&!/^(?:\d+(?:\.\d+)?\s*(?:out of|ratings?|reviews?))/i.test(x));
