@@ -257,30 +257,23 @@ function readerUrls(sourceUrl:string){
   try{const u=new URL(sourceUrl);if(u.protocol==="https:"){const v=new URL(u.toString());v.protocol="http:";urls.push(v.toString());}}catch{}
   return urls;
 }
-async function browserRunFetch(sourceUrl:string){
-  const accountId=Deno.env.get("CLOUDFLARE_ACCOUNT_ID");
-  const apiToken=Deno.env.get("CLOUDFLARE_API_TOKEN");
-  if(!accountId||!apiToken)return null;
+async function browserlessFetch(sourceUrl:string){
+  const token=Deno.env.get("BROWSERLESS_API_TOKEN");
+  if(!token)return null;
   try{
-    const rr=await fetchWithTimeout(
-      "https://api.cloudflare.com/client/v4/accounts/"+accountId+"/browser-rendering/content",
-      {
-        method:"POST",
-        headers:{
-          "Authorization":"Bearer "+apiToken,
-          "Content-Type":"application/json"
-        },
-        body:JSON.stringify({
-          url:sourceUrl,
-          gotoOptions:{waitUntil:"networkidle2",timeout:30000}
-        })
-      },
-      45000
-    );
+    const endpoint="https://production-sfo.browserless.io/content?token="+encodeURIComponent(token);
+    const rr=await fetchWithTimeout(endpoint,{
+      method:"POST",
+      headers:{"Content-Type":"application/json","Cache-Control":"no-cache"},
+      body:JSON.stringify({
+        url:sourceUrl,
+        bestAttempt:true,
+        gotoOptions:{waitUntil:"networkidle2",timeout:30000}
+      })
+    },45000);
     if(!rr.ok)return null;
-    const j=await rr.json();
-    const html=String(j?.result||"");
-    if(!html.trim()||!hasRecipeSignals(html))return null;
+    const html=await rr.text();
+    if(!html.trim()||!hasRecipeSignals(html)||looksLikeBlockedPage(html))return null;
     return {text:html,title:null};
   }catch{return null}
 }
@@ -319,7 +312,7 @@ Deno.serve(async req=>{if(req.method==="OPTIONS")return new Response("ok",{heade
   if(reader?.text){text=reader.text;title=reader.title||title;recipe=parse(text,item.file_name||"Imported recipe");}
   else if(direct?.text){const html=direct.text;const ld=jsonLdRecipe(html);if(ld){recipe=fromLd(ld);text=JSON.stringify(recipe);title=recipe.name||title;}else{text=strip(html).slice(0,120000);recipe=parse(text,item.file_name||"Imported recipe");}}
   else {
-    const browser=await browserRunFetch(sourceUrl);
+    const browser=await browserlessFetch(sourceUrl);
     if(browser?.text){
       const html=browser.text;
       const ld=jsonLdRecipe(html);
