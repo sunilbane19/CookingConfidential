@@ -1,6 +1,6 @@
 // V1.2 OCR cleanup layer for the 3x3 image rub importer.
 // Uses the proven v26 OCR engine and cleans the review form as each rub opens.
-import { processImageImport as processV26 } from './multi-recipe-image-fix.js?v=1.0.26';
+import { processImageImport as processV26 } from './multi-recipe-image-fix.js?v=1.0.27';
 const clean=s=>String(s??'').replace(/[\u0000-\u001F\u007F\uFFFD]/g,' ').replace(/\s+/g,' ').trim();
 function tidyLines(value){
  let a=String(value??'').split('\n').map(clean).filter(Boolean),out=[];

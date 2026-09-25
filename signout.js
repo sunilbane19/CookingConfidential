@@ -3,7 +3,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const SUPABASE_URL = 'https://yiwmtfbqbynimqvwxosu.supabase.co';
 // Use the project's proven browser-safe anon key for Auth, matching the shared client.
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlpd210ZmJxYnluaW1xdnd4b3N1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc1ODI3MDYsImV4cCI6MjEwMzE1ODcwNn0.pwfoCI_ajYfrON8kxIV9XWMo9k2GvzCWqwcpsMxI1As';
-const APP_URL = 'https://cookingconfidential.in/';
+const CC_SITE_BASE = (window.location.hostname.endsWith('github.io') ? ('/' + (window.location.pathname.split('/').filter(Boolean)[0] || '') + '/') : '/');
+const APP_URL = `${window.location.origin}${CC_SITE_BASE}`;
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const signOutBtn = document.querySelector('#signOutBtn');

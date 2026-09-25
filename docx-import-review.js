@@ -1,6 +1,8 @@
 import { supabase as sb } from './supabase-client-legacy.js?v=1.0.0';
 import * as mammoth from 'https://esm.sh/mammoth@1.6.0';
 import { parseDocx } from './docx-parser.js?v=1.0.5';
+import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
+import { createGenericEditor, editorValue, sanitizeRichHtml } from './generic-editor.js?v=1.3.3';
 
 const dialog=document.querySelector('#detailDialog');
 const esc=s=>String(s??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));
@@ -8,9 +10,8 @@ const clean=s=>String(s??'').replace(/[\u0000-\u001F\u007F\uFFFD]/g,' ').replace
 const lines=s=>String(s??'').replace(/\\n/g,'\n').replace(/\r/g,'').split('\n').map(clean).filter(Boolean);
 
 async function loadOriginal(x){
-  const{data:u,error}=await sb.storage.from('cooking-confidential').createSignedUrl(x.file_path,600);
-  if(error||!u?.signedUrl)throw Error(error?.message||'Could not read the original file.');
-  const res=await fetch(u.signedUrl);
+  const signedUrl=await getCachedSignedUrl(sb,'cooking-confidential',x.file_path);
+  const res=await fetch(signedUrl);
   if(!res.ok)throw Error('Could not load the original file.');
   return res.blob();
 }
@@ -75,20 +76,44 @@ function imagePicker(form,recipeName,initialUrl){
 
 function editOne(id,x,recipes,i){
   const r=recipes[i];
-  dialog.querySelector('#detailContent').innerHTML=`<button class="close" type="button">×</button><p class="eyebrow">REVIEW RECIPE ${i+1} OF ${recipes.length}</p><h2>Check before saving</h2><form id="docxOne"><label>Recipe name<input name="name" required value="${esc(r.name)}"></label><label>Recipe photo<input name="image_url" type="url" value="${esc(r.image_url||'')}"></label><label>Ingredients<textarea name="ingredients" rows="10">${esc(lines(r.ingredients.join('\n')).join('\n'))}</textarea></label><label>Method / process<textarea name="method" rows="12">${esc(lines(r.method.join('\n')).join('\n'))}</textarea></label><label>Notes / differences<textarea name="notes" rows="7">${esc(lines(r.notes.join('\n')).join('\n'))}</textarea></label><div class="detail-actions"><button type="button" class="secondary" id="docxBack">Back to list</button><button class="primary">Save this recipe</button></div></form>`;
-  dialog.querySelector('.close').onclick=()=>dialog.close();
-  dialog.querySelector('#docxBack').onclick=()=>render(id,x,recipes);
-  const f=dialog.querySelector('#docxOne');
-  imagePicker(f,r.name,r.image_url||'');
-  f.onsubmit=async e=>{
-    e.preventDefault();
-    const fd=new FormData(f);
-    const updated={...r,name:clean(fd.get('name')),image_url:clean(fd.get('image_url')),ingredients:lines(fd.get('ingredients')),method:lines(fd.get('method')),notes:lines(fd.get('notes'))};
-    recipes[i]=updated;
-    await saveOne(id,x,updated,recipes);
-  };
+  const editor=createGenericEditor({
+    dialog,
+    eyebrow:`REVIEW RECIPE ${i+1} OF ${recipes.length}`,
+    title:'Check before saving',
+    fields:[
+      {label:'Recipe name',name:'name',value:r.name,required:true},
+      {label:'Description',name:'description',value:r.description||'',type:'richtext'},
+      {label:'Recipe photo',name:'image_url',value:r.image_url||'',type:'url',className:'cc-image-field'},
+      {group:[
+        {label:'Cuisine',name:'cuisine',value:r.cuisine||''},
+        {label:'Course',name:'course',value:r.course||'',type:'select',options:['','Breakfast','Brunch','Starter','Soup','Salad','Main','Side','Snack','Dessert','Bread','Beverage']}
+      ]},
+      {label:'Recipe type',name:'recipe_type',value:r.recipe_type||'Dish',type:'select',options:['','Dish','Dip','Dressing','Sauce','Chutney','Marinade','Rub','Paste','Spice Blend','Stock / Broth','Pickle','Condiment']},
+      {label:'Servings',name:'servings',value:r.servings||''},
+      {label:'Ingredients',name:'ingredients',value:Array.isArray(r.ingredients)?r.ingredients.join('\n'):String(r.ingredients||''),type:'richtext'},
+      {label:'Method / process',name:'method',value:Array.isArray(r.method)?r.method.join('\n'):String(r.method||''),type:'richtext'},
+      {label:'Notes / differences',name:'notes',value:Array.isArray(r.notes)?r.notes.join('\n'):String(r.notes||''),type:'richtext'}
+    ],
+    actions:{cancelLabel:'Cancel',saveLabel:'Save this recipe'},
+    onSave:async formData=>{
+      recipes[i]={
+        ...r,
+        name:clean(editorValue(formData,'name')),
+        description:sanitizeRichHtml(formData.get('description')||''),
+        image_url:clean(editorValue(formData,'image_url')),
+        cuisine:clean(editorValue(formData,'cuisine')),
+        course:clean(editorValue(formData,'course')),
+        recipe_type:clean(editorValue(formData,'recipe_type'))||'Dish',
+        servings:clean(editorValue(formData,'servings')),
+        ingredients:{html:sanitizeRichHtml(formData.get('ingredients')||'')},
+        method:sanitizeRichHtml(formData.get('method')||''),
+        notes:sanitizeRichHtml(formData.get('notes')||'')
+      };
+      await saveOne(id,x,recipes[i],recipes);
+    }
+  });
+  imagePicker(editor.form,recipes[i].name,recipes[i].image_url||'');
 }
-
 function showSaveSuccess(message,onContinue){
   dialog.querySelector('#detailContent').innerHTML=`<div class="dialog-card"><p class="eyebrow">RECIPE SAVED</p><h2>Recipe saved</h2><p class="small-note">${esc(message)}</p><div class="detail-actions"><button class="primary" id="saveSuccessContinue">Back to recipes</button></div></div>`;
   dialog.querySelector('#saveSuccessContinue').onclick=onContinue;
@@ -99,7 +124,7 @@ async function saveOne(id,x,r,recipes){
   if(!user)return window.ccShowError('Please sign in again.','Sign-in required');
   const prepared=window.ccRecipeInheritance?.applyInheritance?window.ccRecipeInheritance.applyInheritance([r]):[r];
   const p=prepared[0];
-  const row={name:clean(p.name),description:clean(p.description)||null,cuisine:clean(p.cuisine)||null,course:clean(p.course)||null,recipe_type:clean(p.recipe_type)||'Dish',servings:clean(p.servings)||null,ingredients:p.ingredients,method:Array.isArray(p.method)?p.method.join('\n'):clean(p.method),personal_notes:Array.isArray(p.notes)?p.notes.join('\n')||null:null,source_type:'file',source_url:null,source_title:x.file_name||null,image_url:clean(p.image_url)||null,created_by:user.id,visibility:'private'};
+  const row={name:clean(p.name),description:sanitizeRichHtml(p.description||'')||null,cuisine:clean(p.cuisine)||null,course:clean(p.course)||null,recipe_type:clean(p.recipe_type)||'Dish',servings:clean(p.servings)||null,ingredients:p.ingredients,method:typeof p.method==='string'?sanitizeRichHtml(p.method):Array.isArray(p.method)?p.method.join('\n'):clean(p.method),personal_notes:typeof p.notes==='string'?(sanitizeRichHtml(p.notes)||null):Array.isArray(p.notes)?p.notes.join('\n')||null:null,source_type:'file',source_url:null,source_title:x.file_name||null,image_url:clean(p.image_url)||null,created_by:user.id,visibility:'private'};
   const{error}=await sb.from('cc_recipes').insert([row]);
   if(error)return window.ccShowError(error.message,'Could not save recipe');
   r._saved=true;
