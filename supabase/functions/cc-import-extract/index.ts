@@ -6,6 +6,18 @@ import { Buffer } from "node:buffer";
 const C={"Access-Control-Allow-Origin":"*","Access-Control-Allow-Headers":"authorization,x-client-info,apikey,content-type","Access-Control-Allow-Methods":"POST,OPTIONS"};
 const out=(x:any,s=200)=>new Response(JSON.stringify(x),{status:s,headers:{...C,"Content-Type":"application/json"}});
 const clean=(s:any)=>String(s??"").replace(/\r/g,"").replace(/[ \t]+/g," ").replace(/\n{3,}/g,"\n\n").trim();
+const isPageNoise=(s:string)=>{
+  const x=String(s??"").replace(/\s+/g," ").trim();
+  if(!x)return true;
+  return /^(?:\d+\s+(?:ratings?|reviews?)\s*\|\s*rate now|rate now|print|share|save|masterclass certificates?|certificates?)$/i.test(x)
+    || /^(?:\d+\s*(?:min|mins|minutes|hr|hrs|hours))$/i.test(x)
+    || /^(?:(?:prep|cook|total)\s*time\s*[:\-]?\s*\d+\s*(?:min|mins|minutes|hr|hrs|hours))$/i.test(x)
+    || /^(?:ratings?|reviews?)\s*[:\-]?\s*\d+$/i.test(x);
+};
+const cleanDescription=(s:any)=>{
+  const v=String(s??"").split(/\n+/).map(x=>clean(x)).filter(Boolean).filter(x=>!isPageNoise(x)).join(" ").trim();
+  return v&&v.length<500?v:null;
+};
 const lines=(s:string)=>clean(s).split("\n").map(x=>x.replace(/^\s*>\s*/,"").replace(/^\s*#{1,6}\s*/,"").replace(/^\s*[-*+•·]\s*/,"").replace(/^\s*\d+[.)]\s*/,"").replace(/^\s*(?:\\*\\*|__)(.+?)(?:\\*\\*|__)\s*$/,"$1").trim()).filter(Boolean);
 const ih=/^(ingredients?|ingredient list|what you need|ingredients required|साहित्य)\s*[:\-–—,]?\s*$/i;
 const mh=/^(method|directions?|instructions?|preparation|preparations|steps?|recipe method|cooking method|procedure|प्रक्रिया)\s*[:\-–—,]?\s*$/i;
@@ -18,7 +30,7 @@ function structuredRecipe(text:string){
   const r=candidates.find(x=>Array.isArray(x.recipeIngredient)&&x.recipeIngredient.length&&x.recipeInstructions);
   if(!r)return null;
   const method=Array.isArray(r.recipeInstructions)?r.recipeInstructions.map((x:any)=>typeof x==="string"?x:x?.text||x?.name||"").filter(Boolean).join("\n"):String(r.recipeInstructions||"");
-  return {name:clean(r.name||""),description:clean(r.description||"")||null,ingredients:r.recipeIngredient.map((x:any)=>clean(x)).filter(Boolean),method:clean(method),cuisine:r.recipeCuisine||null,course:r.recipeCategory||null,servings:r.recipeYield||null};
+  return {name:clean(r.name||""),description:cleanDescription(r.description),ingredients:r.recipeIngredient.map((x:any)=>clean(x)).filter(Boolean),method:clean(method),cuisine:r.recipeCuisine||null,course:r.recipeCategory||null,servings:r.recipeYield||null};
 }
 function parseLabeledSections(text:string,file:string){
   const raw=String(text||"").replace(/\r/g,"").replace(/\u00a0/g," ");
@@ -144,7 +156,7 @@ function parsePdfRecipe(text:string,file:string){
   };
 }
 
-function parse(text:string,file:string){
+function parse(text:string,file:string,isUrl=false){
   if(/\.pdf$/i.test(file)){const pdfRecipe=parsePdfRecipe(text,file);if(pdfRecipe)return pdfRecipe;}
   const labeled=parseLabeledSections(text,file); if(labeled)return labeled;
   const markdown=parseMarkdownSections(text,file); if(markdown)return markdown;
@@ -153,7 +165,7 @@ function parse(text:string,file:string){
   const raw=String(text||"").replace(/\r/g,"").replace(/\u00a0/g," ");
   const fileTitle=clean(file.replace(/\.[^.]+$/i,"").replace(/[_-]+/g," "));
   const strip=(s:string)=>s.replace(/^\s*#{1,6}\s*/,"").replace(/^\s*[-*+•·]\s*/,"").replace(/^\s*\d+[.)]\s*/,"").replace(/^\s*(?:\*\*|__)/,"").replace(/(?:\*\*|__)\s*$/,"").trim();
-  const sourceLines=raw.split("\n").map(x=>x.trim()).filter(Boolean);
+  const sourceLines=raw.split("\n").map(x=>x.trim()).filter(Boolean).filter(x=>!isUrl||!isPageNoise(x));
   // Some publishers place a literal "Description" label before the recipe title.
   // Treat that label as metadata, not as the recipe name.
   if(/^description\s*:?$/i.test(sourceLines[0]||"")){
@@ -309,14 +321,14 @@ Deno.serve(async req=>{if(req.method==="OPTIONS")return new Response("ok",{heade
     }catch{return null}
   })();
   const [reader,direct]=await Promise.all([readerPromise,directPromise]);
-  if(reader?.text){text=reader.text;title=reader.title||title;recipe=parse(text,item.file_name||"Imported recipe");}
-  else if(direct?.text){const html=direct.text;text=html;recipe=parse(html,item.file_name||"Imported recipe");}
+  if(reader?.text){text=reader.text;title=reader.title||title;recipe=parse(text,item.file_name||"Imported recipe",true);}
+  else if(direct?.text){const html=direct.text;text=html;recipe=parse(html,item.file_name||"Imported recipe",true);}
   else {
     const browser=await browserlessFetch(sourceUrl);
     if(browser?.text){
       const html=browser.text;
       text=html;
-      recipe=parse(html,item.file_name||"Imported recipe");
+      recipe=parse(html,item.file_name||"Imported recipe",true);
     }else throw Error("This website is blocking automated recipe extraction. The page is reachable in a browser, but its recipe content was not returned to the importer.");
   }
 }else if(item.file_path){const{data:blob,error:e}=await sb.storage.from("cooking-confidential").download(item.file_path);if(e||!blob)throw Error("Could not read uploaded file");const n=item.file_name||"",m=item.mime_type||"";if(/\.docx$|\.doc$/i.test(n)||/application\/msword|officedocument\.wordprocessingml/i.test(m)){text=await docText(blob,n);recipe=parse(text,n);}else if(m.startsWith("text/")||/\.(txt|md|csv)$/i.test(n)){text=await blob.text();recipe=parse(text,n);}else if(m==="application/pdf"||/\.pdf$/i.test(n)){const { extractText,getDocumentProxy }=await import("npm:unpdf@0.12.1");const pdf=await getDocumentProxy(new Uint8Array(await blob.arrayBuffer()));const p=await extractText(pdf,{mergePages:true});text=String(p.text||"");recipe=parse(text,n);}else throw Error("This file type needs OCR processing before recipe extraction.")}else throw Error("Import item has no source URL or file");if(!text.trim())throw Error("No readable recipe content found");if(!recipe?.ingredients?.length&&!recipe?.method?.trim()){const preview=clean(text).slice(0,1200).replace(/\s+/g," ");throw Error("The source was read, but no readable Ingredients or Method were found. [diag len="+text.length+" preview="+preview+"]");}const lang=language(text);title=titleFor(recipe,item.file_name||"Imported recipe",text);recipe={...recipe,name:title,language:lang};const{error:ue}=await sb.from("cc_import_items").update({extracted_text:JSON.stringify(recipe),source_title:title,extraction_status:"ready",review_status:"pending",inferred_cuisine:recipe.cuisine||null,inferred_course:recipe.course||null,error_message:null}).eq("id",id);if(ue)throw ue;return out({ok:true,status:"ready",import_item_id:id,recipe});}catch(e){const msg=e instanceof Error?e.message:String(e);await sb.from("cc_import_items").update({extraction_status:"failed",error_message:msg}).eq("id",id);return out({ok:false,status:"failed",import_item_id:id,error:msg},500)}});
