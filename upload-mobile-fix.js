@@ -86,7 +86,17 @@ async function uploadSelected(){
       if(!itemRow?.id)throw new Error('Could not save the uploaded recipe.');
       const isImage=/\.(png|jpe?g|webp)$/i.test(file.name)||String(file.type||'').startsWith('image/');
       item.status='Uploaded';
-      if(isImage){setStatusForName(displayName,'Reading image…');await startImageReview(itemRow.id)}
+      const multiMode=window.ccImportMode==='multi';
+      if(multiMode){
+        setStatusForName(displayName,'Extracting multiple recipes…');
+        window.localStorage.setItem('ccMultiImport:'+itemRow.id,JSON.stringify({expectedCount:window.ccExpectedRecipeCount||null,fileName:displayName}));
+        if(typeof window.ccMultiReview==='function') await window.ccMultiReview(itemRow.id);
+        else {
+          const mod=await import('./multi-recipe-import.js?v=1.3.0');
+          if(typeof mod.reviewMultiImport==='function') await mod.reviewMultiImport(itemRow.id);
+          else throw new Error('Multi-recipe importer could not be loaded.');
+        }
+      }else if(isImage){setStatusForName(displayName,'Reading image…');await startImageReview(itemRow.id)}
       else{setStatusForName(displayName,'Uploaded — review from inbox');message('Upload completed. Open Review in the Import Inbox to extract the recipe.')}
     }
     if(button){button.disabled=false;button.textContent='Upload selected'}
