@@ -47,7 +47,7 @@ function recipeTitleFromSource(text:string,file:string,sectionStart?:number){
 function isBadUrlTitle(s:string){
   return /^(?:skip to main content|home|recipes?|save recipe|print|share|ad|advertisement|good food team|easy|alternatives?|complete the dish|nutrition|loading)$/i.test(cleanRecipeLine(s));
 }
-function structuredRecipe(text:string){
+function structuredRecipe(text:string,isUrl=false){
   const re=/<script[^>]*>([\s\S]*?)<\/script>/gi;
   const candidates:any[]=[];
   const walk=(v:any)=>{if(!v)return;if(Array.isArray(v)){for(const x of v)walk(x);return}if(typeof v==="object"){if(v.recipeIngredient||v.recipeInstructions)candidates.push(v);for(const k of Object.keys(v))walk(v[k]);}};
@@ -55,9 +55,11 @@ function structuredRecipe(text:string){
   const r=candidates.find(x=>Array.isArray(x.recipeIngredient)&&x.recipeIngredient.length&&x.recipeInstructions);
   if(!r)return null;
   const method=Array.isArray(r.recipeInstructions)?r.recipeInstructions.map((x:any)=>typeof x==="string"?x:x?.text||x?.name||"").filter(Boolean).join("\n"):String(r.recipeInstructions||"");
-  const structuredName=cleanRecipeLine(r.name||"");
-  const name=structuredName&&!isBadUrlTitle(structuredName)?structuredName:recipeTitleFromSource(text,"Imported recipe");
-  return {name,description:cleanDescription(r.description),ingredients:r.recipeIngredient.map((x:any)=>cleanRecipeLine(x)).filter(Boolean),method:clean(method.split("\n").map(cleanRecipeLine).join("\n")),cuisine:r.recipeCuisine||null,course:r.recipeCategory||null,servings:cleanRecipeLine(r.recipeYield||"")||null};
+  const structuredName=isUrl?cleanRecipeLine(r.name||""):clean(r.name||"");
+  const name=isUrl?(structuredName&&!isBadUrlTitle(structuredName)?structuredName:recipeTitleFromSource(text,"Imported recipe")):structuredName;
+  const ingredients=r.recipeIngredient.map((x:any)=>isUrl?cleanRecipeLine(x):clean(x)).filter(Boolean);
+  const methodValue=isUrl?clean(method.split("\n").map(cleanRecipeLine).join("\n")):clean(method);
+  return {name,description:cleanDescription(r.description),ingredients,method:methodValue,cuisine:r.recipeCuisine||null,course:r.recipeCategory||null,servings:isUrl?(cleanRecipeLine(r.recipeYield||"")||null):(r.recipeYield||null)};
 }
 function parseLabeledSections(text:string,file:string,isUrl=false){
   const raw=String(text||"").replace(/\r/g,"").replace(/\u00a0/g," ");
@@ -214,7 +216,7 @@ function parse(text:string,file:string,isUrl=false){
   // URL readers may return raw publisher HTML. Try JSON-LD first, then strip
   // executable/page markup before any text parser sees the content.
   if(isUrl){
-    const structured=structuredRecipe(text);
+    const structured=structuredRecipe(text,true);
     if(structured?.ingredients?.length && structured.method)return structured;
     text=htmlTextForParsing(text);
   }
