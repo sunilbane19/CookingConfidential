@@ -51,11 +51,11 @@ function parseLabeledSections(text:string,file:string){
     if(di===0){
       // Our normal text export: Description / Recipe name / description / Ingredients / Method.
       name=clean(src[1]||"");
-      description=clean(src.slice(2,ii).join(" "));
+      description=cleanDescription(src.slice(2,ii).join(" "));
     }else{
       // Title before the Description heading.
       name=clean(src[di-1]||"");
-      description=clean(src.slice(di+1,ii).join(" "));
+      description=cleanDescription(src.slice(di+1,ii).join(" "));
     }
   }else{
     // No explicit Description section: use the first useful line as title.
@@ -69,9 +69,9 @@ function parseLabeledSections(text:string,file:string){
     .replace(/(?:\*\*|__)\s*$/,"")
     .trim();
   const ingredients=src.slice(ii+1,mi).map(strip)
-    .filter(x=>x&&!ingRe.test(x)&&!descRe.test(x));
+    .filter(x=>x&&!ingRe.test(x)&&!descRe.test(x)&&!isPageNoise(x));
   const method=src.slice(mi+1).map(strip)
-    .filter(x=>x&&!methRe.test(x)&&!descRe.test(x))
+    .filter(x=>x&&!methRe.test(x)&&!descRe.test(x)&&!isPageNoise(x))
     .join("\n");
   if(!name||ingredients.length<2||!method.trim())return null;
   const sm=raw.match(/(?:serves?|servings?|yield)\s*[:\-–—]?\s*([^\n]+)/i);
@@ -90,7 +90,7 @@ function parseMarkdownSections(text:string,file:string){
   const markerLine=after.slice(dm).match(/^[^\n]*/);
   const methodBlock=markerLine?after.slice(dm+markerLine[0].length):"";
   const strip=(s:string)=>s.replace(/^\s*#{1,6}\s*/,"").replace(/^\s*[-*+•·]\s*/,"").replace(/^\s*\d+[.)]\s*/,"").replace(/^\s*(?:\*\*|__)/,"").replace(/(?:\*\*|__)\s*$/,"").trim();
-  const cleanLines=(s:string)=>s.split("\n").map(strip).filter(x=>x&&!/^(?:featured video|see all food52 videos)$/i.test(x));
+  const cleanLines=(s:string)=>s.split("\n").map(strip).filter(x=>x&&!isPageNoise(x)&&!/^(?:featured video|see all food52 videos)$/i.test(x));
   const ingredients=cleanLines(ingBlock).filter(x=>!/^(?:shell|filling|ingredients?)$/i.test(x));
   const method=cleanLines(methodBlock).filter(x=>!/^(?:shell|filling|directions?|method|instructions?|preparation|steps?)$/i.test(x)).join("\n");
   if(ingredients.length<2||!method)return null;
