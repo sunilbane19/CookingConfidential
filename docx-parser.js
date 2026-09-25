@@ -49,7 +49,12 @@ function titleCaseScore(s){
   const x=cleanRecipeText(s); if(!x||x.length<3||x.length>90||GENERIC.test(x)||COMPONENT.test(x)||STEP.test(x)||META.test(x))return false;
   const w=x.replace(/^\d+[.)]?\s*/,'').split(/\s+/); if(w.length>12)return false;
   const caps=w.filter(v=>/^[A-Z][A-Za-z'&-]*[A-Za-z'&-]*$/.test(v)).length;
-  return caps>=Math.max(1,Math.ceil(w.length*.35));
+  // Recipe titles are often normal title-case phrases such as "Lamb leg rub",
+  // where only the first word is capitalised. Because recipeHeads later requires
+  // an Ingredients/Method section after the candidate, accepting these phrases
+  // does not make ordinary ingredient lines become recipes.
+  const normalTitle=w.length>=2 && /^[A-Z][A-Za-z'&-]*$/.test(w[0]) && !/[.!?]$/.test(x);
+  return normalTitle || caps>=Math.max(1,Math.ceil(w.length*.35));
 }
 
 function embeddedTitle(s){
