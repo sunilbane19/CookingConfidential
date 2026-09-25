@@ -40,8 +40,16 @@ function recipeTitleFromSource(text:string,file:string,sectionStart?:number){
   const beforeRaw=sectionStart==null?raw:raw.slice(0,sectionStart);
   const before=/<(?:html|body|head|script|div|section|article|h[1-6])\b/i.test(beforeRaw)?htmlTextForParsing(beforeRaw):beforeRaw;
   const fileTitle=clean(file.replace(/\.[^.]+$/i,"").replace(/[_-]+/g," "));
-  const blocked=/^(?:skip to main content|home|recipes?|save recipe|print|share|ad|advertisement|good food team|easy|alternatives?|complete the dish|nutrition|loading|rate|rate now|comments?|questions?|tips?)$/i;
-  const candidates=lines(before).filter(x=>!isPageNoise(x)&&!blocked.test(x)&&!/^serves?\b/i.test(x)&&!/^prep(?:aration)?\s*[:\-]?/i.test(x)&&!/^cook(?:ing)?\s*time\b/i.test(x)&&!/^total\s*time\b/i.test(x)&&!/^(?:\d+(?:\.\d+)?\s*(?:out of|ratings?|reviews?))/i.test(x));
+  const blocked=/^(?:skip to main content|home|recipes?|save recipe|print|share|ad|advertisement|good food team|easy|alternatives?|complete the dish|nutrition|loading|rate|rate now|comments?|questions?|tips?|image(?:\s+\d+)?(?::.*)?|good food logo.*)$/i;
+  // Prefer an actual markdown/HTML heading. Publisher pages commonly put the
+  // hero image alt text before the recipe title, so taking the first text line
+  // can incorrectly produce "Image 1: Good Food logo in black".
+  const headingCandidates=beforeRaw.split(/\n+/).map(x=>cleanMarkdown(x).replace(/^\s*#{1,6}\s*/,"").trim())
+    .filter(x=>x&&!blocked.test(x)&&!isPageNoise(x)&&x.length<160)
+    .filter(x=>!/^\s*!?\[?image\b/i.test(x))
+    .filter(x=>!/^serves?\b/i.test(x)&&!/^prep(?:aration)?\s*[:\-]?/i.test(x)&&!/^cook(?:ing)?\s*time\b/i.test(x)&&!/^total\s*time\b/i.test(x));
+  if(headingCandidates.length)return cleanRecipeLine(headingCandidates[0]);
+  const candidates=lines(before).filter(x=>!isPageNoise(x)&&!blocked.test(x)&&!/^\s*!?\[?image\b/i.test(x)&&!/^serves?\b/i.test(x)&&!/^prep(?:aration)?\s*[:\-]?/i.test(x)&&!/^cook(?:ing)?\s*time\b/i.test(x)&&!/^total\s*time\b/i.test(x)&&!/^(?:\d+(?:\.\d+)?\s*(?:out of|ratings?|reviews?))/i.test(x));
   return cleanRecipeLine(candidates[0]||fileTitle)||fileTitle;
 }
 function isBadUrlTitle(s:string){
@@ -118,10 +126,17 @@ function parseMarkdownSections(text:string,file:string,isUrl=false){
   const ingBlock=after.slice(firstNl>=0?firstNl+1:0,dm);
   const markerLine=after.slice(dm).match(/^[^\n]*/);
   const methodBlock=markerLine?after.slice(dm+markerLine[0].length):"";
-  const strip=(s:string)=>s.replace(/^\s*#{1,6}\s*/,"").replace(/^\s*[-*+•·]\s*/,"").replace(/^\s*\d+[.)]\s*/,"").replace(/^\s*(?:\*\*|__)/,"").replace(/(?:\*\*|__)\s*$/,"").trim();
+  const strip=(s:string)=>cleanRecipeLine(s)
+    .replace(/^step\s+(\d+)\s*[:.)-]?\s*/i,(_m,n)=>'Step '+n+': ')
+    .trim();
   const cleanLines=(s:string)=>s.split("\n").map(strip).filter(x=>x&&!isPageNoise(x)&&!/^(?:featured video|see all food52 videos)$/i.test(x));
-  const ingredients=cleanLines(ingBlock).filter(x=>!/^(?:shell|filling|ingredients?)$/i.test(x));
-  const method=cleanLines(methodBlock).filter(x=>!/^(?:shell|filling|directions?|method|instructions?|preparation|steps?)$/i.test(x)).join("\n");
+  const ingredients=cleanLines(ingBlock)
+    .filter(x=>!/^(?:shell|filling|ingredients?|nutrition|nutrition\s*:|units?|metric\s+us|good food app|keep the screen awake|ad)$/i.test(x))
+    .filter(x=>!/^\s*(?:kcal|calories?|fat|saturates?|carbs?|carbohydrates?|sugars?|fibre|fiber|protein|salt)\b/i.test(x))
+    .filter(x=>!/^\s*(?:low|high)\s*$/i.test(x));
+  const method=cleanLines(methodBlock)
+    .filter(x=>!/^(?:shell|filling|directions?|method|instructions?|preparation|steps?|recipe tips)$/i.test(x))
+    .join("\n");
   if(ingredients.length<2||!method)return null;
   const title=isUrl?recipeTitleFromSource(raw,file,im):clean((raw.match(/(?:^|\n)\s*#\s+([^\n]+)/)||[])[1]||file.replace(/\.[^.]+$/i,"").replace(/[_-]+/g," "));
   const sm=raw.match(/(?:serves?|servings?|yield)\s*[:\-–—]?\s*([^\n]+)/i);
