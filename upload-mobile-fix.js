@@ -114,8 +114,10 @@ async function uploadSelected(){
 function setStatusForName(name,text){
   const q=queue();if(!q)return;
   const target=String(name||'');
+  const item=(window.ccImportItems||[]).find(x=>String(x.file_name||x.source_url||'')===target);
+  const displayText=(text==='Uploaded'&&item?.dbId)?('Uploaded · Item ID '+item.dbId):text;
   const row=[...q.querySelectorAll('.queue-item,.review-item')].find(x=>x.querySelector('strong')?.textContent===target);
-  if(row){const span=row.querySelector(':scope > span');if(span)span.textContent=text;else{const small=row.querySelector('small');if(small)small.textContent=text}}
+  if(row){const span=row.querySelector(':scope > span');if(span)span.textContent=displayText;else{const small=row.querySelector('small');if(small)small.textContent=displayText}}
 }
 function intercept(event){const target=event.target?.closest?.('#uploadAll');if(!target)return;event.preventDefault();event.stopImmediatePropagation();uploadSelected()}
 document.addEventListener('pointerup',intercept,true);document.addEventListener('touchend',intercept,true);document.addEventListener('click',intercept,true);
