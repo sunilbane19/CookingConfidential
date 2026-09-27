@@ -85,13 +85,15 @@ async function uploadSelected(){
       const itemRow=itemsResult?.[0];
       if(!itemRow?.id)throw new Error('Could not save the uploaded recipe.');
       const isImage=/\.(png|jpe?g|webp)$/i.test(file.name)||String(file.type||'').startsWith('image/');
+      item.dbId=Number(itemRow.id);
+      item.importId=Number(importRow.id);
       item.status='Uploaded';
       const multiMode=window.ccImportMode==='multi';
       if(multiMode){
         setStatusForName(displayName,'Extracting multiple recipes…');
-        window.localStorage.setItem('ccMultiImport:'+itemRow.id,JSON.stringify({expectedCount:window.ccExpectedRecipeCount||null,fileName:displayName}));
+        window.localStorage.setItem('ccMultiImport:'+itemRow.id,JSON.stringify({expectedCount:window.ccExpectedRecipeCount||null,fileName:displayName,createdAt:new Date().toISOString()}));
         if(typeof window.ccMultiReview!=='function'){
-          await import('./multi-recipe-import.js?v=1.3.6');
+          await import('./multi-recipe-import.js?v=1.3.10');
         }
         if(typeof window.ccMultiReview!=='function') throw new Error('Multi-recipe importer could not be loaded.');
         await window.ccMultiReview(itemRow.id);
