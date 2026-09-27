@@ -70,10 +70,72 @@ function parseIngredientRows(rows){return cleanIngredientLines(rows.slice(1).map
 function htmlTables(doc){return [...doc.querySelectorAll('table')].map(t=>[...t.rows].map(r=>[...r.cells].map(c=>clean(c.textContent)))).filter(x=>x.length);}
 function htmlBlocks(doc){return [...doc.querySelectorAll('h1,h2,h3,h4,h5,h6,p,li')].map(e=>clean(e.textContent)).filter(Boolean);}
 function tableKind(rows){const h=(rows[0]||[]).join(' ').toLowerCase();if(/ingredient|quantity|amount|ratio|purpose/.test(h))return'ingredients';if(/method|step|direction|instruction/.test(h)&&!/shelf life|best used|storage/.test(h))return'method';if(/temperature|shelf life|best used|storage/.test(h))return'notes';return'';}
+function docxRecipeBlocks(doc){
+  const ps=[...doc.querySelectorAll('p')];
+  const blocks=[]; let current=[];
+  const push=()=>{if(current.length){blocks.push(current);current=[];}};
+  for(const p of ps){
+    const text=clean(p.textContent);
+    if(!text){push();continue;}
+    current.push({text,bold:!!p.querySelector('strong,b')});
+  }
+  push();
+  return blocks;
+}
+function looksLikeIngredientTitle(s){
+  const x=clean(s);
+  if(!x||GENERIC.test(x))return true;
+  if(/^\d+(?:[./]\d+)?\s*(?:tsp|tbsp|cup|cups|oz|lb|lbs|g|kg|ml|l|cl|pinch|cloves?|sprigs?)\\b/i.test(x))return true;
+  if(/^(?:half|quarter|one|two|three|four|five)\s+(?:tsp|tbsp|cup|cloves?|sprigs?|oz|lb|lbs)\\b/i.test(x))return true;
+  return false;
+}
 function parseDocxMulti(html,file){
- const doc=new DOMParser().parseFromString(html,'text/html'),blocks=htmlBlocks(doc),tables=htmlTables(doc);const heads=blocks.filter(titleCaseScore);
- if(heads.length<=1){const r=makeRecipe(blocks[0]||file.replace(/\.[^.]+$/,'')),it=tables.find(t=>tableKind(t)==='ingredients'),mt=tables.find(t=>tableKind(t)==='method'),nt=tables.filter(t=>tableKind(t)==='notes');r.ingredients=it?parseIngredientRows(it):[];r.method=mt?mt.slice(1).map(a=>a.filter(Boolean).join(' — ')).filter(Boolean):blocks.filter(x=>/^step\s*\d+/i.test(x));r.notes=nt.flatMap(t=>t.slice(1).map(a=>a.filter(Boolean).join(' — '))).filter(Boolean);return[r];}
- const out=[];for(let i=0;i<heads.length;i++){const name=heads[i],start=blocks.indexOf(name),end=i+1<heads.length?blocks.indexOf(heads[i+1]):blocks.length,section=blocks.slice(start+1,end),r=makeRecipe(name),ih=section.findIndex(x=>/^ingredients?$/i.test(x)),mh=section.findIndex(x=>/^(method|directions?|instructions?|preparation|steps?)$/i.test(x));if(ih>=0)r.ingredients=cleanIngredientLines(section.slice(ih+1,mh>ih?mh:section.length));if(mh>=0)r.method=section.slice(mh+1).filter(x=>!/^notes?|storage|serving suggestions?/i.test(x)).filter(x=>!isOcrGarbage(x));out.push(r);}return out.length?out:[makeRecipe(file.replace(/\.[^.]+$/,''))];
+  const doc=new DOMParser().parseFromString(html,'text/html');
+  const tables=htmlTables(doc),blocks=htmlBlocks(doc);
+
+  // DOCX recipe collections often use a blank paragraph between recipes.
+  // Use that structural boundary before any title-case heuristic. This prevents
+  // ingredient lines such as "Half tsp pepper" and "Salt" from becoming titles.
+  const separated=docxRecipeBlocks(doc);
+  const boundaryRecipes=separated.filter(b=>b.length>=3 && !looksLikeIngredientTitle(b[0].text));
+  if(boundaryRecipes.length>=2){
+    return boundaryRecipes.map(b=>{
+      const r=makeRecipe(b[0].text);
+      const body=b.slice(1).map(x=>x.text);
+      const ih=body.findIndex(x=>/^ingredients?(?:\s+list)?$/i.test(x));
+      const mh=body.findIndex(x=>/^(method|directions?|instructions?|preparation|steps?)$/i.test(x));
+      const nh=body.findIndex(x=>/^notes?$/i.test(x));
+      if(ih>=0){
+        const end=[mh,nh].filter(n=>n>ih).sort((a,b)=>a-b)[0]??body.length;
+        r.ingredients=cleanIngredientLines(body.slice(ih+1,end));
+      }else{
+        r.ingredients=cleanIngredientLines((mh>=0?body.slice(0,mh):body.slice(0,)).filter(x=>!/^lay on a bed of$/i.test(x)));
+      }
+      if(mh>=0){
+        const end=nh>mh?nh:body.length;
+        r.method=body.slice(mh+1,end).filter(x=>!isOcrGarbage(x));
+      }
+      if(nh>=0)r.notes=body.slice(nh+1).filter(x=>!isOcrGarbage(x));
+      return r;
+    }).filter(r=>r.name&&r.ingredients.length>=1);
+  }
+
+  const heads=blocks.filter(titleCaseScore);
+  if(heads.length<=1){
+    const r=makeRecipe(blocks[0]||file.replace(/\.[^.]+$/,'')),it=tables.find(t=>tableKind(t)==='ingredients'),mt=tables.find(t=>tableKind(t)==='method'),nt=tables.filter(t=>tableKind(t)==='notes');
+    r.ingredients=it?parseIngredientRows(it):[];
+    r.method=mt?mt.slice(1).map(a=>a.filter(Boolean).join(' — ')).filter(Boolean):blocks.filter(x=>/^step\s*\d+/i.test(x));
+    r.notes=nt.flatMap(t=>t.slice(1).map(a=>a.filter(Boolean).join(' — '))).filter(Boolean);
+    return[r];
+  }
+  const out=[];
+  for(let i=0;i<heads.length;i++){
+    const name=heads[i],start=blocks.indexOf(name),end=i+1<heads.length?blocks.indexOf(heads[i+1]):blocks.length,section=blocks.slice(start+1,end),r=makeRecipe(name),ih=section.findIndex(x=>/^ingredients?$/i.test(x)),mh=section.findIndex(x=>/^(method|directions?|instructions?|preparation|steps?)$/i.test(x));
+    if(ih>=0)r.ingredients=cleanIngredientLines(section.slice(ih+1,mh>ih?mh:section.length));
+    if(mh>=0)r.method=section.slice(mh+1).filter(x=>!/^notes?|storage|serving suggestions?/i.test(x)).filter(x=>!isOcrGarbage(x));
+    out.push(r);
+  }
+  return out.length?out:[makeRecipe(file.replace(/\.[^.]+$/,''))];
 }
 function ocrLines(words){const valid=words.filter(w=>w.text?.trim()&&Number(w.confidence||0)>=25);if(!valid.length)return[];const medH=valid.map(w=>w.bbox.y1-w.bbox.y0).sort((a,b)=>a-b)[Math.floor(valid.length/2)]||20,rows=[];for(const w of [...valid].sort((a,b)=>a.bbox.y0-b.bbox.y0||a.bbox.x0-b.bbox.x0)){const cy=(w.bbox.y0+w.bbox.y1)/2;let row=rows.find(r=>Math.abs(r.cy-cy)<Math.max(8,medH*.55));if(!row){row={cy,words:[]};rows.push(row);}row.words.push(w);}return rows.map(r=>{r.words.sort((a,b)=>a.bbox.x0-b.bbox.x0);return {text:clean(r.words.map(w=>w.text).join(' ')),x0:Math.min(...r.words.map(w=>w.bbox.x0)),x1:Math.max(...r.words.map(w=>w.bbox.x1)),y0:Math.min(...r.words.map(w=>w.bbox.y0)),y1:Math.max(...r.words.map(w=>w.bbox.y1)),height:Math.max(...r.words.map(w=>w.bbox.y1-w.bbox.y0))};}).filter(r=>r.text.length>1);}
 function titleCandidate(l,medH){const t=clean(l.text);if(l.height<medH*1.25||t.length>55||titleCaseScore(t)===false)return false;return(t.match(/[A-Za-z]/g)||[]).length>=3;}
