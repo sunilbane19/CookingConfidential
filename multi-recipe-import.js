@@ -30,7 +30,7 @@ function clean(s){
 }
 
 const lines=s=>String(s??'').replace(/\r/g,'').split('\n').map(clean).filter(Boolean);
-const courses=['Breakfast','Brunch','Starter','Soup','Salad','Main','Side','Snack','Dessert','Bread','Beverage'];
+const courses=['Breakfast','Brunch','Starter','Soup','Salad','Main','Side','Snack','Dessert','Bread','Beverage','Ingredient'];
 const types=['Dish','Dip','Dressing','Sauce','Chutney','Marinade','Rub','Paste','Spice Blend','Stock / Broth','Pickle','Condiment'];
 const SECTION=/^(ingredients?|ingredient list|method|directions?|instructions?|preparation|steps?|servings?|notes?|tips?|storage|serving suggestions?|recipe|for the .+|for .+):?$/i;
 const GENERIC=/^(recipe|recipes|ingredients?|method|directions?|instructions?|preparation|steps?|contents?|index|introduction|notes?|tips?|storage|serving suggestions?|long-term preservation methods?|for the .+|for .+)[:.]?$/i;
