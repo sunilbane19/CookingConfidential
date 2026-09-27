@@ -61,8 +61,8 @@ async function uploadSelected(){
         });
         const itemRow=itemsResult?.[0];
         if(!itemRow?.id)throw new Error('Could not save the recipe URL.');
-        item.status='Uploaded';
-        setStatusForName(displayName,'Uploaded — review from inbox');
+        item.dbId=Number(itemRow.id); item.importId=Number(importRow.id); item.status='Uploaded';
+        setStatusForName(displayName,'Uploaded');
         continue;
       }
       const file=item.file;
@@ -97,8 +97,9 @@ async function uploadSelected(){
         }
         if(typeof window.ccMultiReview!=='function') throw new Error('Multi-recipe importer could not be loaded.');
         await window.ccMultiReview(itemRow.id);
+        setStatusForName(displayName,'Uploaded');
       }else if(isImage){setStatusForName(displayName,'Reading image…');await startImageReview(itemRow.id)}
-      else{setStatusForName(displayName,'Uploaded — review from inbox');message('Upload completed. Open Review in the Import Inbox to extract the recipe.')}
+      else{setStatusForName(displayName,'Uploaded');message('Upload completed. Open Review in the Import Inbox to extract the recipe.')}
     }
     if(button){button.disabled=false;button.textContent='Upload selected'}
     if(typeof window.ccReloadImportInbox==='function')await window.ccReloadImportInbox();
