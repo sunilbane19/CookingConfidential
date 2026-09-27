@@ -225,14 +225,53 @@ function editOne(id,x,recipes,i){
         servings:clean(editorValue(formData,'servings')),
         ingredients:sanitizeRichHtml(formData.get('ingredients')||''),
         method:sanitizeRichHtml(formData.get('method')||''),
-        notes:sanitizeRichHtml(formData.get('notes')||'')
+        notes:sanitizeRichHtml(formData.get('notes')||''),
+        _reviewed:true
       };
       render(id,x,recipes);
     }
   });
   importImagePicker(editor.form,recipes[i]);
 }
-async function saveMany(id,x,recipes){const{data:{user}}=await sb.auth.getUser();if(!user)return alert('Please sign in again.');if(!recipes.length)return alert('Select at least one recipe.');const rows=recipes.map(r=>({name:clean(r.name),description:clean(r.description)||null,cuisine:clean(r.cuisine)||null,course:clean(r.course)||null,recipe_type:clean(r.recipe_type)||'Dish',servings:clean(r.servings)||null,ingredients:Array.isArray(r.ingredients)?r.ingredients:{html:sanitizeRichHtml(r.ingredients||'')},method:Array.isArray(r.method)?r.method.join('\n'):sanitizeRichHtml(r.method||''),personal_notes:Array.isArray(r.notes)?(r.notes.join('\n')||null):(sanitizeRichHtml(r.notes||'')||null),source_type:'file',source_url:null,source_title:x.file_name||null,image_url:clean(r.image_url)||null,created_by:user.id,visibility:'private'}));const{error}=await sb.from('cc_recipes').insert(rows);if(error)return alert(error.message);const{error:ie}=await sb.from('cc_import_items').update({review_status:'approved',extraction_status:'ready',source_title:`${recipes.length} recipes from ${x.file_name||'import'}`,extracted_text:JSON.stringify({multiple:true,recipes})}).eq('id',id);if(ie)return alert(ie.message);dialog.close();location.reload();}
+async function saveMany(id,x,selectedRecipes){
+  const{data:{user}}=await sb.auth.getUser();
+  if(!user)return window.ccShowError?.('Please sign in again.','Sign-in required')||alert('Please sign in again.');
+  if(!selectedRecipes.length)return window.ccShowError?.('Please review and select at least one recipe before saving.','Nothing to save')||alert('Select at least one recipe.');
+
+  const rows=selectedRecipes.map(r=>({name:clean(r.name),description:clean(r.description)||null,cuisine:clean(r.cuisine)||null,course:clean(r.course)||null,recipe_type:clean(r.recipe_type)||'Dish',servings:clean(r.servings)||null,ingredients:Array.isArray(r.ingredients)?r.ingredients:{html:sanitizeRichHtml(r.ingredients||'')},method:Array.isArray(r.method)?r.method.join('\n'):sanitizeRichHtml(r.method||''),personal_notes:Array.isArray(r.notes)?(r.notes.join('\n')||null):(sanitizeRichHtml(r.notes||'')||null),source_type:'file',source_url:null,source_title:x.file_name||null,image_url:clean(r.image_url)||null,created_by:user.id,visibility:'private'}));
+  const{error}=await sb.from('cc_recipes').insert(rows);
+  if(error){
+    const raw=String(error.message||'');
+    const duplicate=/cc_recipes_no_duplicate_names|duplicate key value violates unique constraint/i.test(raw);
+    const friendly=duplicate
+      ? 'One or more of the selected recipes is already in your collection. No duplicate recipe was created. Please use Edit on the existing recipe if you want to change it.'
+      : raw;
+    return window.ccShowError?.(friendly,duplicate?'Recipe already saved':'Could not save recipes')||alert(friendly);
+  }
+
+  // Keep the complete extracted upload intact. Only the selected/reviewed
+  // recipes are written to the recipe collection; the original multi-recipe
+  // extraction must remain available for later review.
+  let allRecipes=selectedRecipes;
+  try{
+    const cached=typeof x.extracted_text==='string'?JSON.parse(x.extracted_text||'{}'):x.extracted_text;
+    if(cached?.multiple&&Array.isArray(cached.recipes)&&cached.recipes.length)allRecipes=cached.recipes.map(r=>{
+      const saved=selectedRecipes.find(s=>String(s.name).trim().toLowerCase()===String(r.name).trim().toLowerCase());
+      return saved?{...r,...saved,_reviewed:true}:r;
+    });
+  }catch(_){}
+  const allReviewed=allRecipes.length>0&&allRecipes.every(r=>r._reviewed);
+  const{error:ie}=await sb.from('cc_import_items').update({
+    review_status:allReviewed?'approved':'pending',
+    extraction_status:'ready',
+    source_title:`${selectedRecipes.length} reviewed from ${x.file_name||'import'}`,
+    extracted_text:JSON.stringify({version:6,multiple:true,recipes:allRecipes})
+  }).eq('id',id);
+  if(ie)return window.ccShowError?.(ie.message,'Could not update import')||alert(ie.message);
+  dialog.close();
+  await window.ccReloadRecipes?.();
+  if(window.ccReloadImportInbox)await window.ccReloadImportInbox();
+}
 window.ccMultiReview=extract;
 
 export { ocrImage };
