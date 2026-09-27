@@ -3,7 +3,7 @@ import { createWorker } from 'https://esm.sh/tesseract.js@5';
 import * as mammoth from 'https://esm.sh/mammoth@1.6.0';
 import JSZip from 'https://esm.sh/jszip@3.10.1';
 import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
-import { createGenericEditor, editorValue, sanitizeRichHtml } from './generic-editor.js?v=1.3.3';
+import { createGenericEditor, editorValue, sanitizeRichHtml } from './generic-editor.js?v=1.3.4';
 
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
@@ -210,6 +210,8 @@ function editOne(id,x,recipes,i){
       {label:'Notes / differences',name:'notes',value:richValue(r.notes),type:'richtext'}
     ],
     actions:{cancelLabel:'Cancel',saveLabel:'Save this recipe'},
+    onCancel:()=>render(id,x,recipes),
+    onClose:()=>render(id,x,recipes),
     onSave:async formData=>{
       recipes[i]={
         ...r,
