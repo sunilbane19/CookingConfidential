@@ -91,7 +91,7 @@ async function uploadSelected(){
         setStatusForName(displayName,'Extracting multiple recipes…');
         window.localStorage.setItem('ccMultiImport:'+itemRow.id,JSON.stringify({expectedCount:window.ccExpectedRecipeCount||null,fileName:displayName}));
         if(typeof window.ccMultiReview!=='function'){
-          await import('./multi-recipe-import.js?v=1.3.1');
+          await import('./multi-recipe-import.js?v=1.3.2');
         }
         if(typeof window.ccMultiReview!=='function') throw new Error('Multi-recipe importer could not be loaded.');
         await window.ccMultiReview(itemRow.id);
