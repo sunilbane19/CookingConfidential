@@ -53,26 +53,35 @@ function recipeTitleFromSource(text:string,file:string,sectionStart?:number){
   const before=/<(?:html|body|head|script|div|section|article|h[1-6])\b/i.test(beforeRaw)?htmlTextForParsing(beforeRaw):beforeRaw;
   const fileTitle=clean(file.replace(/\.[^.]+$/i,"").replace(/[_-]+/g," "));
   const blocked=/^(?:skip to main content|home|recipes?|save recipe|print|share|ad|advertisement|good food team|easy|alternatives?|complete the dish|nutrition|nutrition:\s*per serving|loading|rate|rate now|comments?|questions?|tips?|image(?:\s+\d+)?(?::.*)?|good food logo.*|subscribe(?: now)?|get .*all access|showing items .* of .*|learn how to .*|freezable|keep the screen awake.*|recipe from .*|units?|metric us)$/i;
+  const isUrlTitleNoise=(s:string)=>{
+    const x=String(s??"").replace(/\s+/g," ").trim();
+    return /^search\b/i.test(x)
+      || /^(?:food52(?:\.com)?|food52)\b/i.test(x)
+      || /https?:\/\/(?:www\.)?food52\.com\b/i.test(x)
+      || /^\[\s*\]\(https?:\/\//i.test(x);
+  };
   // Prefer the publisher's actual recipe heading. On sites such as BBC Good
   // Food there can be CTA text ("Subscribe") between page chrome and title.
   const rawHeadingCandidates=beforeRaw.split(/\n+/).map(x=>x.trim())
     .filter(x=>/^#{1,6}\s+/.test(x));
   const headingCandidates=rawHeadingCandidates
     .map(x=>cleanMarkdown(x).replace(/^\s*#{1,6}\s*/,"").trim())
-    .filter(x=>x&&!blocked.test(x)&&!isPageNoise(x)&&x.length<160)
+    .filter(x=>x&&!blocked.test(x)&&!isUrlTitleNoise(x)&&!isPageNoise(x)&&x.length<160)
     .filter(x=>!/^\s*!?\[?image\b/i.test(x))
     .filter(x=>!/^serves?\b/i.test(x)&&!/^prep(?:aration)?\s*[:\-]?/i.test(x)&&!/^cook(?:ing)?\s*time\b/i.test(x)&&!/^total\s*time\b/i.test(x));
   if(headingCandidates.length)return cleanRecipeLine(headingCandidates[0]);
   const usefulCandidates=beforeRaw.split(/\n+/).map(x=>cleanMarkdown(x).replace(/^\s*#{1,6}\s*/,"").trim())
-    .filter(x=>x&&!blocked.test(x)&&!isPageNoise(x)&&x.length<160)
+    .filter(x=>x&&!blocked.test(x)&&!isUrlTitleNoise(x)&&!isPageNoise(x)&&x.length<160)
     .filter(x=>!/^\s*!?\[?image\b/i.test(x))
     .filter(x=>!/^serves?\b/i.test(x)&&!/^prep(?:aration)?\s*[:\-]?/i.test(x)&&!/^cook(?:ing)?\s*time\b/i.test(x)&&!/^total\s*time\b/i.test(x));
   if(usefulCandidates.length)return cleanRecipeLine(usefulCandidates[0]);
-  const candidates=lines(before).filter(x=>!isPageNoise(x)&&!blocked.test(x)&&!/^\s*!?\[?image\b/i.test(x)&&!/^serves?\b/i.test(x)&&!/^prep(?:aration)?\s*[:\-]?/i.test(x)&&!/^cook(?:ing)?\s*time\b/i.test(x)&&!/^total\s*time\b/i.test(x)&&!/^(?:\d+(?:\.\d+)?\s*(?:out of|ratings?|reviews?))/i.test(x));
+  const candidates=lines(before).filter(x=>!isPageNoise(x)&&!blocked.test(x)&&!isUrlTitleNoise(x)&&!/^\s*!?\[?image\b/i.test(x)&&!/^serves?\b/i.test(x)&&!/^prep(?:aration)?\s*[:\-]?/i.test(x)&&!/^cook(?:ing)?\s*time\b/i.test(x)&&!/^total\s*time\b/i.test(x)&&!/^(?:\d+(?:\.\d+)?\s*(?:out of|ratings?|reviews?))/i.test(x));
   return cleanRecipeLine(candidates[0]||fileTitle)||fileTitle;
 }
 function isBadUrlTitle(s:string){
-  return /^(?:skip to main content|home|recipes?|save recipe|print|share|ad|advertisement|good food team|easy|alternatives?|complete the dish|nutrition|loading)$/i.test(cleanRecipeLine(s));
+  const x=cleanRecipeLine(s);
+  return /^(?:skip to main content|home|recipes?|save recipe|print|share|ad|advertisement|good food team|easy|alternatives?|complete the dish|nutrition|loading)$/i.test(x)
+    || isUrlTitleNoise(x);
 }
 function structuredRecipe(text:string,isUrl=false){
   const re=/<script[^>]*>([\s\S]*?)<\/script>/gi;
