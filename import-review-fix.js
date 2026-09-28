@@ -56,8 +56,12 @@ async function invokeExtract(itemId){
 }
 function parseLegacyDocText(text,fileName){
   const raw=String(text||'')
-    .replace(/\r/g,'\n')
-    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\uFFFD]/g,' ')
+    .replace(/<br\s*\/?>/gi,'\n')
+    .replace(/<\/p>|<\/div>|<\/li>|<\/tr>|<\/h[1-6]>/gi,'\n')
+    .replace(/<[^>]+>/g,' ')
+    .replace(/\r\n?/g,'\n')
+    .replace(/[\u000B\u000C]/g,'\n')
+    .replace(/[\u0000-\u0008\u000E-\u001F\u007F\uFFFD]/g,' ')
     .replace(/[\t|]+/g,'\n')
     .replace(/[•·▪◦]/g,'\n• ');
   const normalized=raw
@@ -151,7 +155,15 @@ async function extractLegacyDocInBrowser(x,id){
   let mod;
   try{mod=await import('https://esm.sh/@zhenghy/doc-preview@0.7.3?bundle')}catch(e){throw new Error('Could not load the legacy Word reader in the browser: '+(e?.message||'module load failed.'))}
   let text;
-  try{text=mod.parseDocFileFromBuffer(await blob.arrayBuffer())}catch(e){throw new Error('The legacy Word document could not be read: '+(e?.message||'parser failed.'))}
+  try{
+  const parsed=mod.parseDocFileFromBuffer(await blob.arrayBuffer());
+  if(typeof parsed==='string') text=parsed;
+  else if(parsed && typeof parsed.text==='string') text=parsed.text;
+  else if(parsed && typeof parsed.plainText==='string') text=parsed.plainText;
+  else if(parsed?.document?.paragraphs) text=parsed.document.paragraphs.map(p=>typeof p==='string'?p:(p?.text||'')).join('\n');
+  else if(Array.isArray(parsed?.paragraphs)) text=parsed.paragraphs.map(p=>typeof p==='string'?p:(p?.text||'')).join('\n');
+  else text=String(parsed??'');
+}catch(e){throw new Error('The legacy Word document could not be read: '+(e?.message||'parser failed.'))}
   const recipe=parseLegacyDocText(text,x.file_name||'Imported recipe');
   const {error}=await supabase.from('cc_import_items').update({
     extracted_text:JSON.stringify(recipe),
