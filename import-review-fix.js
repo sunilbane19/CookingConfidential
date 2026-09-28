@@ -55,35 +55,88 @@ async function invokeExtract(itemId){
   }finally{clearTimeout(timer)}
 }
 function parseLegacyDocText(text,fileName){
-  const raw=String(text||'').replace(/\r/g,'').replace(/[\u0000-\u001F\u007F\uFFFD]/g,' ');
-  const lines=raw.split(/\n+/).map(s=>clean(s)).filter(Boolean);
+  const raw=String(text||'')
+    .replace(/\r/g,'\n')
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\uFFFD]/g,' ')
+    .replace(/[\t|]+/g,'\n')
+    .replace(/[•·▪◦]/g,'\n• ');
+  const normalized=raw
+    .replace(/\s+(?=(?:ingredients?|what you.?ll need|you will need)\s*:?\s*)/ig,'\n')
+    .replace(/\s+(?=(?:method|directions?|instructions?|preparation|steps?)\s*:?\s*)/ig,'\n');
+  const lines=normalized.split(/\n+/).map(s=>clean(s)).filter(Boolean);
   if(!lines.length)throw new Error('The legacy Word file contained no readable text.');
-  const heading=(s,kind)=>kind==='ingredients'
-    ? /^(ingredients?|what you.?ll need|you will need)\s*:??$/i.test(s)
-    : /^(method|directions?|instructions?|preparation|steps?)\s*:??$/i.test(s);
+
+  const heading=(s,kind)=>{
+    const v=String(s||'').replace(/^[-•*]\s*/,'').trim();
+    return kind==='ingredients'
+      ? /^(?:ingredients?|what you.?ll need|you will need)\s*:?-?$/i.test(v)
+      : /^(?:method|directions?|instructions?|preparation|steps?)\s*:?-?$/i.test(v);
+  };
   const ii=lines.findIndex(s=>heading(s,'ingredients'));
   const mi=lines.findIndex((s,i)=>i>(ii<0?0:ii)&&heading(s,'method'));
+
   let name=String(fileName||'Imported recipe').replace(/\.[^.]+$/,'').replace(/[_-]+/g,' ').trim();
-  if(ii>0&&lines[0].length<=120)name=lines[0];
+  if(lines[0] && !heading(lines[0],'ingredients') && !heading(lines[0],'method') && lines[0].length<=140)name=lines[0];
+
+  const qty=/^(?:\d+(?:[.,]\d+)?(?:\/\d+)?|\d+\/\d+|[¼½¾⅓⅔⅛⅜⅝⅞]|one|two|three|four|five|six|seven|eight|nine|ten|a|an)\b/i;
+  const unit=/\b(?:kg|g|grams?|mg|ml|l|litres?|liters?|oz|ounces?|lb|lbs|pounds?|cups?|cup|tbsp|tablespoons?|tsp|teaspoons?|cloves?|slices?|sticks?|pieces?|sprigs?|heads?|bulbs?|bunch(?:es)?|pinch|handful)\b/i;
+  const ingredientLike=s=>qty.test(s)||unit.test(s)||/^[-•*]/.test(s);
+  const methodLike=s=>/\b(?:peel|boil|cook|bake|roast|fry|heat|add|mix|stir|combine|place|put|pour|drain|mash|blend|whisk|season|serve|remove|transfer|cover|simmer|bring to|preheat|chop|slice|cut|dice|grate)\b/i.test(s)&&s.length>18;
+
   let ingredients=[];
   let method=[];
+
   if(ii>=0){
     const end=mi>ii?mi:lines.length;
-    ingredients=lines.slice(ii+1,end).filter(s=>!/^[-•*]+$/.test(s));
+    ingredients=lines.slice(ii+1,end);
     if(mi>ii)method=lines.slice(mi+1);
   }else{
-    const qty=/^(?:\d+(?:[.,]\d+)?|[¼½¾⅓⅔⅛⅜⅝⅞]|one|two|three|four|five|six|a|an|½|¼)\b/i;
-    const firstIng=lines.findIndex((s,i)=>i>0&&qty.test(s));
+    // Legacy Word files often come back from the browser reader without
+    // paragraph headings. Find the first convincing ingredient line and
+    // collect the contiguous ingredient block, allowing unquantified items
+    // such as salt to remain in the block.
+    const firstIng=lines.findIndex((s,i)=>i>0&&ingredientLike(s));
     if(firstIng>0){
       name=lines[0];
-      ingredients=lines.slice(firstIng).filter(s=>qty.test(s)||/^[-•*]/.test(s));
-      method=lines.slice(firstIng+ingredients.length);
+      let i=firstIng;
+      for(;i<lines.length;i++){
+        const s=lines[i];
+        if(methodLike(s)&&ingredients.length>=2)break;
+        if(ingredientLike(s)||ingredients.length<2){
+          ingredients.push(s.replace(/^[-•*]\s*/,'').trim());
+          continue;
+        }
+        // A short unquantified ingredient such as "salt" or "pepper".
+        if(ingredients.length>=2&&s.length<=35&&!/^[A-Z][a-z]+\s+to\s+/i.test(s)){
+          ingredients.push(s);
+          continue;
+        }
+        break;
+      }
+      method=lines.slice(i);
     }
   }
-  ingredients=ingredients.map(s=>s.replace(/^[-•*]\s*/,'').trim()).filter(Boolean);
-  method=method.map(s=>s.replace(/^\d+[.)]\s*/,'').trim()).filter(Boolean);
-  if(!ingredients.length)throw new Error('The older Word file was read, but its Ingredients section could not be identified.');
-  return {name:name||'Imported recipe',description:null,ingredients,method:method.join('\n'),cuisine:null,course:null,servings:null};
+
+  ingredients=ingredients
+    .map(s=>s.replace(/^[-•*]\s*/,'').trim())
+    .filter(Boolean);
+  method=method
+    .map(s=>s.replace(/^\d+[.)]\s*/,'').trim())
+    .filter(Boolean);
+
+  if(!ingredients.length){
+    throw new Error('The older Word file was read, but its Ingredients section could not be identified.');
+  }
+
+  return {
+    name:name||'Imported recipe',
+    description:null,
+    ingredients,
+    method:method.join('\n'),
+    cuisine:null,
+    course:null,
+    servings:null
+  };
 }
 async function extractLegacyDocInBrowser(x,id){
   if(!x?.file_path)throw new Error('The original Word file is not available.');
