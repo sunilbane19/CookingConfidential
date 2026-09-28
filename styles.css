@@ -61,3 +61,6 @@
   .import-mode-option{padding:5px 6px!important}
   .multi-count-wrap input{width:64px!important}
 }
+
+/* Upload dialog field labels */
+.recipe-files-label,.recipe-url-label{font-weight:700}
