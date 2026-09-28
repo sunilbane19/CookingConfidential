@@ -249,6 +249,42 @@ function htmlTextForParsing(input:string){
     .replace(/\n\s*\n\s*\n+/g,"\n\n")
     .trim();
 }
+function parseHtmlRecipeSections(text:string,file:string){
+  const html=String(text||"");
+  const headings=[...html.matchAll(/<h([1-6])\\b[^>]*>([\\s\\S]*?)<\\/h\\1>/gi)].map(m=>({level:Number(m[1]),raw:String(m[2]||""),text:cleanRecipeLine(htmlTextForParsing(m[2]||"")),start:m.index??0,end:(m.index??0)+m[0].length}));
+  if(!headings.length)return null;
+  const isIng=(s:string)=>/^(?:ingredients?|ingredient list|what you need|ingredients required|shopping list)\\b/i.test(cleanRecipeLine(s));
+  const isMethod=(s:string)=>/^(?:directions?|method|instructions?|preparation|preparations|steps?|recipe method|cooking method|procedure)\\b/i.test(cleanRecipeLine(s));
+  const ingIndex=headings.findIndex(h=>isIng(h.text));
+  if(ingIndex<0)return null;
+  const methodIndex=headings.findIndex((h,i)=>i>ingIndex&&isMethod(h.text));
+  if(methodIndex<0)return null;
+  const section=(i:number)=>{
+    const start=headings[i].end;
+    const end=i+1<headings.length?headings[i+1].start:html.length;
+    return html.slice(start,end);
+  };
+  const itemLines=(fragment:string)=>{
+    const items=[...fragment.matchAll(/<li\\b[^>]*>([\\s\\S]*?)<\\/li>/gi)]
+      .map(m=>cleanRecipeLine(htmlTextForParsing(m[1]||"")))
+      .filter(Boolean);
+    if(items.length)return items;
+    return lines(htmlTextForParsing(fragment));
+  };
+  const ingredients=itemLines(section(ingIndex))
+    .filter(x=>!isNutritionNoise(x)&&!isPageNoise(x)&&x.length>1)
+    .slice(0,200);
+  const method=itemLines(section(methodIndex))
+    .map(cleanUrlMethodLine)
+    .filter(x=>!isPageNoise(x)&&x.length>1)
+    .join("\\n");
+  if(ingredients.length<2||!method.trim())return null;
+  const h1=headings.find(h=>h.level===1&&h.text&&!isPageNoise(h.text));
+  const name=cleanRecipeLine(h1?.text||recipeTitleFromSource(html,file));
+  const beforeIngredients=html.slice(h1?.end??0,headings[ingIndex].start);
+  const description=cleanDescription(htmlTextForParsing(beforeIngredients));
+  return {name,description:description||null,ingredients,method:clean(method),cuisine:null,course:null,servings:null};
+}
 function parseRaw(text:string,file:string,isUrl=false){
   if(/\.pdf$/i.test(file)){const pdfRecipe=parsePdfRecipe(text,file);if(pdfRecipe)return pdfRecipe;}
   // URL readers may return raw publisher HTML. Try JSON-LD first, then strip
@@ -256,6 +292,8 @@ function parseRaw(text:string,file:string,isUrl=false){
   if(isUrl){
     const structured=structuredRecipe(text,true);
     if(structured?.ingredients?.length && structured.method)return structured;
+    const htmlRecipe=parseHtmlRecipeSections(text,file);
+    if(htmlRecipe?.ingredients?.length && htmlRecipe.method)return htmlRecipe;
     text=htmlTextForParsing(text);
   }
   const labeled=parseLabeledSections(text,file,isUrl); if(labeled)return labeled;
