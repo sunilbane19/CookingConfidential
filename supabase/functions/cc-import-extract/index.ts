@@ -251,10 +251,10 @@ function htmlTextForParsing(input:string){
 }
 function parseHtmlRecipeSections(text:string,file:string){
   const html=String(text||"");
-  const headings=[...html.matchAll(/<h([1-6])\\b[^>]*>([\\s\\S]*?)<\\/h\\1>/gi)].map(m=>({level:Number(m[1]),raw:String(m[2]||""),text:cleanRecipeLine(htmlTextForParsing(m[2]||"")),start:m.index??0,end:(m.index??0)+m[0].length}));
+  const headings=[...html.matchAll(/<h([1-6])\b[^>]*>([\s\S]*?)<\/h\1>/gi)].map(m=>({level:Number(m[1]),raw:String(m[2]||""),text:cleanRecipeLine(htmlTextForParsing(m[2]||"")),start:m.index??0,end:(m.index??0)+m[0].length}));
   if(!headings.length)return null;
-  const isIng=(s:string)=>/^(?:ingredients?|ingredient list|what you need|ingredients required|shopping list)\\b/i.test(cleanRecipeLine(s));
-  const isMethod=(s:string)=>/^(?:directions?|method|instructions?|preparation|preparations|steps?|recipe method|cooking method|procedure)\\b/i.test(cleanRecipeLine(s));
+  const isIng=(s:string)=>/^(?:ingredients?|ingredient list|what you need|ingredients required|shopping list)\b/i.test(cleanRecipeLine(s));
+  const isMethod=(s:string)=>/^(?:directions?|method|instructions?|preparation|preparations|steps?|recipe method|cooking method|procedure)\b/i.test(cleanRecipeLine(s));
   const ingIndex=headings.findIndex(h=>isIng(h.text));
   if(ingIndex<0)return null;
   const methodIndex=headings.findIndex((h,i)=>i>ingIndex&&isMethod(h.text));
@@ -277,7 +277,8 @@ function parseHtmlRecipeSections(text:string,file:string){
   const method=itemLines(section(methodIndex))
     .map(cleanUrlMethodLine)
     .filter(x=>!isPageNoise(x)&&x.length>1)
-    .join("\\n");
+    .join("
+");
   if(ingredients.length<2||!method.trim())return null;
   const h1=headings.find(h=>h.level===1&&h.text&&!isPageNoise(h.text));
   const name=cleanRecipeLine(h1?.text||recipeTitleFromSource(html,file));
