@@ -87,14 +87,18 @@ function parseLegacyDocText(text,fileName){
 }
 async function extractLegacyDocInBrowser(x,id){
   if(!x?.file_path)throw new Error('The original Word file is not available.');
-  const signedUrl=await getCachedSignedUrl(supabase,'cooking-confidential',x.file_path);
-  const res=await fetch(signedUrl);
-  if(!res.ok)throw new Error('Could not load the original Word file.');
+  let signedUrl;
+  try{signedUrl=await getCachedSignedUrl(supabase,'cooking-confidential',x.file_path)}catch(e){throw new Error('Could not access the uploaded Word file: '+(e?.message||'signed URL failed.'))}
+  let res;
+  try{res=await fetch(signedUrl)}catch(e){throw new Error('Could not download the uploaded Word file: '+(e?.message||'network request failed.'))}
+  if(!res.ok)throw new Error('Could not download the uploaded Word file (HTTP '+res.status+').');
   const blob=await res.blob();
   const status=detailDialog.querySelector('.import-status');
   if(status)status.textContent='Reading the legacy Word document in your browser…';
-  const mod=await import('https://unpkg.com/@zhenghy/doc-preview@0.7.3/dist/doc-preview.js');
-  const text=mod.parseDocFileFromBuffer(await blob.arrayBuffer());
+  let mod;
+  try{mod=await import('https://esm.sh/@zhenghy/doc-preview@0.7.3?bundle')}catch(e){throw new Error('Could not load the legacy Word reader in the browser: '+(e?.message||'module load failed.'))}
+  let text;
+  try{text=mod.parseDocFileFromBuffer(await blob.arrayBuffer())}catch(e){throw new Error('The legacy Word document could not be read: '+(e?.message||'parser failed.'))}
   const recipe=parseLegacyDocText(text,x.file_name||'Imported recipe');
   const {error}=await supabase.from('cc_import_items').update({
     extracted_text:JSON.stringify(recipe),
