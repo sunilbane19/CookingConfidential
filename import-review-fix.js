@@ -80,7 +80,19 @@ function parseLegacyDocText(text,fileName){
   const mi=lines.findIndex((s,i)=>i>(ii<0?0:ii)&&heading(s,'method'));
 
   let name=String(fileName||'Imported recipe').replace(/\.[^.]+$/,'').replace(/[_-]+/g,' ').trim();
-  if(lines[0] && !heading(lines[0],'ingredients') && !heading(lines[0],'method') && lines[0].length<=140)name=lines[0];
+  const titleCandidate=(s)=>{
+    let v=clean(String(s||''))
+      .replace(/\[([^\]]*)\]\(https?:\/\/[^\s)]+\)/gi,'$1')
+      .replace(/https?:\/\/[^\s]+/gi,'')
+      .replace(/^[-•*]\s*/,'')
+      .replace(/^search\s*[:|>-]?\s*/i,'')
+      .replace(/\s+/g,' ')
+      .trim();
+    if(!v)return '';
+    if(/^(?:search|food52|home|recipes?|save|share|print|log ?in|sign ?in|sign ?up|subscribe|menu|skip to|jump to|advertisement)$/i.test(v))return '';
+    if(/^(?:search|food52)\b/i.test(v)&&v.length<60)return '';
+    return v.length<=140?v:'';
+  };
 
   const qty=/^(?:\d+(?:[.,]\d+)?(?:\/\d+)?|\d+\/\d+|[¼½¾⅓⅔⅛⅜⅝⅞]|one|two|three|four|five|six|seven|eight|nine|ten|a|an)\b/i;
   const unit=/\b(?:kg|g|grams?|mg|ml|l|litres?|liters?|oz|ounces?|lb|lbs|pounds?|cups?|cup|tbsp|tablespoons?|tsp|teaspoons?|cloves?|slices?|sticks?|pieces?|sprigs?|heads?|bulbs?|bunch(?:es)?|pinch|handful)\b/i;
@@ -101,7 +113,10 @@ function parseLegacyDocText(text,fileName){
     // such as salt to remain in the block.
     const firstIng=lines.findIndex((s,i)=>i>0&&ingredientLike(s));
     if(firstIng>0){
-      name=lines[0];
+      const titleLines=lines.slice(0,firstIng)
+        .map(titleCandidate)
+        .filter(Boolean);
+      if(titleLines.length)name=titleLines[0];
       let i=firstIng;
       for(;i<lines.length;i++){
         const s=lines[i];
