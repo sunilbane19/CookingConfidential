@@ -277,8 +277,7 @@ function parseHtmlRecipeSections(text:string,file:string){
   const method=itemLines(section(methodIndex))
     .map(cleanUrlMethodLine)
     .filter(x=>!isPageNoise(x)&&x.length>1)
-    .join("
-");
+    .join("\n");
   if(ingredients.length<2||!method.trim())return null;
   const h1=headings.find(h=>h.level===1&&h.text&&!isPageNoise(h.text));
   const name=cleanRecipeLine(h1?.text||recipeTitleFromSource(html,file));
