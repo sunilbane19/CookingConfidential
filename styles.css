@@ -17,3 +17,23 @@
   #importDialog{max-width:96vw}
   #importDialog .dialog-card{padding:26px 22px}
 }
+
+/* Compact import mode controls: keep Single, Multiple and recipe count on one row. */
+.import-mode-panel{margin-top:14px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#fff}
+.import-mode-title{font:600 12px Arial;color:var(--ink);margin-bottom:7px}
+.import-mode-options{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.import-mode-option{display:flex;align-items:center;justify-content:center;gap:7px;margin:0!important;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);font:12px Arial;color:var(--ink);cursor:pointer}
+.import-mode-option input{width:auto;margin:0}
+.multi-count-wrap{display:flex;align-items:center;gap:8px;margin:8px 0 0!important;font:12px Arial;color:var(--muted)}
+.multi-count-wrap input{width:110px;margin:0!important;padding:8px!important}
+@media(min-width:761px){
+  .import-mode-panel{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:12px}
+  .import-mode-title{margin:0}
+  .import-mode-options{grid-template-columns:1fr 1fr}
+  .multi-count-wrap{margin:0!important;white-space:nowrap}
+}
+@media(max-width:760px){
+  .import-mode-panel{padding:8px}
+  .import-mode-options{grid-template-columns:1fr 1fr}
+  .multi-count-wrap{margin-top:7px!important}
+}
