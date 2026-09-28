@@ -10,4 +10,10 @@
 
 /* Import Inbox visibility */
 .import-inbox-panel{margin-top:18px;padding-top:12px;border-top:1px solid var(--line);max-height:230px;overflow:auto}.import-inbox-panel .queue-head{padding-bottom:8px}.import-inbox-panel .review-item{background:var(--card)}
-#importDialog .dialog-card{max-height:82vh;overflow:auto}
+/* Larger upload/import dialog: gives the file picker and import options more room. */
+#importDialog{max-width:min(820px,94vw);width:100%}
+#importDialog .dialog-card{max-height:88vh;overflow:auto;padding:34px 36px}
+@media (max-width:700px){
+  #importDialog{max-width:96vw}
+  #importDialog .dialog-card{padding:26px 22px}
+}
