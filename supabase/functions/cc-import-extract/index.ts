@@ -265,7 +265,7 @@ function parseHtmlRecipeSections(text:string,file:string){
     return html.slice(start,end);
   };
   const itemLines=(fragment:string)=>{
-    const items=[...fragment.matchAll(/<li\\b[^>]*>([\\s\\S]*?)<\\/li>/gi)]
+    const items=[...fragment.matchAll(/<li\b[^>]*>([\s\S]*?)<\/li>/gi)]
       .map(m=>cleanRecipeLine(htmlTextForParsing(m[1]||"")))
       .filter(Boolean);
     if(items.length)return items;
