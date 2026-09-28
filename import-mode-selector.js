@@ -8,7 +8,8 @@
   function sync(){
     const mode=panel.querySelector('input[name="importMode"]:checked')?.value||'single';
     const multi=mode==='multi';
-    if(countWrap)countWrap.hidden=!multi;
+    if(countWrap)countWrap.hidden=false;
+    if(countInput)countInput.disabled=!multi;
     window.ccImportMode=mode;
     window.ccExpectedRecipeCount=multi&&countInput?.value?Math.max(2,Math.min(50,Number(countInput.value))):null;
   }
