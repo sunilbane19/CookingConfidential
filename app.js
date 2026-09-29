@@ -110,7 +110,7 @@ function render(){
   const title=view==='favourites'?'Favourites':'Your recipes';
   const list=recipes;
   const pager=recipePager();
-  content.innerHTML=`${pager}<div class="section-head"><h2>${title}</h2><span class="count">${list.length?recipeOffset+1+'–'+(recipeOffset+list.length):'0'} of ${recipeTotalCount}</span></div>${list.length?'<div class="grid">'+list.map(recipeCard).join(''):'<div class="empty">No recipes found. Try another ingredient, cuisine or dish.</div>'}${pager}`;
+  content.innerHTML=`${pager}<div class="section-head"><h2>${title}</h2><span class="count">${list.length?recipeOffset+1+'–'+(recipeOffset+list.length):'0'} of ${recipeTotalCount}</span></div>${list.length?'<div class="grid">'+list.map(recipeCard).join('')+'</div>':'<div class="empty">No recipes found. Try another ingredient, cuisine or dish.</div>'}${pager}`;
   content.querySelectorAll('.card').forEach(c=>c.onclick=()=>showRecipe(+c.dataset.id));
   wireRecipePager();
   window.dispatchEvent(new CustomEvent('cc:recipes-rendered'));
