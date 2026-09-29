@@ -11,7 +11,7 @@ const RECIPE_CARD_FIELDS='id,name,cuisine,country,region,course,recipe_type,rati
 const RECIPE_DETAIL_FIELDS='id,name,description,cuisine,country,region,course,recipe_type,ingredients,method,personal_notes,rating,source_url,source_title,is_favourite,image_url,updated_at,servings,original_file_path,original_file_name,original_mime_type,source_type';
 // Full recipe cache: fetch a recipe once when it is first opened during this session.
 const recipeDetailCache=new Map();
-let recipeOffset=0,recipeHasMore=false,recipeLoading=false,recipeRequestId=0,searchTimer=null;
+let recipeOffset=0,recipeTotalCount=0,recipeLoading=false,recipeRequestId=0,searchTimer=null;
 window.ccImportItems=importItems;
 const esc=(s='')=>String(s).replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));
 const stars=n=>n?'★'.repeat(n):'';
@@ -20,31 +20,34 @@ const ingredientsHtml=r=>{const a=r?.ingredients;if(a&&typeof a==='object'&&!Arr
 const ingredientsPlain=r=>{const a=r?.ingredients;if(a&&typeof a==='object'&&!Array.isArray(a)&&typeof a.html==='string')return a.html.replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim();if(Array.isArray(a))return a.map(x=>typeof x==='string'?x:[x?.quantity,x?.unit,x?.name].filter(Boolean).join(' ')).join(' ');return String(a||'')};
 function showUiError(message,title='Something went wrong',onClose=null){const raw=String(message||'Something went wrong'),lower=raw.toLowerCase();let heading=title,friendly=raw;if(lower.includes('cc_recipes_no_duplicate_names')||lower.includes('duplicate key value violates unique constraint')){heading='Recipe already saved';friendly='This recipe is already in your collection. Please use Edit on the recipe card to make changes.'}if(!detailDialog)return console.error(raw);detailDialog.querySelector('#detailContent').innerHTML=`<div class="dialog-card error-card"><button class="close" type="button" aria-label="Close">×</button><p class="eyebrow">COOKING CONFIDENTIAL · ERROR</p><h2>${esc(heading)}</h2><p class="error-message">${esc(friendly)}</p>${friendly!==raw?`<details class="error-details"><summary>Technical details</summary><code>${esc(raw)}</code></details>`:''}<div class="detail-actions"><button class="primary" id="uiErrorClose">Close</button></div></div>`;const close=()=>{detailDialog.close();if(typeof onClose==='function')onClose()};detailDialog.querySelector('.close').onclick=close;detailDialog.querySelector('#uiErrorClose').onclick=close;if(!detailDialog.open)detailDialog.showModal()}
 window.ccShowError=showUiError;
-const cleanSearchTerm=value=>String(value||'').trim().replace(/[^\\p{L}\\p{N}\\s]/gu,' ').replace(/\\s+/g,' ').slice(0,80);
+const cleanSearchTerm=value=>String(value||'').trim().replace(/\s+/g,' ').slice(0,80);
 
-async function loadRecipePage({reset=true}={}) {
+async function loadRecipePage({offset=0,refreshCount=true}={}) {
   const requestId=++recipeRequestId;
   const q=cleanSearchTerm(search.value);
   const favouriteOnly=view==='favourites';
-  if(reset){
-    recipeOffset=0;
-    recipeHasMore=false;
-    if(!recipeLoading)content.innerHTML='<div class="empty">Loading your recipes…</div>';
-  }
+  const safeOffset=Math.max(0,Math.floor(Number(offset)||0));
+  recipeOffset=safeOffset;
   recipeLoading=true;
+  content.innerHTML='<div class="empty">Loading your recipes…</div>';
   try{
-    const{data,error}=await supabase.rpc('cc_search_recipe_cards',{
+    const pageRequest=supabase.rpc('cc_search_recipe_cards',{
       p_search:q,
       p_favourite_only:favouriteOnly,
-      p_offset:reset?0:recipeOffset,
+      p_offset:safeOffset,
       p_limit:RECIPE_PAGE_SIZE
     });
+    const countRequest=refreshCount||recipeTotalCount===0
+      ?supabase.rpc('cc_count_recipe_cards',{p_search:q,p_favourite_only:favouriteOnly})
+      :Promise.resolve({data:recipeTotalCount,error:null});
+    const [pageResult,countResult]=await Promise.all([pageRequest,countRequest]);
     if(requestId!==recipeRequestId)return;
-    if(error)throw new Error(error.message);
-    const rows=Array.isArray(data)?data:[];
-    recipes=reset?rows:[...recipes,...rows];
-    recipeOffset=(reset?0:recipeOffset)+rows.length;
-    recipeHasMore=rows.length===RECIPE_PAGE_SIZE;
+    if(pageResult.error)throw new Error(pageResult.error.message);
+    if(countResult.error)throw new Error(countResult.error.message);
+    const rows=Array.isArray(pageResult.data)?pageResult.data:[];
+    const rawCount=countResult.data;
+    recipeTotalCount=Number(Array.isArray(rawCount)?rawCount[0]:rawCount)||0;
+    recipes=rows;
     window.ccRecipes=recipes;
     render();
     window.dispatchEvent(new CustomEvent('cc:recipes-rendered'));
@@ -68,18 +71,44 @@ async function loadData(){
   await loadMenus();
   if(view==='menus')renderMenus(search.value.trim().toLowerCase());
 }
-window.ccReloadRecipes=loadRecipePage;
+window.ccReloadRecipes=()=>loadRecipePage({offset:recipeOffset,refreshCount:true});
 function recipeCard(r){return `<article class="card" data-id="${r.id}"><div class="card-image" aria-hidden="true"></div><div class="card-body"><span class="tag">${esc(r.cuisine||'Uncategorised')}</span><h3>${esc(r.name)}</h3><div class="meta">${esc([r.course||'Recipe',r.recipe_type].filter(Boolean).join(' · '))} · ${stars(r.rating)}</div></div></article>`}
+function recipePager(){
+  const totalPages=Math.max(1,Math.ceil(recipeTotalCount/RECIPE_PAGE_SIZE));
+  const page=Math.floor(recipeOffset/RECIPE_PAGE_SIZE)+1;
+  const first=0;
+  const prev=Math.max(0,(page-2)*RECIPE_PAGE_SIZE);
+  const next=Math.min(Math.max(0,(totalPages-1)*RECIPE_PAGE_SIZE),recipeOffset+RECIPE_PAGE_SIZE);
+  const last=Math.max(0,(totalPages-1)*RECIPE_PAGE_SIZE);
+  const disabled=(condition)=>condition?' disabled':'';
+  return `<div class="recipe-pager" aria-label="Recipe pages">
+    <button class="secondary pager-btn" data-page-offset="${first}"${disabled(page===1)}>First 12</button>
+    <button class="secondary pager-btn" data-page-offset="${prev}"${disabled(page===1)}>Previous 12</button>
+    <span class="pager-status">Page ${page} of ${totalPages} · ${recipeTotalCount} recipes</span>
+    <button class="secondary pager-btn" data-page-offset="${next}"${disabled(page===totalPages)}>Next 12</button>
+    <button class="secondary pager-btn" data-page-offset="${last}"${disabled(page===totalPages)}>Last 12</button>
+  </div>`;
+}
+function wireRecipePager(){
+  content.querySelectorAll('.pager-btn').forEach(btn=>btn.onclick=async()=>{
+    if(btn.disabled||recipeLoading)return;
+    const offset=Number(btn.dataset.pageOffset)||0;
+    btn.disabled=true;
+    try{await loadRecipePage({offset,refreshCount:false})}
+    catch(e){showUiError(e.message,'Could not change recipe page')}
+  });
+}
 function render(){
   if(view==='menus')return renderMenus(search.value.trim().toLowerCase());
   const title=view==='favourites'?'Favourites':'Your recipes';
   const list=recipes;
-  content.innerHTML=`<div class="section-head"><h2>${title}</h2><span class="count">${list.length}${recipeHasMore?'+':''} shown</span></div>${list.length?'<div class="grid">'+list.map(recipeCard).join('')+'</div>':'<div class="empty">No recipes found. Try another ingredient, cuisine or dish.</div>'}${recipeHasMore?'<div class="load-more-wrap"><button class="secondary" id="loadMoreRecipes">Load more recipes</button></div>':''}`;
+  const pager=(recipeTotalCount>RECIPE_PAGE_SIZE)?recipePager():'';
+  content.innerHTML=`${pager}<div class="section-head"><h2>${title}</h2><span class="count">${list.length?recipeOffset+1+'–'+(recipeOffset+list.length):'0'} of ${recipeTotalCount}</span></div>${list.length?'<div class="grid">'+list.map(recipeCard).join('')+'</div>':'<div class="empty">No recipes found. Try another ingredient, cuisine or dish.</div>'}${pager}`;
   content.querySelectorAll('.card').forEach(c=>c.onclick=()=>showRecipe(+c.dataset.id));
-  const more=document.querySelector('#loadMoreRecipes');
-  if(more)more.onclick=async()=>{if(recipeLoading)return;more.disabled=true;more.textContent='Loading…';try{await loadRecipePage({reset:false})}catch(e){showUiError(e.message,'Could not load more recipes')}};
+  wireRecipePager();
   window.dispatchEvent(new CustomEvent('cc:recipes-rendered'));
 }
+
 function renderMenus(q){const list=menus.filter(m=>(m.name+' '+(m.occasion||'')+' '+(m.notes||'')).toLowerCase().includes(q));content.innerHTML=`<div class="section-head"><h2>Your menus</h2><span class="count">${list.length} menus</span></div><button class="primary" id="newMenuBtn">＋ New menu</button><div style="margin-top:18px">${list.length?list.map(m=>`<article class="menu-card"><span class="tag">${m.guest_count?m.guest_count+' guests':'Menu'} ${m.menu_date?'· '+esc(m.menu_date):''}</span><h3>${esc(m.name)}</h3><div class="menu-items">${esc(m.occasion||'')}</div><button class="tab copy-menu" data-id="${m.id}">Copy & modify</button></article>`).join(''):'<div class="empty">No menus yet. Create one from a blank page.</div>'}</div>`;document.querySelector('#newMenuBtn').onclick=()=>menuDialog.showModal();content.querySelectorAll('.copy-menu').forEach(b=>b.onclick=()=>copyMenu(+b.dataset.id))}
 async function showRecipe(id){
   const recipeId=Number(id);
@@ -131,13 +160,13 @@ search.oninput=()=>{
     return;
   }
   clearTimeout(searchTimer);
-  searchTimer=setTimeout(()=>loadRecipePage({reset:true}).catch(e=>showUiError(e.message,'Could not search recipes')),250);
+  searchTimer=setTimeout(()=>loadRecipePage({offset:0,refreshCount:true}).catch(e=>showUiError(e.message,'Could not search recipes')),250);
 };
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
   view=t.dataset.view;
   document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===t));
   if(view==='menus')renderMenus(search.value.trim().toLowerCase());
-  else loadRecipePage({reset:true}).catch(e=>showUiError(e.message,'Could not load recipes'));
+  else loadRecipePage({offset:0,refreshCount:true}).catch(e=>showUiError(e.message,'Could not load recipes'));
 });
 async function boot(sessionOverride=null){let session=sessionOverride;if(!session){const{data:{session:currentSession}}=await supabase.auth.getSession();session=currentSession}if(!session){loginPanel.hidden=false;appPanel.hidden=true;return}loginPanel.hidden=true;appPanel.hidden=false;userBadge.textContent=session.user.email||'Signed in';try{await loadData()}catch(e){content.innerHTML='<div class="empty">'+esc(e.message)+'</div>'}}
 supabase.auth.onAuthStateChange((_event,session)=>{if(session)setTimeout(()=>boot(session),0);else{loginPanel.hidden=false;appPanel.hidden=true}});boot();
