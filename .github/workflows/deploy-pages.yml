@@ -27,6 +27,13 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
+      - name: Generate PWA PNG icons
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y librsvg2-bin
+          rsvg-convert -w 192 -h 192 pwa-icon.svg -o pwa-icon-192.png
+          rsvg-convert -w 512 -h 512 pwa-icon.svg -o pwa-icon-512.png
+
       - name: Upload site artifact
         uses: actions/upload-pages-artifact@v3
         with:
