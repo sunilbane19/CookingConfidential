@@ -81,13 +81,20 @@ function recipePager(){
   const next=Math.min(Math.max(0,(totalPages-1)*RECIPE_PAGE_SIZE),recipeOffset+RECIPE_PAGE_SIZE);
   const last=Math.max(0,(totalPages-1)*RECIPE_PAGE_SIZE);
   const disabled=(condition)=>condition?' disabled':'';
-  return `<div class="recipe-pager" aria-label="Recipe pages">
-    <button class="secondary pager-btn" data-page-offset="${first}"${disabled(page===1)}>First 12</button>
-    <button class="secondary pager-btn" data-page-offset="${prev}"${disabled(page===1)}>Previous 12</button>
-    <span class="pager-status">Page ${page} of ${totalPages} · ${recipeTotalCount} recipes</span>
-    <button class="secondary pager-btn" data-page-offset="${next}"${disabled(page===totalPages)}>Next 12</button>
-    <button class="secondary pager-btn" data-page-offset="${last}"${disabled(page===totalPages)}>Last 12</button>
-  </div>`;
+  return `<nav class="recipe-pager" aria-label="Recipe pages">
+    <div class="pager-actions">
+      <button class="pager-btn pager-edge" data-page-offset="${first}"${disabled(page===1)}>« First</button>
+      <button class="pager-btn" data-page-offset="${prev}"${disabled(page===1)}>‹ Previous</button>
+    </div>
+    <div class="pager-info">
+      <span class="pager-count">${recipeTotalCount} <small>recipes</small></span>
+      <span class="pager-page">Page ${page} <small>of ${totalPages}</small></span>
+    </div>
+    <div class="pager-actions">
+      <button class="pager-btn" data-page-offset="${next}"${disabled(page===totalPages)}>Next ›</button>
+      <button class="pager-btn pager-edge" data-page-offset="${last}"${disabled(page===totalPages)}>Last »</button>
+    </div>
+  </nav>`;
 }
 function wireRecipePager(){
   content.querySelectorAll('.pager-btn').forEach(btn=>btn.onclick=async()=>{
@@ -102,8 +109,8 @@ function render(){
   if(view==='menus')return renderMenus(search.value.trim().toLowerCase());
   const title=view==='favourites'?'Favourites':'Your recipes';
   const list=recipes;
-  const pager=(recipeTotalCount>RECIPE_PAGE_SIZE)?recipePager():'';
-  content.innerHTML=`${pager}<div class="section-head"><h2>${title}</h2><span class="count">${list.length?recipeOffset+1+'–'+(recipeOffset+list.length):'0'} of ${recipeTotalCount}</span></div>${list.length?'<div class="grid">'+list.map(recipeCard).join('')+'</div>':'<div class="empty">No recipes found. Try another ingredient, cuisine or dish.</div>'}${pager}`;
+  const pager=recipePager();
+  content.innerHTML=`${pager}<div class="section-head"><h2>${title}</h2><span class="count">${list.length?recipeOffset+1+'–'+(recipeOffset+list.length):'0'} of ${recipeTotalCount}</span></div>${list.length?'<div class="grid">'+list.map(recipeCard).join(''):'<div class="empty">No recipes found. Try another ingredient, cuisine or dish.</div>'}${pager}`;
   content.querySelectorAll('.card').forEach(c=>c.onclick=()=>showRecipe(+c.dataset.id));
   wireRecipePager();
   window.dispatchEvent(new CustomEvent('cc:recipes-rendered'));
