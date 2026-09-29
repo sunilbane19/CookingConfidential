@@ -9,6 +9,8 @@ let importItems=[],recipes=[],menus=[],view='recipes';
 const RECIPE_PAGE_SIZE=12;
 const RECIPE_CARD_FIELDS='id,name,cuisine,country,region,course,recipe_type,rating,is_favourite,image_url,updated_at';
 const RECIPE_DETAIL_FIELDS='id,name,description,cuisine,country,region,course,recipe_type,ingredients,method,personal_notes,rating,source_url,source_title,is_favourite,image_url,updated_at,servings,original_file_path,original_file_name,original_mime_type,source_type';
+// Full recipe cache: fetch a recipe once when it is first opened during this session.
+const recipeDetailCache=new Map();
 let recipeOffset=0,recipeHasMore=false,recipeLoading=false,recipeRequestId=0,searchTimer=null;
 window.ccImportItems=importItems;
 const esc=(s='')=>String(s).replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));
@@ -67,7 +69,7 @@ async function loadData(){
   if(view==='menus')renderMenus(search.value.trim().toLowerCase());
 }
 window.ccReloadRecipes=loadRecipePage;
-function recipeCard(r){return `<article class="card" data-id="${r.id}"><div class="card-image">🍽</div><div class="card-body"><span class="tag">${esc(r.cuisine||'Uncategorised')}</span><h3>${esc(r.name)}</h3><div class="meta">${esc(r.course||'Recipe')} · ${stars(r.rating)}</div></div></article>`}
+function recipeCard(r){return `<article class="card" data-id="${r.id}"><div class="card-image" aria-hidden="true"></div><div class="card-body"><span class="tag">${esc(r.cuisine||'Uncategorised')}</span><h3>${esc(r.name)}</h3><div class="meta">${esc([r.course||'Recipe',r.recipe_type].filter(Boolean).join(' · '))} · ${stars(r.rating)}</div></div></article>`}
 function render(){
   if(view==='menus')return renderMenus(search.value.trim().toLowerCase());
   const title=view==='favourites'?'Favourites':'Your recipes';
@@ -80,12 +82,18 @@ function render(){
 }
 function renderMenus(q){const list=menus.filter(m=>(m.name+' '+(m.occasion||'')+' '+(m.notes||'')).toLowerCase().includes(q));content.innerHTML=`<div class="section-head"><h2>Your menus</h2><span class="count">${list.length} menus</span></div><button class="primary" id="newMenuBtn">＋ New menu</button><div style="margin-top:18px">${list.length?list.map(m=>`<article class="menu-card"><span class="tag">${m.guest_count?m.guest_count+' guests':'Menu'} ${m.menu_date?'· '+esc(m.menu_date):''}</span><h3>${esc(m.name)}</h3><div class="menu-items">${esc(m.occasion||'')}</div><button class="tab copy-menu" data-id="${m.id}">Copy & modify</button></article>`).join(''):'<div class="empty">No menus yet. Create one from a blank page.</div>'}</div>`;document.querySelector('#newMenuBtn').onclick=()=>menuDialog.showModal();content.querySelectorAll('.copy-menu').forEach(b=>b.onclick=()=>copyMenu(+b.dataset.id))}
 async function showRecipe(id){
+  const recipeId=Number(id);
   detailDialog.querySelector('#detailContent').innerHTML='<div class="dialog-card"><p class="small-note">Loading recipe…</p></div>';
   detailDialog.showModal();
-  const{data:r,error}=await supabase.from('cc_recipes').select(RECIPE_DETAIL_FIELDS).eq('id',Number(id)).single();
-  if(error||!r){
-    detailDialog.close();
-    return showUiError(error?.message||'Recipe could not be found.','Could not load recipe');
+  let r=recipeDetailCache.get(recipeId);
+  if(!r){
+    const{data,error}=await supabase.from('cc_recipes').select(RECIPE_DETAIL_FIELDS).eq('id',recipeId).single();
+    if(error||!data){
+      detailDialog.close();
+      return showUiError(error?.message||'Recipe could not be found.','Could not load recipe');
+    }
+    r=data;
+    recipeDetailCache.set(recipeId,r);
   }
   window.ccCurrentRecipe=r;
   detailDialog.querySelector('#detailContent').innerHTML=`<button class="close" onclick="detailDialog.close()">×</button><span class="tag">${esc(r.cuisine||'')} · ${esc(r.course||'Recipe')}</span><h2 class="detail-title">${esc(r.name)}</h2><div class="meta">${stars(r.rating)}</div>${r.description?'<div class="detail-section"><h4>Description</h4><div class="rich-display">'+safeRichHtml(r.description)+'</div></div>':''}<div class="detail-section"><h4>Ingredients</h4><div class="rich-display">${ingredientsHtml(r)||'—'}</div></div><div class="detail-section"><h4>Method</h4><div class="rich-display">${safeRichHtml(r.method||'')||'—'}</div></div>${r.personal_notes?'<div class="detail-section"><h4>My notes</h4><div class="rich-display">'+safeRichHtml(r.personal_notes)+'</div></div>':''}${r.source_url?'<div class="detail-section"><h4>Source</h4><p><a href="'+esc(r.source_url)+'" target="_blank" rel="noopener">'+esc(r.source_title||r.source_url)+'</a></p></div>':''}<div class="detail-actions"><button class="secondary" id="favBtn">${r.is_favourite?'★ Remove favourite':'☆ Add to favourites'}</button></div>`;
@@ -96,6 +104,7 @@ async function showRecipe(id){
     const card=recipes.find(x=>Number(x.id)===Number(r.id));
     if(card)card.is_favourite=next;
     r.is_favourite=next;
+    recipeDetailCache.set(Number(r.id),r);
     detailDialog.close();
     if(view==='favourites'&&!next)recipes=recipes.filter(x=>Number(x.id)!==Number(r.id));
     window.ccRecipes=recipes;
