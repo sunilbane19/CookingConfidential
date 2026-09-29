@@ -12,6 +12,14 @@
 .import-inbox-panel{margin-top:18px;padding-top:12px;border-top:1px solid var(--line);max-height:230px;overflow:auto}.import-inbox-panel .queue-head{padding-bottom:8px}.import-inbox-panel .review-item{background:var(--card)}
 /* Larger upload/import dialog: gives the file picker and import options more room. */
 #importDialog{max-width:min(820px,94vw);width:100%}
+/* Larger review-import editor: more room for checking recipes before saving. */
+#detailDialog{max-width:min(900px,94vw);width:100%;height:auto;max-height:92vh}
+#detailDialog .dialog-card{max-height:88vh;overflow:auto;padding:34px 40px}
+@media(max-width:700px){
+  #detailDialog{max-width:96vw;max-height:94vh}
+  #detailDialog .dialog-card{max-height:90vh;padding:28px 24px}
+}
+
 #importDialog .dialog-card{max-height:88vh;overflow:auto;padding:34px 36px}
 @media (max-width:700px){
   #importDialog{max-width:96vw}
