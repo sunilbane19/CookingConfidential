@@ -19,7 +19,29 @@ const types=['','Dish','Dip','Dressing','Sauce','Chutney','Marinade','Rub','Past
 function mountReviewRichText(form,name,label){const ta=form.querySelector(`textarea[name="${CSS.escape(name)}"]`);if(!ta)return;const oldLabel=ta.closest('label');const wrap=document.createElement('div');wrap.className='rich-field';const initial=String(ta.value||'');const safe=initial.split(/\r?\n/).map(v=>v?'<div>'+esc(decodeEntities(v))+'</div>':'<div><br></div>').join('');wrap.innerHTML='<label>'+esc(label)+'</label><div class="rich-toolbar" role="toolbar" aria-label="'+esc(label)+' formatting"><button type="button" class="rich-tool" data-command="bold">B</button><button type="button" class="rich-tool" data-command="italic">I</button><button type="button" class="rich-tool" data-command="underline">U</button><button type="button" class="rich-tool" data-command="insertUnorderedList">•</button><button type="button" class="rich-tool" data-command="insertOrderedList">1.</button></div><div class="rich-editor" contenteditable="true" role="textbox" aria-multiline="true">'+safe+'</div>';const hidden=document.createElement('input');hidden.type='hidden';hidden.name=name;hidden.value=initial;if(oldLabel)oldLabel.replaceWith(wrap);else ta.replaceWith(wrap);wrap.appendChild(hidden);ta.remove();const ed=wrap.querySelector('.rich-editor');const sync=()=>{hidden.value=ed.innerHTML};ed.addEventListener('input',sync);ed.addEventListener('blur',sync);wrap.querySelectorAll('.rich-tool').forEach(btn=>{btn.addEventListener('mousedown',e=>e.preventDefault());btn.addEventListener('click',()=>{ed.focus();document.execCommand(btn.dataset.command,false,null);sync()})});sync()}
 
 function selectField(label,name,list,value){const v=String(value||'');const known=list.includes(v);return `<label>${label}<select name="${name}">${list.map(o=>`<option value="${esc(o)}" ${o===v?'selected':''}>${esc(o||'Select…')}</option>`).join('')}<option value="__custom__" ${v&&!known?'selected':''}>Other / custom…</option></select><input name="${name}_custom" placeholder="Enter category" style="display:${v&&!known?'block':'none'};margin-top:8px" value="${v&&!known?esc(v):''}"></label>`}
-function parseRecipe(x){const fileTitle=x?.file_name?.replace(/\.[^.]+$/,'')||'Imported recipe';let r={name:fileTitle,ingredients:[],method:'',cuisine:x?.inferred_cuisine||'',course:x?.inferred_course||'',servings:'',description:''};if(x?.extracted_text){try{const j=JSON.parse(x.extracted_text),s=j.recipe&&typeof j.recipe==='object'?j.recipe:j,n=String(s.name||'').trim(),long=n.length>100||/\b(we will|here is|to make|using|ingredients list)\b/i.test(n);r={...r,name:long?fileTitle:(n||fileTitle),personal_notes:s.personal_notes||s.notes||'',ingredients:s.ingredients||s.recipeIngredient||[],method:s.method||s.recipeInstructions||'',cuisine:s.cuisine||s.recipeCuisine||r.cuisine,course:s.course||s.recipeCategory||r.course,servings:s.servings||s.recipeYield||'',description:s.description||(long?clean(n):'')};if(Array.isArray(r.method))r.method=r.method.map(v=>typeof v==='string'?v:v?.text||v?.name||'').join('\n');}catch{}}return r}
+function parseRecipe(x){
+  const rawFileTitle=String(x?.file_name||'Imported recipe').replace(/\.[^.]+$/,'').replace(/^\s*\d+[-_\s]+/,'').replace(/[_-]+/g,' ').replace(/\s+/g,' ').trim();
+  const fileTitle=rawFileTitle||'Imported recipe';
+  const badTitle=/^(?:\*+|(?:\*\s*){2,}|_+|-+|=+|search(?:\s*\[|\s*$)|search\b|food52\b|home$|recipes?$|save recipe$|print$|share$|0 items? in your cart$|skip to main content$|advertisement$|loading$|menu$|subscribe$)/i;
+  const usableTitle=v=>{
+    const s=clean(String(v||'')).replace(/^[*_\-#\s]+|[*_\-#\s]+$/g,'').replace(/\s+/g,' ').trim();
+    if(!s||badTitle.test(s)||s.length<3||s.length>160)return '';
+    if(/^(?:https?:\/\/|\[[^\]]*\]\(https?:\/\/)/i.test(s))return '';
+    if(/^(?:\*\s*)+$/.test(s))return '';
+    return s;
+  };
+  let r={name:fileTitle,ingredients:[],method:'',cuisine:x?.inferred_cuisine||'',course:x?.inferred_course||'',servings:'',description:''};
+  if(x?.extracted_text){
+    try{
+      const j=JSON.parse(x.extracted_text),s=j.recipe&&typeof j.recipe==='object'?j.recipe:j;
+      const n=usableTitle(s.name);
+      const long=n.length>100||/\b(we will|here is|to make|using|ingredients list)\b/i.test(n);
+      r={...r,name:long?fileTitle:(n||fileTitle),personal_notes:s.personal_notes||s.notes||'',ingredients:s.ingredients||s.recipeIngredient||[],method:s.method||s.recipeInstructions||'',cuisine:s.cuisine||s.recipeCuisine||r.cuisine,course:s.course||s.recipeCategory||r.course,servings:s.servings||s.recipeYield||'',description:s.description||(long?clean(n):'')};
+      if(Array.isArray(r.method))r.method=r.method.map(v=>typeof v==='string'?v:v?.text||v?.name||'').join('\n');
+    }catch{}
+  }
+  return r
+}
 async function invokeExtract(itemId){
   const {data:{session}}=await supabase.auth.getSession();
   if(!session?.access_token)return {data:null,error:new Error('Your sign-in session has expired. Please sign in again.')};
