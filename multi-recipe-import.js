@@ -95,33 +95,33 @@ async function parseDocxRawMulti(arrayBuffer,file){
   const xml=await zip.file('word/document.xml')?.async('text');
   if(!xml)return[];
   const doc=new DOMParser().parseFromString(xml,'application/xml');
-  const paras=[...doc.getElementsByTagNameNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main','p')].map(p=>({
-    text:clean([...p.getElementsByTagNameNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main','t')].map(t=>t.textContent||'').join(' ')),
-    empty:[...p.getElementsByTagNameNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main','t')].every(t=>!clean(t.textContent))
-  }));
-  const blocks=[];let current=[];const push=()=>{if(current.length){blocks.push(current);current=[];}};
-  for(const p of paras){if(p.empty){push();continue;}current.push(p.text);}push();
-  const usable=blocks.filter(b=>b.length>=2);
-  if(usable.length>=2){
-    const recipes=usable.map(b=>{
-      const r=makeRecipe(b[0]);
-      const body=b.slice(1);
-      const ih=body.findIndex(x=>/^ingredients?(?:\s+list)?$/i.test(x));
-      const mh=body.findIndex(x=>/^(method|directions?|instructions?|preparation|steps?)$/i.test(x));
-      const nh=body.findIndex(x=>/^notes?$/i.test(x));
-      if(ih>=0){
-        const end=[mh,nh].filter(n=>n>ih).sort((a,b)=>a-b)[0]??body.length;
-        r.ingredients=cleanIngredientLines(body.slice(ih+1,end));
-      }else{
-        r.ingredients=cleanIngredientLines((mh>=0?body.slice(0,mh):body).filter(x=>!/^lay on a bed of$/i.test(x)));
-      }
-      if(mh>=0){const end=nh>mh?nh:body.length;r.method=body.slice(mh+1,end).filter(x=>!isOcrGarbage(x));}
-      if(nh>=0)r.notes=body.slice(nh+1).filter(x=>!isOcrGarbage(x));
-      return r;
-    }).filter(r=>r.name&&r.ingredients.length>=1);
-    if(recipes.length>=2)return recipes;
+  const W='http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+  const paras=[...doc.getElementsByTagNameNS(W,'p')].map(p=>{
+    const text=clean([...p.getElementsByTagNameNS(W,'t')].map(t=>t.textContent||'').join(' '));
+    const bold=[...p.getElementsByTagNameNS(W,'r')].some(r=>[...r.getElementsByTagNameNS(W,'b')].some(b=>{const v=b.getAttributeNS(W,'val');return v===null||v==='1'||v==='true'||v==='on'}));
+    const style=[...p.getElementsByTagNameNS(W,'pStyle')].map(s=>s.getAttributeNS(W,'val')||'')[0]||'';
+    return {text,bold,style};
+  }).filter(p=>p.text);
+  if(!paras.length)return[];
+  const isList=p=>/listparagraph/i.test(p.style);
+  const isTitle=(p,i)=>{
+    if(!p.text||GENERIC.test(p.text)||looksLikeIngredientTitle(p.text))return false;
+    if(p.bold)return true;
+    return !isList(p)&&!!paras[i+1]&&isList(paras[i+1])&&titleCaseScore(p.text);
+  };
+  const ti=paras.map((p,i)=>isTitle(p,i)?i:-1).filter(i=>i>=0);
+  if(ti.length<2)return[];
+  const recipes=[];
+  for(let k=0;k<ti.length;k++){
+    const si=ti[k],ei=k+1<ti.length?ti[k+1]:paras.length,body=paras.slice(si+1,ei).map(p=>p.text),r=makeRecipe(paras[si].text);
+    const ih=body.findIndex(x=>/^ingredients?(?:\s+list)?$/i.test(x)),mh=body.findIndex(x=>/^(method|directions?|instructions?|preparation|steps?)$/i.test(x)),nh=body.findIndex(x=>/^notes?$/i.test(x));
+    if(ih>=0){const e=[mh,nh].filter(n=>n>ih).sort((a,b)=>a-b)[0]??body.length;r.ingredients=cleanIngredientLines(body.slice(ih+1,e));}
+    else{const e=mh>=0?mh:(nh>=0?nh:body.length);r.ingredients=cleanIngredientLines(body.slice(0,e));}
+    if(mh>=0){const e=nh>mh?nh:body.length;r.method=body.slice(mh+1,e).filter(x=>!isOcrGarbage(x));}
+    if(nh>=0)r.notes=body.slice(nh+1).filter(x=>!isOcrGarbage(x));
+    if(r.name&&r.ingredients.length)recipes.push(r);
   }
-  return[];
+  return recipes.length>=2?recipes:[];
 }
 function parseDocxMulti(html,file){
   const doc=new DOMParser().parseFromString(html,'text/html');
