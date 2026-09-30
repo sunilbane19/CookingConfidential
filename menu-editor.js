@@ -1,7 +1,7 @@
 import { supabase } from './supabase-client.js?v=1.0.0';
 import * as mammoth from 'https://esm.sh/mammoth@1.6.0';
 
-const esc=s=>String(s??'').replace(/[&<>\\\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\\\"':'&quot;',"'":'&#39;'}[c]));
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const cleanHtml=(html='')=>{
   const doc=new DOMParser().parseFromString('<div>'+String(html||'')+'</div>','text/html');
   const allowed=new Set(['DIV','P','BR','B','STRONG','I','EM','U','SPAN','A','UL','OL','LI','FONT']);
@@ -96,7 +96,7 @@ function addLink(href,recipeId=null){
  const ed=getSelectionEditor();if(!ed)return window.ccShowError('Place the cursor in a menu line and select some text first.','Select menu text');
  if(!getSelection()?.toString())return window.ccShowError('Select the text you want to link first.','Select menu text');
  exec('createLink',href);
- const sel=getSelection();let node=sel?.anchorNode?.parentElement?.closest?.('a');if(node&&recipeId)node.dataset.recipeId=String(recipeId);if(ed)ed.innerHTML=cleanHtml(ed.innerHTML)
+ const sel=getSelection();let node=sel?.anchorNode?.parentElement?.closest?.('a');if(recipeId&&ed){ed.querySelectorAll('a').forEach(a=>{if(a.getAttribute('href')===('#recipe-'+recipeId)||a.getAttribute('href')?.endsWith('#recipe-'+recipeId))a.dataset.recipeId=String(recipeId)})}if(ed)ed.innerHTML=cleanHtml(ed.innerHTML)
 }
 async function collectDocument(){
  const blocks=[...document.querySelectorAll('#ccMenuDocument .cc-menu-block')].map(el=>{
@@ -125,7 +125,7 @@ async function openEditor(menu,{blocks=null,sourceLabel='',newMenu=false}={}){
  content.querySelector('#ccMenuNumber').onclick=()=>exec('insertOrderedList');
  content.querySelector('#ccMenuDivider').onclick=()=>{const doc=d.querySelector('#ccMenuDocument');doc.insertAdjacentHTML('beforeend','<div class="cc-menu-block cc-divider" contenteditable="false"><div class="cc-block-controls"><button type="button" data-move="-1">↑</button><button type="button" data-move="1">↓</button><button type="button" data-delete="1">×</button></div></div>')};
  content.querySelector('#ccMenuAddLine').onclick=()=>{const doc=d.querySelector('#ccMenuDocument');doc.insertAdjacentHTML('beforeend','<div class="cc-menu-block" contenteditable="true"><br><div class="cc-block-controls"><button type="button" data-move="-1">↑</button><button type="button" data-move="1">↓</button><button type="button" data-delete="1">×</button></div></div>');doc.lastElementChild.focus()};
- content.querySelector('#ccMenuApplyRecipeLink').onclick=()=>{const id=content.querySelector('#ccMenuRecipeLink').value;if(!id)return;const r=recipes.find(x=>String(x.id)===String(id));if(!r)return;addLink(location.href.split('#')[0]+'#recipe-'+id,id)};
+ content.querySelector('#ccMenuApplyRecipeLink').onclick=()=>{const id=content.querySelector('#ccMenuRecipeLink').value;if(!id)return;const r=recipes.find(x=>String(x.id)===String(id));if(!r)return;addLink('#recipe-'+id,id)};
  content.querySelector('#ccMenuApplyUrl').onclick=()=>{const u=content.querySelector('#ccMenuUrl').value.trim();if(/^https?:\\/\\//i.test(u))addLink(u)};
  d.querySelector('#ccMenuDocument').addEventListener('click',e=>{
    const del=e.target.closest('[data-delete]'),move=e.target.closest('[data-move]');
