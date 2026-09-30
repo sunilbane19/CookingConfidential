@@ -202,8 +202,8 @@ async function uploadExisting(){
        let blocks;try{blocks=await extractMenu(file)}catch(err){await supabase.storage.from('cooking-confidential').remove([path]);status.textContent=err.message;continue}
        const documentData={version:1,blocks};
        const payload={name:file.name.replace(/\.[^.]+$/,''),menu_date:null,guest_count:null,occasion:null,content:JSON.stringify(documentData),document:documentData,original_file_path:path,original_file_name:file.name,original_mime_type:file.type||null,is_favourite:false,visibility:'private',created_by:user.id};
-       const ins=await supabase.from('cc_menus').insert(payload).select().single();
-       if(ins.error){await supabase.storage.from('cooking-confidential').remove([path]);status.textContent=ins.error.message;continue}
+       const ins=await supabase.from('cc_menus').insert(payload);
+       if(ins.error){await supabase.storage.from('cooking-confidential').remove([path]);status.textContent='Could not save '+file.name+': '+ins.error.message;continue}
      }
      status.textContent='Upload complete.';
      await window.ccReloadMenus?.();
