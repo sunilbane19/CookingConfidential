@@ -54,10 +54,10 @@ function ensure(){
     valueSelect.onchange=e=>{const k=kindSelect.value;state.filter=(k==='latest'||k==='favourite')?k:k+':'+e.target.value;apply()};
     apply();
   }else if(active==='menus'){
-    tools.innerHTML='<div class="cc-library-toolbar"><div class="cc-library-actions"><button class="secondary cc-library-icon" id="ccImportMenus" type="button" aria-label="Import menus" title="Import menus">⇅</button><button class="primary cc-library-icon" id="ccNewMenuContext" type="button" aria-label="New menu" title="New menu">＋</button></div></div>';
+    tools.innerHTML='<div class="cc-library-toolbar"><div class="cc-library-actions"><button class="secondary cc-library-icon" id="ccImportMenus" type="button" aria-label="Upload menu" title="Upload menu">⇅</button><button class="primary cc-library-icon" id="ccNewMenuContext" type="button" aria-label="New menu" title="New menu">＋</button></div></div>';
     head.parentNode.insertBefore(tools,head);
-    tools.querySelector('#ccImportMenus').onclick=()=>document.querySelector('#importBtn')?.click();
-    tools.querySelector('#ccNewMenuContext').onclick=()=>document.querySelector('#newMenuBtn')?.click();
+    tools.querySelector('#ccImportMenus').onclick=()=>window.ccMenuEditor?.uploadExisting?.();
+    tools.querySelector('#ccNewMenuContext').onclick=()=>window.ccMenuEditor?.newBlank?.();
   }
 }
 window.ccEnsureLibraryToolbar=ensure;
