@@ -126,7 +126,7 @@ async function openEditor(menu,{blocks=null,sourceLabel='',newMenu=false}={}){
  content.querySelector('#ccMenuDivider').onclick=()=>{const doc=d.querySelector('#ccMenuDocument');doc.insertAdjacentHTML('beforeend','<div class="cc-menu-block cc-divider" contenteditable="false"><div class="cc-block-controls"><button type="button" data-move="-1">↑</button><button type="button" data-move="1">↓</button><button type="button" data-delete="1">×</button></div></div>')};
  content.querySelector('#ccMenuAddLine').onclick=()=>{const doc=d.querySelector('#ccMenuDocument');doc.insertAdjacentHTML('beforeend','<div class="cc-menu-block" contenteditable="true"><br><div class="cc-block-controls"><button type="button" data-move="-1">↑</button><button type="button" data-move="1">↓</button><button type="button" data-delete="1">×</button></div></div>');doc.lastElementChild.focus()};
  content.querySelector('#ccMenuApplyRecipeLink').onclick=()=>{const id=content.querySelector('#ccMenuRecipeLink').value;if(!id)return;const r=recipes.find(x=>String(x.id)===String(id));if(!r)return;addLink('#recipe-'+id,id)};
- content.querySelector('#ccMenuApplyUrl').onclick=()=>{const u=content.querySelector('#ccMenuUrl').value.trim();if(/^https?:\\/\\//i.test(u))addLink(u)};
+ content.querySelector('#ccMenuApplyUrl').onclick=()=>{const u=content.querySelector('#ccMenuUrl').value.trim();if(/^https?:\/\//i.test(u))addLink(u)};
  d.querySelector('#ccMenuDocument').addEventListener('click',e=>{
    const del=e.target.closest('[data-delete]'),move=e.target.closest('[data-move]');
    const block=e.target.closest('.cc-menu-block');if(!block)return;
