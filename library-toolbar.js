@@ -56,8 +56,9 @@ function ensure(){
   }else if(active==='menus'){
     tools.innerHTML='<div class="cc-library-toolbar"><div class="cc-library-actions"><button class="secondary cc-library-icon" id="ccImportMenus" type="button" aria-label="Upload menu" title="Upload menu">⇅</button><button class="primary cc-library-icon" id="ccNewMenuContext" type="button" aria-label="New menu" title="New menu">＋</button></div></div>';
     head.parentNode.insertBefore(tools,head);
-    tools.querySelector('#ccImportMenus').onclick=()=>window.ccMenuEditor?.uploadExisting?.();
-    tools.querySelector('#ccNewMenuContext').onclick=()=>window.ccMenuEditor?.newBlank?.();
+    const ensureMenuEditor=async()=>{if(window.ccMenuEditor)return window.ccMenuEditor;try{await import('./menu-editor.js?v=1.9.2')}catch(e){console.error('Cooking Confidential menu editor:',e)}return window.ccMenuEditor};
+    tools.querySelector('#ccImportMenus').onclick=async e=>{e.preventDefault();e.stopPropagation();const m=await ensureMenuEditor();m?.uploadExisting?.()};
+    tools.querySelector('#ccNewMenuContext').onclick=async e=>{e.preventDefault();e.stopPropagation();const m=await ensureMenuEditor();m?.newBlank?.()};
   }
 }
 window.ccEnsureLibraryToolbar=ensure;
