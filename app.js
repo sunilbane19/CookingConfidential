@@ -58,7 +58,7 @@ async function loadRecipePage({offset=0,refreshCount=true}={}) {
 
 async function loadMenus(){
   try{
-    const menuFields='id,name,menu_date,occasion,guest_count,notes,created_at';
+    const menuFields='id,name,menu_date,occasion,guest_count,notes,created_at,updated_at,menu_type,content,document,original_file_path,original_file_name,original_mime_type,is_favourite';
     const menusResult=await supabase.from('cc_menus').select(menuFields).order('menu_date',{ascending:false,nullsFirst:false}).order('created_at',{ascending:false});
     if(menusResult.error)throw new Error(menusResult.error.message);
     menus=menusResult.data||[];
@@ -116,7 +116,12 @@ function render(){
   window.dispatchEvent(new CustomEvent('cc:recipes-rendered'));
 }
 
-function renderMenus(q){const list=menus.filter(m=>(m.name+' '+(m.occasion||'')+' '+(m.notes||'')).toLowerCase().includes(q));content.innerHTML=`<div class="section-head"><h2>Your menus</h2><span class="count">${list.length} menus</span></div><button class="primary" id="newMenuBtn">＋ New menu</button><div style="margin-top:18px">${list.length?list.map(m=>`<article class="menu-card"><span class="tag">${m.guest_count?m.guest_count+' guests':'Menu'} ${m.menu_date?'· '+esc(m.menu_date):''}</span><h3>${esc(m.name)}</h3><div class="menu-items">${esc(m.occasion||'')}</div><button class="tab copy-menu" data-id="${m.id}">Copy & modify</button></article>`).join(''):'<div class="empty">No menus yet. Create one from a blank page.</div>'}</div>`;document.querySelector('#newMenuBtn').onclick=()=>menuDialog.showModal();content.querySelectorAll('.copy-menu').forEach(b=>b.onclick=()=>copyMenu(+b.dataset.id))}
+function renderMenus(q){const list=menus.filter(m=>(m.name+' '+(m.occasion||'')+' '+(m.notes||'')).toLowerCase().includes(q));window.ccMenus=list;content.innerHTML=`<div class="section-head"><h2>Your menus</h2><span class="count">${list.length} menus</span></div><div class="cc-menu-actions-grid"><button class="primary" id="newMenuBtn">＋ New menu</button><button class="secondary" id="ccUploadMenuBtn">＋ Upload existing menu</button></div><div style="margin-top:18px">${list.length?list.map(m=>`<article class="menu-card"><span class="tag">${m.guest_count?m.guest_count+' guests':'Menu'} ${m.menu_date?'· '+esc(m.menu_date):''}</span><h3>${esc(m.name)}</h3><div class="menu-items">${esc(m.occasion||'')}${m.is_favourite?' · ★ Favourite':''}</div><div class="cc-menu-card-actions"><button class="secondary" data-menu-action="open" data-id="${m.id}">Open / Edit</button>${m.original_file_path?'<button class="secondary" data-menu-action="original" data-id="'+m.id+'">Show Original</button>':''}<button class="secondary" data-menu-action="saveas" data-id="${m.id}">Save As</button><button class="secondary" data-menu-action="print" data-id="${m.id}">Print</button><button class="secondary" data-menu-action="share" data-id="${m.id}">Share</button><button class="secondary" data-menu-action="fav" data-id="${m.id}">${m.is_favourite?'★ Unfavourite':'☆ Favourite'}</button><button class="secondary" data-menu-action="delete" data-id="${m.id}">Delete</button></div></article>`).join(''):'<div class="empty">No menus yet. Create a new menu or upload an existing one.</div>'}</div>`;
+ document.querySelector('#newMenuBtn').onclick=()=>window.ccMenuEditor?.newBlank();
+ document.querySelector('#ccUploadMenuBtn').onclick=()=>window.ccMenuEditor?.uploadExisting();
+ window.ccRenderMenus=()=>renderMenus(search.value.trim().toLowerCase());
+}
+window.ccReloadMenus=async()=>{await loadMenus();if(view==='menus')renderMenus(search.value.trim().toLowerCase())};
 async function showRecipe(id){
   const recipeId=Number(id);
   detailDialog.querySelector('#detailContent').innerHTML='<div class="dialog-card"><p class="small-note">Loading recipe…</p></div>';
