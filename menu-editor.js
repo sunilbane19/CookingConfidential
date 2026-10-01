@@ -38,13 +38,13 @@ function styles(){
  #ccMenuEditorDialog{max-width:min(1080px,96vw);width:min(1080px,96vw);max-height:94vh}
  #ccMenuEditorDialog .dialog-card{max-height:94vh;overflow:auto;padding:26px}
  .cc-menu-toolbar{position:sticky;top:0;z-index:5;background:var(--card);border-bottom:1px solid var(--line);padding:10px 0 12px;margin-bottom:14px}
- .cc-menu-toolrow{display:flex;flex-wrap:wrap;gap:7px;align-items:center}
- .cc-menu-toolrow button,.cc-menu-toolrow select,.cc-menu-toolrow input{min-height:38px;border:1px solid var(--line);border-radius:8px;background:#fff;padding:7px 10px;font:13px Arial;color:var(--ink)}
+ .cc-menu-toolrow{display:flex;flex-wrap:nowrap;gap:5px;align-items:center;overflow-x:auto;overflow-y:hidden;padding-bottom:2px;scrollbar-width:thin}
+ .cc-menu-toolrow button,.cc-menu-toolrow select,.cc-menu-toolrow input{min-height:36px;flex:0 0 auto;border:1px solid var(--line);border-radius:8px;background:#fff;padding:6px 9px;font:13px Arial;color:var(--ink)}
  .cc-menu-toolrow button{cursor:pointer;font-weight:600}.cc-menu-align{min-width:42px}.cc-menu-align.active{background:var(--accent);color:#fff;border-color:var(--accent)}
  .cc-menu-toolrow .cc-tool-primary{background:var(--paper)}
  .cc-menu-document{background:#fff;border:1px solid var(--line);border-radius:14px;padding:24px;min-height:520px;box-shadow:0 4px 18px rgba(40,30,20,.05)}
  .cc-menu-block{position:relative;min-height:30px;padding:7px 42px 7px 6px;margin:2px 0;border-radius:7px;outline:none;line-height:1.45;font-family:Georgia,"Times New Roman",serif}
- .cc-menu-block:focus{box-shadow:inset 0 0 0 1px rgba(155,63,47,.35)} .cc-menu-block h1,.cc-menu-block h2,.cc-menu-block h3,.cc-menu-block h4,.cc-menu-block h5,.cc-menu-block h6{margin:0 0 8px}.cc-menu-block table{border-collapse:collapse;width:100%;margin:6px 0}.cc-menu-block th,.cc-menu-block td{border:1px solid var(--line);padding:5px 7px;text-align:left}
+ .cc-menu-block:focus{box-shadow:inset 0 0 0 1px rgba(155,63,47,.35)} .cc-menu-block h1,.cc-menu-block h2,.cc-menu-block h3,.cc-menu-block h4,.cc-menu-block h5,.cc-menu-block h6{margin:0 0 8px}.cc-menu-block table{border-collapse:collapse;width:100%;margin:6px 0;table-layout:auto}.cc-menu-block th,.cc-menu-block td{border:1px solid var(--line);padding:5px 7px;vertical-align:top;text-align:inherit}
  .cc-menu-block.cc-divider{border-top:1px solid var(--line);height:1px;min-height:1px;padding:0;margin:16px 4px}
  .cc-menu-block .cc-block-controls{position:absolute;right:2px;top:5px;display:flex;gap:3px;opacity:.35}
  .cc-menu-block:hover .cc-block-controls,.cc-menu-block:focus-within .cc-block-controls{opacity:1}
@@ -68,6 +68,13 @@ function styles(){
  .cc-menu-card-actions button{font:12px Arial;padding:8px 12px;border-radius:8px}
  .cc-menu-card-preview{font:15px/1.55 Georgia,serif;margin-top:12px;color:var(--ink);white-space:normal}
  .cc-menu-card-preview .more{color:var(--muted);font:12px Arial}
+ .cc-menu-original-viewer{max-height:72vh;overflow:auto;background:#e9e5dd;border:1px solid var(--line);border-radius:12px;padding:18px}
+ .cc-menu-original-viewer .docx-wrapper{margin:0 auto!important}
+ .cc-menu-original-viewer .docx{margin:0 auto}
+ .cc-menu-original-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+ .cc-menu-original-actions a{display:inline-flex;align-items:center;justify-content:center;text-decoration:none}
+ .cc-menu-original-viewer img{max-width:100%;height:auto}
+
  @media(max-width:760px){
    #ccMenuEditorDialog{max-width:96vw;width:96vw}
    #ccMenuEditorDialog .dialog-card{padding:18px 14px}
@@ -134,6 +141,28 @@ async function collectDocument(){
  }).filter((b,i)=>b.type==='divider'||b.html||i===0);
  return {version:1,blocks}
 }
+async function applyDocxParagraphAlignment(html,arrayBuffer){
+  try{
+    const mod=await import('https://esm.sh/jszip@3.10.1?bundle');
+    const JSZip=mod.default||mod;
+    const zip=await JSZip.loadAsync(arrayBuffer);
+    const xmlFile=zip.file('word/document.xml');
+    if(!xmlFile)return html;
+    const xml=await xmlFile.async('string');
+    const xmlDoc=new DOMParser().parseFromString(xml,'application/xml');
+    const ns='http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+    const paragraphs=[...xmlDoc.getElementsByTagNameNS(ns,'p')];
+    const alignments=paragraphs.map(p=>{
+      const jc=p.getElementsByTagNameNS(ns,'jc')[0];
+      const v=jc?.getAttributeNS(ns,'val')||jc?.getAttribute('w:val')||'';
+      return ({start:'left',left:'left',center:'center',end:'right',right:'right',both:'justify',distribute:'justify'}[v]||null);
+    });
+    const doc=new DOMParser().parseFromString(String(html||''),'text/html');
+    const targets=[...doc.querySelectorAll('p,h1,h2,h3,h4,h5,h6,li')];
+    targets.forEach((el,i)=>{const a=alignments[i];if(a)el.style.textAlign=a});
+    return doc.body.innerHTML;
+  }catch(e){return html}
+}
 function blockMarkup(b,i){
  if(b.type==='divider')return '<div class="cc-menu-block cc-divider" data-index="'+i+'" contenteditable="false"><div class="cc-block-controls"><button type="button" data-move="-1" title="Move up">↑</button><button type="button" data-move="1" title="Move down">↓</button><button type="button" data-delete="1" title="Delete">×</button></div></div>';
  return '<div class="cc-menu-block" data-index="'+i+'" contenteditable="true">'+(b.html||'')+'<div class="cc-block-controls"><button type="button" data-move="-1" title="Move up">↑</button><button type="button" data-move="1" title="Move down">↓</button><button type="button" data-delete="1" title="Delete">×</button></div></div>'
@@ -141,9 +170,10 @@ function blockMarkup(b,i){
 async function openEditor(menu,{blocks=null,sourceLabel='',newMenu=false}={}){
  styles();const d=ensureDialog();let source=blocks?{version:1,blocks}:docFromMenu(menu);if(!blocks&&menu.id&&!(source.blocks||[]).length){const legacy=await supabase.from('cc_menu_items').select('sort_order,custom_label,section,recipe_id,cc_recipes(id,name)').eq('menu_id',menu.id).order('sort_order');if(!legacy.error&&legacy.data?.length){source={version:1,blocks:legacy.data.map(x=>({type:'line',html:'<a href=\"#recipe-'+x.recipe_id+'\" data-recipe-id=\"'+x.recipe_id+'\">'+esc(x.custom_label||x.cc_recipes?.name||'Recipe')+'</a>'}))}}}const initial=normalizeBlocks(source.blocks||[]);
  const recipes=await recipesForLinks();
- d.querySelector('#ccMenuEditorContent').innerHTML='<button class="close" type="button" id="ccMenuEditorClose">×</button><p class="eyebrow">'+(newMenu?'NEW MENU':'MENU EDITOR')+'</p><h2>'+(newMenu?'Create a menu':esc(menu.name||'Edit menu'))+'</h2><div class="cc-menu-meta"><label>Menu name<input id="ccMenuName" value="'+esc(menu.name||'')+'" required></label><label>Date<input id="ccMenuDate" type="date" value="'+esc(menu.menu_date||'')+'"></label><label>Guests<input id="ccMenuGuests" type="number" min="1" value="'+esc(menu.guest_count??'')+'"></label></div><label>Occasion<input id="ccMenuOccasion" value="'+esc(menu.occasion||'')+'"></label><div class="cc-menu-original-note" id="ccMenuOriginalNote">'+(sourceLabel?'Original uploaded: <strong>'+esc(sourceLabel)+'</strong>. It is retained unchanged. <a href="#" id="ccMenuReviewOriginal">Review original</a>':'Menu content is editable. Your saved version is separate from any original upload.')+'</div><div class="cc-menu-toolbar"><div class="cc-menu-toolrow"><button type="button" data-cmd="bold"><b>B</b></button><button type="button" data-cmd="italic"><i>I</i></button><button type="button" data-cmd="underline"><u>U</u></button><select id="ccMenuFont" title="Font"><option value="Georgia">Georgia</option><option value="Arial">Arial</option><option value="Times New Roman">Times New Roman</option><option value="Verdana">Verdana</option></select><select id="ccMenuSize" title="Font size"><option value="12px">Small</option><option value="14px">14</option><option value="16px" selected>Normal</option><option value="18px">Large</option><option value="22px">Extra large</option><option value="30px">Title</option></select><button type="button" data-block-style="normal">Normal</button><button type="button" data-block-style="heading">Heading</button><button type="button" data-block-style="subheading">Subheading</button><button type="button" class="cc-menu-align" data-align="left" title="Align left">L</button><button type="button" class="cc-menu-align" data-align="center" title="Align center">C</button><button type="button" class="cc-menu-align" data-align="right" title="Align right">R</button><button type="button" id="ccMenuBullet">• List</button><button type="button" id="ccMenuNumber">1. List</button><button type="button" id="ccMenuDivider">Divider</button><button type="button" id="ccMenuAddLine">＋ Line</button></div><div class="cc-menu-linkrow"><select id="ccMenuRecipeLink"><option value="">Link selected text to a recipe…</option>'+recipes.map(r=>'<option value="'+r.id+'">'+esc(r.name)+'</option>').join('')+'</select><button type="button" id="ccMenuApplyRecipeLink">Link recipe</button><input id="ccMenuUrl" type="url" placeholder="https:// external link"><button type="button" id="ccMenuApplyUrl">Link URL</button></div></div><div id="ccMenuDocument" class="cc-menu-document" spellcheck="true">'+initial.map(blockMarkup).join('')+'</div><div class="cc-menu-actions-grid"><button class="secondary" type="button" id="ccMenuShowOriginal">Show Original</button><button class="secondary" type="button" id="ccMenuSaveAs">Save As</button><button class="secondary" type="button" id="ccMenuPrint">Print</button><button class="secondary" type="button" id="ccMenuShare">Share</button><button class="secondary" type="button" id="ccMenuFavourite">'+(menu.is_favourite?'★ Unfavourite':'☆ Favourite')+'</button><button class="secondary danger" type="button" id="ccMenuDelete" '+(newMenu?'disabled':'')+'>Delete</button><button class="primary" type="button" id="ccMenuSave">Save</button></div>';
+ d.querySelector('#ccMenuEditorContent').innerHTML='<button class="close" type="button" id="ccMenuEditorClose">×</button><p class="eyebrow">'+(newMenu?'NEW MENU':'MENU EDITOR')+'</p><h2>'+(newMenu?'Create a menu':esc(menu.name||'Edit menu'))+'</h2><div class="cc-menu-meta"><label>Menu name<input id="ccMenuName" value="'+esc(menu.name||'')+'" required></label><label>Date<input id="ccMenuDate" type="date" min="1900-01-01" max="2100-12-31" value="'+esc(menu.menu_date||'')+'"></label><label>Guests<input id="ccMenuGuests" type="number" min="1" value="'+esc(menu.guest_count??'')+'"></label></div><label>Occasion<input id="ccMenuOccasion" value="'+esc(menu.occasion||'')+'"></label><div class="cc-menu-original-note" id="ccMenuOriginalNote">'+(sourceLabel?'Original uploaded: <strong>'+esc(sourceLabel)+'</strong>. It is retained unchanged. <a href="#" id="ccMenuReviewOriginal">Review original</a>':'Menu content is editable. Your saved version is separate from any original upload.')+'</div><div class="cc-menu-toolbar"><div class="cc-menu-toolrow"><button type="button" data-cmd="bold"><b>B</b></button><button type="button" data-cmd="italic"><i>I</i></button><button type="button" data-cmd="underline"><u>U</u></button><select id="ccMenuFont" title="Font"><option value="Georgia">Georgia</option><option value="Arial">Arial</option><option value="Times New Roman">Times New Roman</option><option value="Verdana">Verdana</option></select><select id="ccMenuSize" title="Font size"><option value="12px">Small</option><option value="14px">14</option><option value="16px" selected>Normal</option><option value="18px">Large</option><option value="22px">Extra large</option><option value="30px">Title</option></select><button type="button" data-block-style="normal">Normal</button><button type="button" data-block-style="heading">Heading</button><button type="button" data-block-style="subheading">Subheading</button><button type="button" class="cc-menu-align" data-align="left" title="Align left">L</button><button type="button" class="cc-menu-align" data-align="center" title="Align center">C</button><button type="button" class="cc-menu-align" data-align="right" title="Align right">R</button><button type="button" id="ccMenuBullet">• List</button><button type="button" id="ccMenuNumber">1. List</button><button type="button" id="ccMenuDivider">Divider</button><button type="button" id="ccMenuAddLine">＋ Line</button></div><div class="cc-menu-linkrow"><select id="ccMenuRecipeLink"><option value="">Link selected text to a recipe…</option>'+recipes.map(r=>'<option value="'+r.id+'">'+esc(r.name)+'</option>').join('')+'</select><button type="button" id="ccMenuApplyRecipeLink">Link recipe</button><input id="ccMenuUrl" type="url" placeholder="https:// external link"><button type="button" id="ccMenuApplyUrl">Link URL</button></div></div><div id="ccMenuDocument" class="cc-menu-document" spellcheck="true">'+initial.map(blockMarkup).join('')+'</div><div class="cc-menu-actions-grid"><button class="secondary" type="button" id="ccMenuShowOriginal">Show Original</button><button class="secondary" type="button" id="ccMenuSaveAs">Save As</button><button class="secondary" type="button" id="ccMenuPrint">Print</button><button class="secondary" type="button" id="ccMenuShare">Share</button><button class="secondary" type="button" id="ccMenuFavourite">'+(menu.is_favourite?'★ Unfavourite':'☆ Favourite')+'</button><button class="secondary danger" type="button" id="ccMenuDelete" '+(newMenu?'disabled':'')+'>Delete</button><button class="primary" type="button" id="ccMenuSave">Save</button></div>';
  d.showModal();
  const content=d.querySelector('#ccMenuEditorContent');
+ requestAnimationFrame(()=>{d.scrollTop=0;content.scrollTop=0;});
  lastEditorBlock=null;lastRange=null;
  content.querySelector('#ccMenuDocument').addEventListener('mouseup',rememberSelection);
  content.querySelector('#ccMenuDocument').addEventListener('keyup',rememberSelection);
@@ -192,8 +222,24 @@ async function showOriginal(menu){
  if(!menu.original_file_path)return window.ccShowError('No original upload is attached to this menu.','Original unavailable');
  const name=menu.original_file_name||'Original menu';let url;try{const q=await supabase.storage.from('cooking-confidential').createSignedUrl(menu.original_file_path,900);if(q.error||!q.data?.signedUrl)throw Error(q.error?.message||'Could not open original file');url=q.data.signedUrl}catch(e){return window.ccShowError(e.message,'Could not open original menu')}
  const lower=name.toLowerCase(),d=ensureDialog();
- if(lower.endsWith('.docx')){try{const blob=await fetch(url).then(r=>r.blob());const out=await mammoth.convertToHtml({arrayBuffer:await blob.arrayBuffer()});d.querySelector('#ccMenuEditorContent').innerHTML='<button class="close" id="ccOriginalBack">×</button><p class="eyebrow">ORIGINAL MENU</p><h2>'+esc(name)+'</h2><p class="small-note">Original uploaded file — retained unchanged.</p><div class="original-viewer">'+(out.value||'<p>No readable content found.</p>')+'</div>';d.showModal();d.querySelector('#ccOriginalBack').onclick=()=>openEditor(menu);return}catch(e){}}
- if(/\\.(png|jpe?g|webp|gif)$/i.test(name)){d.querySelector('#ccMenuEditorContent').innerHTML='<button class="close" id="ccOriginalBack">×</button><p class="eyebrow">ORIGINAL MENU</p><h2>'+esc(name)+'</h2><p class="small-note">Original uploaded file — retained unchanged.</p><div class="original-viewer"><img class="original-image" src="'+esc(url)+'" alt="Original menu"></div>';d.showModal();d.querySelector('#ccOriginalBack').onclick=()=>openEditor(menu);return}
+ if(lower.endsWith('.docx')){
+   try{
+     const blob=await fetch(url).then(r=>r.blob());
+     const bytes=await blob.arrayBuffer();
+     d.querySelector('#ccMenuEditorContent').innerHTML='<button class="close" id="ccOriginalBack">×</button><p class="eyebrow">ORIGINAL MENU</p><h2>'+esc(name)+'</h2><p class="small-note">Original uploaded file — retained unchanged. This preview uses the Word document layout rather than the editable menu representation.</p><div class="cc-menu-original-viewer" id="ccDocxOriginalViewer"><p class="small-note">Loading original document…</p></div><div class="cc-menu-original-actions"><a class="secondary" href="'+esc(url)+'" target="_blank" rel="noopener">Open original file</a></div>';
+     if(!d.open)d.showModal();
+     const viewer=d.querySelector('#ccDocxOriginalViewer');
+     try{
+       const mod=await import('https://esm.sh/docx-preview@0.4.1?bundle');
+       await mod.renderAsync(bytes,viewer,document.head,{className:'ccDocx',inWrapper:true,breakPages:true,ignoreLastRenderedPageBreak:false});
+     }catch(previewError){
+       viewer.innerHTML='<p class="small-note">The in-app Word preview could not be rendered. Use <strong>Open original file</strong> above to view the unchanged document.</p>';
+     }
+     d.querySelector('#ccOriginalBack').onclick=()=>openEditor(menu);
+     return;
+   }catch(e){return window.ccShowError(e.message||'Could not render the original DOCX.','Could not open original menu')}
+ }
+ if(/\\.(png|jpe?g|webp|gif)$/i.test(name)){d.querySelector('#ccMenuEditorContent').innerHTML='<button class="close" id="ccOriginalBack">×</button><p class="eyebrow">ORIGINAL MENU</p><h2>'+esc(name)+'</h2><p class="small-note">Original uploaded file — retained unchanged.</p><div class="original-viewer"><img class="original-image" src="'+esc(url)+'" alt="Original menu"></div>';if(!d.open)d.showModal();d.querySelector('#ccOriginalBack').onclick=()=>openEditor(menu);return}
  if(lower.endsWith('.pdf')){d.querySelector('#ccMenuEditorContent').innerHTML='<button class="close" id="ccOriginalBack">×</button><p class="eyebrow">ORIGINAL MENU</p><h2>'+esc(name)+'</h2><p class="small-note">Original uploaded file — retained unchanged.</p><iframe class="original-pdf" title="Original menu PDF" src="'+esc(url)+'"></iframe>';d.showModal();d.querySelector('#ccOriginalBack').onclick=()=>openEditor(menu);return}
  d.querySelector('#ccMenuEditorContent').innerHTML='<button class="close" id="ccOriginalBack">×</button><p class="eyebrow">ORIGINAL MENU</p><h2>'+esc(name)+'</h2><p class="small-note">Original uploaded file — retained unchanged.</p><p><a class="primary" href="'+esc(url)+'" target="_blank" rel="noopener">Open original file</a></p>';d.showModal();d.querySelector('#ccOriginalBack').onclick=()=>openEditor(menu)
 }
@@ -203,7 +249,12 @@ async function shareMenu(menu,content){
 }
 async function extractMenu(file){
  const name=file.name||'Imported menu';const lower=name.toLowerCase();
- if(lower.endsWith('.docx')){const out=await mammoth.convertToHtml({arrayBuffer:await file.arrayBuffer()});return htmlToBlocks(out.value)}
+ if(lower.endsWith('.docx')){
+   const bytes=await file.arrayBuffer();
+   const out=await mammoth.convertToHtml({arrayBuffer:bytes});
+   const html=await applyDocxParagraphAlignment(out.value,bytes);
+   return htmlToBlocks(html)
+ }
  if(lower.endsWith('.txt'))return textToBlocks(await file.text());
  if(lower.endsWith('.pdf')){
    try{
@@ -224,7 +275,7 @@ async function uploadExisting(){
    const pending=await supabase.from('cc_menus').select('id,name,created_at,original_file_path,original_file_name,original_mime_type,status,document,content,menu_date,guest_count,occasion,is_favourite').not('original_file_path','is',null).eq('status','draft').order('created_at',{ascending:false});
    const rows=pending.error?[]:(pending.data||[]);
    const htmlRows=rows.length?rows.map(m=>'<div class="cc-menu-upload-item"><div><strong>'+esc(m.name||m.original_file_name||'Untitled menu')+'</strong><div class="meta">'+esc(m.original_file_name||'Original file')+(m.created_at?' · '+new Date(m.created_at).toLocaleDateString():'')+'</div></div><div class="cc-menu-upload-actions"><button type="button" class="primary-action" data-upload-review="'+m.id+'">Review</button><button type="button" data-upload-delete="'+m.id+'">Delete</button></div></div>').join(''):'<div class="empty compact">No uploaded menus yet.</div>';
-   d.querySelector('#ccMenuEditorContent').innerHTML='<button class="close" type="button" id="ccMenuUploadClose">×</button><p class="eyebrow">UPLOAD MENU</p><h2>Upload an existing menu</h2><p class="small-note">Choose a menu file to add it to your library. The original file is retained unchanged. After upload, use <strong>Review</strong> to open it in the menu editor.</p><div class="cc-menu-upload-note"><label class="primary" style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;padding:10px 14px;border-radius:8px">＋ Choose menu file<input id="ccMenuUploadFile" type="file" multiple accept=".docx,.pdf,.txt,.png,.jpg,.jpeg,.webp" style="display:none"></label><span id="ccMenuUploadStatus" class="small-note" style="margin-left:14px"></span></div><h3 style="margin-top:36px;padding-top:8px">Previously uploaded menus</h3><div class="cc-menu-upload-list" id="ccMenuUploadList">'+htmlRows+'</div>';
+   d.querySelector('#ccMenuEditorContent').innerHTML='<button class="close" type="button" id="ccMenuUploadClose">×</button><p class="eyebrow">UPLOAD MENU</p><h2>Uploaded Menus</h2><p class="small-note">Choose a menu file to add it to your library. The original file is retained unchanged. After upload, use <strong>Review</strong> to open it in the menu editor.</p><div class="cc-menu-upload-note"><label class="primary" style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;padding:10px 14px;border-radius:8px">＋ Choose menu file<input id="ccMenuUploadFile" type="file" multiple accept=".docx,.pdf,.txt,.png,.jpg,.jpeg,.webp" style="display:none"></label><span id="ccMenuUploadStatus" class="small-note" style="margin-left:14px"></span></div><h3 style="margin-top:36px;padding-top:8px">Previously uploaded menus</h3><div class="cc-menu-upload-list" id="ccMenuUploadList">'+htmlRows+'</div>';
    d.showModal();
    d.querySelector('#ccMenuUploadClose').onclick=()=>d.close();
    d.querySelector('#ccMenuUploadFile').onchange=async e=>{
