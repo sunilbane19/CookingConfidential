@@ -144,7 +144,7 @@ async function openEditor(menu,{blocks=null,sourceLabel='',newMenu=false}={}){
  const save=async asNew=>{
    const name=String(content.querySelector('#ccMenuName').value||'').trim();if(!name)return window.ccShowError('Please enter a menu name.','Menu name required');
    const documentData=await collectDocument();const {data:{user}}=await supabase.auth.getUser();if(!user)return window.ccShowError('Please sign in again.','Sign-in required');
-   const payload={name,menu_date:content.querySelector('#ccMenuDate').value||null,guest_count:content.querySelector('#ccMenuGuests').value?Number(content.querySelector('#ccMenuGuests').value):null,occasion:String(content.querySelector('#ccMenuOccasion').value||'').trim()||null,content:JSON.stringify(documentData),document:documentData,visibility:'private',created_by:user.id};
+   const payload={name,menu_date:content.querySelector('#ccMenuDate').value||null,guest_count:content.querySelector('#ccMenuGuests').value?Number(content.querySelector('#ccMenuGuests').value):null,occasion:String(content.querySelector('#ccMenuOccasion').value||'').trim()||null,content:JSON.stringify(documentData),document:documentData,visibility:'private',created_by:user.id,status:menu.status==='draft'?'published':'published'};
    if(!asNew&&menu.id)payload.id=menu.id;
    if(menu.original_file_path){payload.original_file_path=menu.original_file_path;payload.original_file_name=menu.original_file_name;payload.original_mime_type=menu.original_mime_type}
    const q=asNew||!menu.id?await supabase.from('cc_menus').insert(payload).select().single():await supabase.from('cc_menus').update(payload).eq('id',menu.id).select().single();
@@ -192,8 +192,9 @@ async function uploadExisting(){
  const d=ensureDialog();styles();
  const {data:{user}}=await supabase.auth.getUser();
  if(!user)return window.ccShowError('Please sign in again.','Sign-in required');
- const renderUploadLibrary=()=>{
-   const rows=(window.ccMenus||[]).filter(m=>m.original_file_path);
+ const renderUploadLibrary=async()=>{
+   const pending=await supabase.from('cc_menus').select('id,name,created_at,original_file_path,original_file_name,original_mime_type,status,document,content,menu_date,guest_count,occasion,is_favourite').not('original_file_path','is',null).eq('status','draft').order('created_at',{ascending:false});
+   const rows=pending.error?[]:(pending.data||[]);
    const htmlRows=rows.length?rows.map(m=>'<div class="cc-menu-upload-item"><div><strong>'+esc(m.name||m.original_file_name||'Untitled menu')+'</strong><div class="meta">'+esc(m.original_file_name||'Original file')+(m.created_at?' · '+new Date(m.created_at).toLocaleDateString():'')+'</div></div><div class="cc-menu-upload-actions"><button type="button" class="primary-action" data-upload-review="'+m.id+'">Review</button><button type="button" data-upload-delete="'+m.id+'">Delete</button></div></div>').join(''):'<div class="empty compact">No uploaded menus yet.</div>';
    d.querySelector('#ccMenuEditorContent').innerHTML='<button class="close" type="button" id="ccMenuUploadClose">×</button><p class="eyebrow">UPLOAD MENU</p><h2>Upload an existing menu</h2><p class="small-note">Choose a menu file to add it to your library. The original file is retained unchanged. After upload, use <strong>Review</strong> to open it in the menu editor.</p><div class="cc-menu-upload-note"><label class="primary" style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;padding:10px 14px;border-radius:8px">＋ Choose menu file<input id="ccMenuUploadFile" type="file" multiple accept=".docx,.pdf,.txt,.png,.jpg,.jpeg,.webp" style="display:none"></label><span id="ccMenuUploadStatus" class="small-note" style="margin-left:14px"></span></div><h3 style="margin-top:36px;padding-top:8px">Previously uploaded menus</h3><div class="cc-menu-upload-list" id="ccMenuUploadList">'+htmlRows+'</div>';
    d.showModal();
@@ -208,16 +209,16 @@ async function uploadExisting(){
        if(up.error){status.textContent=up.error.message;continue}
        let blocks;try{blocks=await extractMenu(file)}catch(err){await supabase.storage.from('cooking-confidential').remove([path]);status.textContent=err.message;continue}
        const documentData={version:1,blocks};
-       const payload={name:file.name.replace(/\.[^.]+$/,''),menu_date:null,guest_count:null,occasion:null,content:JSON.stringify(documentData),document:documentData,original_file_path:path,original_file_name:file.name,original_mime_type:file.type||null,is_favourite:false,visibility:'private',created_by:user.id};
+       const payload={name:file.name.replace(/\.[^.]+$/,''),menu_date:null,guest_count:null,occasion:null,content:JSON.stringify(documentData),document:documentData,original_file_path:path,original_file_name:file.name,original_mime_type:file.type||null,is_favourite:false,visibility:'private',created_by:user.id,status:'draft'};
        const ins=await supabase.from('cc_menus').insert(payload);
        if(ins.error){await supabase.storage.from('cooking-confidential').remove([path]);status.textContent='Could not save '+file.name+': '+ins.error.message;continue}
      }
      status.textContent='Upload complete.';
      await window.ccReloadMenus?.();
-     renderUploadLibrary();
+     await renderUploadLibrary();
    };
-   d.querySelectorAll('[data-upload-review]').forEach(b=>b.onclick=async()=>{const m=(window.ccMenus||[]).find(x=>Number(x.id)===Number(b.dataset.uploadReview));if(m){d.close();await openEditor(m,{sourceLabel:m.original_file_name||''})}});
-   d.querySelectorAll('[data-upload-delete]').forEach(b=>b.onclick=async()=>{const m=(window.ccMenus||[]).find(x=>Number(x.id)===Number(b.dataset.uploadDelete));if(!m||!confirm('Delete this uploaded menu?'))return;if(m.original_file_path)await supabase.storage.from('cooking-confidential').remove([m.original_file_path]);const q=await supabase.from('cc_menus').delete().eq('id',m.id);if(q.error)return window.ccShowError(q.error.message,'Could not delete menu');await window.ccReloadMenus?.();renderUploadLibrary()});
+   d.querySelectorAll('[data-upload-review]').forEach(b=>b.onclick=async()=>{const q=await supabase.from('cc_menus').select('*').eq('id',Number(b.dataset.uploadReview)).single();const m=q.data;if(m){d.close();await openEditor(m,{sourceLabel:m.original_file_name||''})}});
+   d.querySelectorAll('[data-upload-delete]').forEach(b=>b.onclick=async()=>{const q0=await supabase.from('cc_menus').select('id,original_file_path').eq('id',Number(b.dataset.uploadDelete)).single();const m=q0.data;if(!m||!confirm('Delete this uploaded menu?'))return;if(m.original_file_path)await supabase.storage.from('cooking-confidential').remove([m.original_file_path]);const q=await supabase.from('cc_menus').delete().eq('id',m.id);if(q.error)return window.ccShowError(q.error.message,'Could not delete menu');await window.ccReloadMenus?.();renderUploadLibrary()});
  };
  renderUploadLibrary();
 }
