@@ -58,8 +58,8 @@ async function loadRecipePage({offset=0,refreshCount=true}={}) {
 
 async function loadMenus(){
   try{
-    const menuFields='id,name,menu_date,occasion,guest_count,notes,created_at,updated_at,menu_type,content,document,original_file_path,original_file_name,original_mime_type,is_favourite';
-    const menusResult=await supabase.from('cc_menus').select(menuFields).order('menu_date',{ascending:false,nullsFirst:false}).order('created_at',{ascending:false});
+    const menuFields='id,name,menu_date,occasion,guest_count,notes,created_at,updated_at,menu_type,content,document,original_file_path,original_file_name,original_mime_type,is_favourite,status';
+    const menusResult=await supabase.from('cc_menus').select(menuFields).or('status.is.null,status.eq.published').order('menu_date',{ascending:false,nullsFirst:false}).order('created_at',{ascending:false});
     if(menusResult.error)throw new Error(menusResult.error.message);
     menus=menusResult.data||[];
   }catch(_){menus=[]}
