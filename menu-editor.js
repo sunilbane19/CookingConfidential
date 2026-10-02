@@ -50,7 +50,7 @@ const normalizeBlocks=blocks=>blocks.map(b=>({...b,html:cleanHtml(b.html||'')}))
 const recipeCache=new Map();
 
 function styles(){
- /* menu editor UI refresh 1.9.12 */
+ /* menu editor UI refresh 1.9.15 */
  if(document.querySelector('#ccMenuEditorStyles'))return;
  const s=document.createElement('style');s.id='ccMenuEditorStyles';s.textContent=`
  #ccMenuEditorDialog{max-width:min(1120px,96vw);width:100%;max-height:94vh}
@@ -108,14 +108,17 @@ function styles(){
    @page{size:A4 portrait;margin:8mm}
    body.cc-menu-printing{padding:0!important;background:#fff!important}
    body.cc-menu-printing>*:not(#ccMenuPrintPage){display:none!important}
-   body.cc-menu-printing #ccMenuPrintPage{display:block!important;width:194mm;margin:0 auto;background:#fff;color:#111}
-   #ccMenuPrintPage .cc-print-scaled{transform-origin:top left}
-   #ccMenuPrintPage .cc-print-document{font:13px/1.28 Georgia,"Times New Roman",serif}
-   #ccMenuPrintPage .cc-print-document h1,#ccMenuPrintPage .cc-print-document h2,#ccMenuPrintPage .cc-print-document h3,#ccMenuPrintPage .cc-print-document h4,#ccMenuPrintPage .cc-print-document h5,#ccMenuPrintPage .cc-print-document h6{margin:4px 0 6px}
-   #ccMenuPrintPage .cc-print-document p{margin:2px 0}
-   #ccMenuPrintPage .cc-print-document ul,#ccMenuPrintPage .cc-print-document ol{margin:3px 0;padding-left:22px}
-   #ccMenuPrintPage .cc-print-document .cc-menu-block{padding:2px 0!important;margin:1px 0!important;min-height:0!important}
-   #ccMenuPrintPage .cc-print-document .cc-divider{border-top:1px solid #aaa;height:1px;padding:0!important;margin:7px 0!important}
+   body.cc-menu-printing #ccMenuPrintPage{display:block!important;width:100%;margin:0;background:#fff;color:#111}
+   #ccMenuPrintPage .cc-print-page{width:100%}
+   #ccMenuPrintPage .cc-print-header{text-align:center;margin:0 0 1.4em}
+   #ccMenuPrintPage .cc-print-header h1{font:700 22px Georgia,serif;margin:0 0 .25em;white-space:normal}
+   #ccMenuPrintPage .cc-print-header div{font:11px Arial,sans-serif;line-height:1.35;margin:0}
+   #ccMenuPrintPage .cc-print-document{font:13px/1.35 Georgia,"Times New Roman",serif}
+   #ccMenuPrintPage .cc-print-document h1,#ccMenuPrintPage .cc-print-document h2,#ccMenuPrintPage .cc-print-document h3,#ccMenuPrintPage .cc-print-document h4,#ccMenuPrintPage .cc-print-document h5,#ccMenuPrintPage .cc-print-document h6{margin:0 0 1em}
+   #ccMenuPrintPage .cc-print-document p{margin:0 0 1em}
+   #ccMenuPrintPage .cc-print-document ul,#ccMenuPrintPage .cc-print-document ol{margin:0 0 1em;padding-left:22px}
+   #ccMenuPrintPage .cc-print-document .cc-menu-block{padding:0!important;margin:0 0 1em!important;min-height:0!important}
+   #ccMenuPrintPage .cc-print-document .cc-divider{border-top:1px solid #aaa;height:1px;padding:0!important;margin:1em 0!important}
  }
  @media print{
    body:not(.cc-menu-printing)>*:not(#ccMenuEditorDialog){display:none!important}
@@ -210,16 +213,11 @@ async function printMenuDocument(contentOrMenu){
  if(!doc)return;
  const old=document.querySelector('#ccMenuPrintPage');if(old)old.remove();
  const sheet=document.createElement('div');sheet.id='ccMenuPrintPage';
- const scaled=document.createElement('div');scaled.className='cc-print-scaled';
+ const page=document.createElement('div');page.className='cc-print-page';
  const clone=doc.cloneNode(true);clone.removeAttribute('contenteditable');clone.classList.add('cc-print-document');
  clone.querySelectorAll('.cc-block-controls').forEach(x=>x.remove());
- scaled.innerHTML='<div style="text-align:center;margin:0 0 10px"><h1 style="font:700 22px Georgia,serif;margin:0 0 3px">'+title+'</h1>'+(occasion?'<div style="font:12px Arial;margin-bottom:2px">'+occasion+'</div>':'')+(date?'<div style="font:11px Arial;color:#555">'+date+'</div>':'')+'</div>';
- scaled.appendChild(clone);sheet.appendChild(scaled);document.body.appendChild(sheet);document.body.classList.add('cc-menu-printing');
- await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
- const availableHeight=1040,availableWidth=733;
- const naturalHeight=Math.max(1,scaled.scrollHeight),naturalWidth=Math.max(1,scaled.scrollWidth);
- const scale=Math.min(1,availableHeight/naturalHeight,availableWidth/naturalWidth);
- scaled.style.transform='scale('+scale+')';sheet.style.height=Math.ceil(naturalHeight*scale)+'px';
+ page.innerHTML='<div class="cc-print-header"><h1>'+title+'</h1>'+(occasion?'<div>'+occasion+'</div>':'')+(date?'<div>'+date+'</div>':'')+'</div>';
+ page.appendChild(clone);sheet.appendChild(page);document.body.appendChild(sheet);document.body.classList.add('cc-menu-printing');
  const cleanup=()=>{document.body.classList.remove('cc-menu-printing');sheet.remove()};
  window.addEventListener('afterprint',cleanup,{once:true});
  setTimeout(()=>window.print(),80);
