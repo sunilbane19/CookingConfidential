@@ -43,14 +43,14 @@ function showUiError(message,title='Something went wrong',onClose=null){
 window.ccShowError=showUiError;
 const cleanSearchTerm=value=>String(value||'').trim().replace(/\s+/g,' ').slice(0,80);
 
-async function loadRecipePage({offset=0,refreshCount=true}={}) {
+async function loadRecipePage({offset=0,refreshCount=true,silent=false}={}) {
   const requestId=++recipeRequestId;
   const q=cleanSearchTerm(search.value);
   const favouriteOnly=view==='favourites';
   const safeOffset=Math.max(0,Math.floor(Number(offset)||0));
   recipeOffset=safeOffset;
   recipeLoading=true;
-  content.innerHTML='<div class="empty">Loading your recipes…</div>';
+  if(!silent)content.innerHTML='<div class="empty">Loading your recipes…</div>';
   try{
     const pageRequest=supabase.rpc('cc_search_recipe_cards',{
       p_search:q,
@@ -70,8 +70,7 @@ async function loadRecipePage({offset=0,refreshCount=true}={}) {
     recipeTotalCount=Number(Array.isArray(rawCount)?rawCount[0]:rawCount)||0;
     recipes=rows;
     window.ccRecipes=recipes;
-    render();
-    window.dispatchEvent(new CustomEvent('cc:recipes-rendered'));
+    if(!silent){render();window.dispatchEvent(new CustomEvent('cc:recipes-rendered'));}
   }finally{
     if(requestId===recipeRequestId)recipeLoading=false;
   }
@@ -134,16 +133,16 @@ function render(){
   content.innerHTML=`${pager}<div class="section-head"><h2>Your recipes</h2><span class="count">${list.length?recipeOffset+1+'–'+(recipeOffset+list.length):'0'} of ${recipeTotalCount}</span></div>${list.length?'<div class="grid">'+list.map(recipeCard).join('')+'</div>':'<div class="empty">No recipes found. Try another ingredient, cuisine or dish.</div>'}${pager}`;
   content.querySelectorAll('.card').forEach(c=>c.onclick=()=>showRecipe(+c.dataset.id)); wireRecipePager(); window.dispatchEvent(new CustomEvent('cc:recipes-rendered'));
 }
-function favouriteMenuCard(m){return `<article class="menu-card"><span class="tag">${m.guest_count?m.guest_count+' guests':'Menu'} ${m.menu_date?'· '+formatMenuDate(m.menu_date):''}</span><h3>${esc(m.name)}</h3><div class="menu-items">${esc(m.occasion||'')} · ★ Favourite</div><div class="cc-menu-card-actions"><button class="secondary" data-menu-action="open" data-id="${m.id}">Edit</button><button class="secondary" data-menu-action="print" data-id="${m.id}">Print</button><button class="secondary" data-menu-action="share" data-id="${m.id}">Share</button><button class="secondary" data-menu-action="fav" data-id="${m.id}">★ Unfavourite</button></div></article>`}
+function favouriteMenuCard(m){return `<article class="menu-card"><span class="tag">${m.guest_count?m.guest_count+' guests':'Menu'} ${m.menu_date?'· '+formatMenuDate(m.menu_date):''}</span><h3>${esc(m.name)}</h3><div class="menu-items">${esc(m.occasion||'')} · ★ Favourite</div><div class="cc-menu-card-actions"><button class="secondary" data-menu-action="open" data-id="${m.id}">Edit</button><button class="secondary" data-menu-action="print" data-id="${m.id}">Print</button><button class="secondary" data-menu-action="share" data-id="${m.id}">Share</button><button class="secondary cc-favourite" data-active="1" data-menu-action="fav" data-id="${m.id}" aria-label="Unfavourite menu" title="Unfavourite menu">♥</button></div></article>`}
 function renderFavourites(q=''){
   const menuMatches=menus.filter(m=>m.is_favourite&&(m.name+' '+(m.occasion||'')+' '+(m.notes||'')).toLowerCase().includes(q));
-  const recipeSection=`<div class="section-head"><h2>Favourite recipes</h2><span class="count">${recipeTotalCount} recipes</span></div>${recipes.length?'<div class="grid">'+recipes.map(recipeCard).join('')+'</div>':'<div class="empty">No favourite recipes.</div>'}`;
-  const menuSection=`<div class="section-head cc-favourites-subhead"><h2>Favourite menus</h2><span class="count">${menuMatches.length} menus</span></div>${menuMatches.length?'<div class="cc-menu-library-grid" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;align-items:start">'+menuMatches.map(favouriteMenuCard).join('')+'</div>':'<div class="empty">No favourite menus.</div>'}`;
+  const recipeSection=`<div class="section-head"><h2>Recipes</h2><span class="count">${recipeTotalCount} recipes</span></div>${recipes.length?'<div class="grid">'+recipes.map(recipeCard).join('')+'</div>':'<div class="empty">No favourite recipes.</div>'}`;
+  const menuSection=`<div class="section-head cc-favourites-subhead"><h2>Menus</h2><span class="count">${menuMatches.length} menus</span></div>${menuMatches.length?'<div class="cc-menu-library-grid" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;align-items:start">'+menuMatches.map(favouriteMenuCard).join('')+'</div>':'<div class="empty">No favourite menus.</div>'}`;
   content.innerHTML=recipeSection+menuSection; content.querySelectorAll('.card').forEach(c=>c.onclick=()=>showRecipe(+c.dataset.id)); window.ccMenus=menuMatches; window.ccRenderMenus=()=>view==='favourites'?renderFavourites(search.value.trim().toLowerCase()):renderMenus(search.value.trim().toLowerCase()); setTimeout(()=>window.ccEnsureLibraryToolbar?.(),0); window.dispatchEvent(new CustomEvent('cc:recipes-rendered'));
 }
 async function ccMenuAction(action){try{if(!window.ccMenuEditor){await import('./menu-editor.js?v=1.9.18')}const m=window.ccMenuEditor;if(!m||typeof m[action]!=='function')throw new Error('Menu editor action unavailable');m[action]()}catch(e){console.error('Cooking Confidential menu action:',e);window.ccShowError?.(e.message||'Could not open menu editor','Menu editor')}}
 window.ccMenuAction=ccMenuAction;
-function renderMenus(q){const list=menus.filter(m=>(m.name+' '+(m.occasion||'')+' '+(m.notes||'')).toLowerCase().includes(q));window.ccMenus=list;content.innerHTML=`<div class="section-head"><h2>Your menus</h2><span class="count">${list.length} menus</span></div><div class="cc-menu-library-grid" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;align-items:start">${list.length?list.map(m=>`<article class="menu-card"><span class="tag">${m.guest_count?m.guest_count+' guests':'Menu'} ${m.menu_date?'· '+formatMenuDate(m.menu_date):''}</span><h3>${esc(m.name)}</h3><div class="menu-items">${esc(m.occasion||'')}${m.is_favourite?' · ★ Favourite':''}</div><div class="cc-menu-card-actions"><button class="secondary" data-menu-action="open" data-id="${m.id}">Edit</button><button class="secondary" data-menu-action="print" data-id="${m.id}">Print</button><button class="secondary" data-menu-action="share" data-id="${m.id}">Share</button><button class="secondary" data-menu-action="fav" data-id="${m.id}">${m.is_favourite?'★ Unfavourite':'☆ Favourite'}</button></div></article>`).join(''):'<div class="empty">No menus yet. Create a new menu or upload an existing one.</div>'}</div>`;
+function renderMenus(q){const list=menus.filter(m=>(m.name+' '+(m.occasion||'')+' '+(m.notes||'')).toLowerCase().includes(q));window.ccMenus=list;content.innerHTML=`<div class="section-head"><h2>Your menus</h2><span class="count">${list.length} menus</span></div><div class="cc-menu-library-grid" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;align-items:start">${list.length?list.map(m=>`<article class="menu-card"><span class="tag">${m.guest_count?m.guest_count+' guests':'Menu'} ${m.menu_date?'· '+formatMenuDate(m.menu_date):''}</span><h3>${esc(m.name)}</h3><div class="menu-items">${esc(m.occasion||'')}${m.is_favourite?' · ★ Favourite':''}</div><div class="cc-menu-card-actions"><button class="secondary" data-menu-action="open" data-id="${m.id}">Edit</button><button class="secondary" data-menu-action="print" data-id="${m.id}">Print</button><button class="secondary" data-menu-action="share" data-id="${m.id}">Share</button><button class="secondary cc-favourite" data-active="${m.is_favourite?1:0}" data-menu-action="fav" data-id="${m.id}" aria-label="${m.is_favourite?'Unfavourite menu':'Favourite menu'}" title="${m.is_favourite?'Unfavourite menu':'Favourite menu'}">${m.is_favourite?'♥':'♡'}</button></div></article>`).join(''):'<div class="empty">No menus yet. Create a new menu or upload an existing one.</div>'}</div>`;
  window.ccRenderMenus=()=>renderMenus(search.value.trim().toLowerCase()); setTimeout(()=>window.ccEnsureLibraryToolbar?.(),0);
 }
 window.ccReloadMenus=async()=>{await loadMenus();if(view==='menus')renderMenus(search.value.trim().toLowerCase())};
@@ -200,11 +199,16 @@ search.oninput=()=>{
   clearTimeout(searchTimer);
   searchTimer=setTimeout(()=>loadRecipePage({offset:0,refreshCount:true}).catch(e=>showUiError(e.message,'Could not search recipes')),250);
 };
-document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
+document.querySelectorAll('.tab').forEach(t=>t.onclick=async()=>{
   view=t.dataset.view;
   document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===t));
-  if(view==='menus')renderMenus(search.value.trim().toLowerCase());
-  else loadRecipePage({offset:0,refreshCount:true}).catch(e=>showUiError(e.message,view==='favourites'?'Could not load favourites':'Could not load recipes'));
+  if(view==='menus'){renderMenus(search.value.trim().toLowerCase());return}
+  if(view==='favourites'){
+    try{await Promise.all([loadRecipePage({offset:0,refreshCount:true,silent:true}),loadMenus()]);renderFavourites(search.value.trim().toLowerCase())}
+    catch(e){showUiError(e.message,'Could not load favourites')}
+    return;
+  }
+  loadRecipePage({offset:0,refreshCount:true}).catch(e=>showUiError(e.message,'Could not load recipes'));
 });
 async function boot(sessionOverride=null){let session=sessionOverride;if(!session){const{data:{session:currentSession}}=await supabase.auth.getSession();session=currentSession}if(!session){loginPanel.hidden=false;appPanel.hidden=true;return}loginPanel.hidden=true;appPanel.hidden=false;userBadge.textContent=session.user.email||'Signed in';try{await loadData()}catch(e){content.innerHTML='<div class="empty">'+esc(e.message)+'</div>'}}
 supabase.auth.onAuthStateChange((_event,session)=>{if(session)setTimeout(()=>boot(session),0);else{loginPanel.hidden=false;appPanel.hidden=true}});boot();
