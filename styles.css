@@ -102,13 +102,13 @@
 @media(max-width:760px){
   .site-footer{font-size:9px!important;padding:0 10px!important;white-space:nowrap!important;gap:0!important}
   .site-footer strong{white-space:nowrap!important;display:block!important}
-  .cc-menu-library-grid .menu-card{height:440px;min-height:440px;box-sizing:border-box;display:flex;flex-direction:column}
+  .cc-menu-library-grid .menu-card{height:260px;min-height:260px;box-sizing:border-box;display:flex;flex-direction:column}
   .cc-menu-library-grid .menu-card .menu-date-only{display:block;white-space:nowrap;overflow:hidden;text-overflow:clip;min-height:18px}
-  .cc-menu-library-grid .menu-card h3{min-height:72px;display:flex;align-items:flex-start}
+  .cc-menu-library-grid .menu-card h3{min-height:58px;display:flex;align-items:flex-start}
   .cc-menu-library-grid .menu-card .menu-items{min-height:44px}
   .cc-menu-library-grid .cc-menu-card-actions{margin-top:auto}
 }
 @media(max-width:480px){
   .site-footer{font-size:8.5px!important}
-  .cc-menu-library-grid .menu-card{height:440px;min-height:440px}
+  .cc-menu-library-grid .menu-card{height:260px;min-height:260px}
 }
