@@ -381,5 +381,5 @@ function enhance(){
  styles();
  menuActions()
 }
-window.ccMenuEditor={openEditor,uploadExisting,newBlank,showOriginal,printMenu:async menu=>{await openEditor(menu);document.querySelector('#ccMenuPrint')?.click()},shareMenu:async menu=>{await openEditor(menu);document.querySelector('#ccMenuShare')?.click()}};
+window.ccMenuEditor={openEditor,uploadExisting,newBlank,showOriginal,printMenu:async menu=>{await openEditor(menu);const c=document.querySelector('#ccMenuEditorContent');if(c)await printMenuDocument(c)},shareMenu:async menu=>{await openEditor(menu);const c=document.querySelector('#ccMenuEditorContent');if(c)await shareMenu(menu,c)}};
 const obs=new MutationObserver(()=>enhance());obs.observe(document.body,{subtree:true,childList:true});enhance();
