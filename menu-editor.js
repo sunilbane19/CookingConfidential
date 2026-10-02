@@ -50,10 +50,11 @@ const normalizeBlocks=blocks=>blocks.map(b=>({...b,html:cleanHtml(b.html||'')}))
 const recipeCache=new Map();
 
 function styles(){
+ /* menu editor UI refresh 1.9.12 */
  if(document.querySelector('#ccMenuEditorStyles'))return;
  const s=document.createElement('style');s.id='ccMenuEditorStyles';s.textContent=`
- #ccMenuEditorDialog{max-width:min(900px,94vw);width:100%;max-height:92vh}
- #ccMenuEditorDialog .dialog-card{max-height:88vh;overflow:auto;padding:34px 40px}
+ #ccMenuEditorDialog{max-width:min(1120px,96vw);width:100%;max-height:94vh}
+ #ccMenuEditorDialog .dialog-card{max-height:90vh;overflow:auto;padding:30px 36px}
  .cc-menu-toolbar{position:sticky;top:0;z-index:5;background:var(--card);border-bottom:1px solid var(--line);padding:10px 0 12px;margin-bottom:14px}
  .cc-menu-toolrow{display:flex;flex-wrap:nowrap;gap:5px;align-items:center;overflow-x:auto;overflow-y:hidden;padding-bottom:2px;scrollbar-width:thin}
  .cc-menu-toolrow button,.cc-menu-toolrow select,.cc-menu-toolrow input{min-height:36px;flex:0 0 auto;border:1px solid var(--line);border-radius:8px;background:#fff;padding:6px 9px;font:13px Arial;color:var(--ink)}
@@ -70,8 +71,8 @@ function styles(){
  .cc-menu-meta label{margin:8px 0}
  .cc-menu-meta input{display:block;width:100%;margin-top:6px;padding:10px;border:1px solid var(--line);border-radius:9px;background:#fff;font:14px Arial}
  .cc-menu-original-note{padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#f8f5ee;font:13px/1.4 Arial;color:var(--muted);margin:10px 0}
- .cc-menu-linkrow{margin-top:8px;display:flex;gap:7px;flex-wrap:wrap}
- .cc-menu-linkrow select,.cc-menu-linkrow input{min-height:38px;border:1px solid var(--line);border-radius:8px;background:#fff;padding:7px 10px;font:13px Arial;color:var(--ink)} .cc-menu-linkrow input{min-width:280px} .cc-menu-linkrow button{min-height:38px;border:1px solid var(--accent);border-radius:8px;background:var(--accent);color:#fff;padding:7px 13px;font:600 13px Arial;cursor:pointer} .cc-menu-upload-list{display:grid;gap:10px;margin-top:14px}.cc-menu-upload-item{border:1px solid var(--line);border-radius:10px;padding:12px;background:#fff;display:flex;align-items:center;justify-content:space-between;gap:12px}.cc-menu-upload-item .meta{font:13px/1.4 Arial;color:var(--muted)}.cc-menu-upload-actions{display:flex;gap:7px;flex-wrap:wrap}.cc-menu-upload-actions button{min-height:36px;border:1px solid var(--line);border-radius:8px;background:var(--paper);padding:7px 12px;font:600 13px Arial;cursor:pointer}.cc-menu-upload-actions .primary-action{background:var(--accent);border-color:var(--accent);color:#fff}
+ .cc-menu-linkrow{margin-top:8px;display:grid;grid-template-columns:minmax(260px,1fr) auto minmax(220px,.8fr) auto auto;gap:7px;align-items:center}
+ .cc-menu-linkrow select,.cc-menu-linkrow input{min-height:38px;width:100%;min-width:0;border:1px solid var(--line);border-radius:8px;background:#fff;padding:7px 10px;font:13px Arial;color:var(--ink)} .cc-menu-linkrow button{min-height:38px;border:1px solid var(--accent);border-radius:8px;background:var(--accent);color:#fff;padding:7px 13px;font:600 13px Arial;cursor:pointer;white-space:nowrap} .cc-menu-upload-list{display:grid;gap:10px;margin-top:14px}.cc-menu-upload-item{border:1px solid var(--line);border-radius:10px;padding:12px;background:#fff;display:flex;align-items:center;justify-content:space-between;gap:12px}.cc-menu-upload-item .meta{font:13px/1.4 Arial;color:var(--muted)}.cc-menu-upload-actions{display:flex;gap:7px;flex-wrap:wrap}.cc-menu-upload-actions button{min-height:36px;border:1px solid var(--line);border-radius:8px;background:var(--paper);padding:7px 12px;font:600 13px Arial;cursor:pointer}.cc-menu-upload-actions .primary-action{background:var(--accent);border-color:var(--accent);color:#fff}
  .cc-menu-actions-grid{display:flex;flex-wrap:wrap;gap:9px;margin-top:18px}
  #ccMenuConfirmDialog{border:0;border-radius:16px;padding:0;width:min(430px,92vw);background:transparent;box-shadow:0 18px 60px rgba(30,20,10,.22)}
  #ccMenuConfirmDialog::backdrop{background:rgba(35,28,22,.48)}
@@ -93,7 +94,7 @@ function styles(){
  .cc-menu-original-viewer img{max-width:100%;height:auto}
 
  @media(max-width:760px){
-   #ccMenuEditorDialog{max-width:96vw;width:96vw}
+   #ccMenuEditorDialog{max-width:98vw;width:98vw}
    #ccMenuEditorDialog .dialog-card{padding:18px 14px}
    .cc-menu-meta{grid-template-columns:1fr}
    .cc-menu-document{padding:14px;min-height:420px}
@@ -131,6 +132,19 @@ function ensureDialog(){
  let d=document.querySelector('#ccMenuEditorDialog');
  if(d)return d;
  d=document.createElement('dialog');d.id='ccMenuEditorDialog';d.innerHTML='<div class="dialog-card" id="ccMenuEditorContent"></div>';document.body.appendChild(d);return d
+}
+async function ccPrompt(message,title='Save As',initialValue=''){
+ return new Promise(resolve=>{
+  let d=document.querySelector('#ccMenuPromptDialog');
+  if(!d){d=document.createElement('dialog');d.id='ccMenuPromptDialog';document.body.appendChild(d)}
+  d.innerHTML='<div class="cc-confirm-card"><button class="close" type="button" data-prompt-cancel>×</button><p class="eyebrow">COOKING CONFIDENTIAL</p><h2>'+esc(title)+'</h2><p>'+esc(message)+'</p><label style="text-align:left">Menu name<input id="ccMenuPromptInput" value="'+esc(initialValue)+'" autocomplete="off"></label><div class="cc-confirm-actions"><button type="button" class="secondary" data-prompt-cancel>Cancel</button><button type="button" class="primary" data-prompt-ok>Save copy</button></div></div>';
+  const input=d.querySelector('#ccMenuPromptInput');
+  const finish=v=>{try{d.close()}catch{};resolve(v)};
+  d.querySelectorAll('[data-prompt-cancel]').forEach(b=>b.onclick=()=>finish(null));
+  d.querySelector('[data-prompt-ok]').onclick=()=>{const v=String(input.value||'').trim();if(v)finish(v);else input.focus()};
+  d.addEventListener('cancel',()=>finish(null),{once:true});
+  d.showModal();requestAnimationFrame(()=>{input.focus();input.select()});
+ });
 }
 async function ccConfirm(message,title='Please confirm',confirmLabel='Continue'){
  return new Promise(resolve=>{
@@ -175,15 +189,28 @@ async function collectDocument(){
  }).filter((b,i)=>b.type==='divider'||b.html||i===0);
  return {version:1,blocks}
 }
-async function printMenuDocument(content){
- const doc=content.querySelector('#ccMenuDocument');
+async function printMenuDocument(contentOrMenu){
+ let content=null,doc,title,occasion,date;
+ if(contentOrMenu?.querySelector){
+   content=contentOrMenu;doc=content.querySelector('#ccMenuDocument');
+   title=esc(content.querySelector('#ccMenuName')?.value||'Menu');
+   occasion=esc(content.querySelector('#ccMenuOccasion')?.value||'');
+   date=esc(content.querySelector('#ccMenuDate')?.value||'');
+ }else{
+   const menu=contentOrMenu||{};
+   const source=docFromMenu(menu);
+   doc=document.createElement('div');
+   doc.id='ccMenuDocument';
+   doc.className='cc-menu-document';
+   doc.innerHTML=(source.blocks||[]).map(blockMarkup).join('');
+   title=esc(menu.name||'Menu');
+   occasion=esc(menu.occasion||'');
+   date=esc(formatMenuDate(menu.menu_date||''));
+ }
  if(!doc)return;
  const old=document.querySelector('#ccMenuPrintPage');if(old)old.remove();
  const sheet=document.createElement('div');sheet.id='ccMenuPrintPage';
  const scaled=document.createElement('div');scaled.className='cc-print-scaled';
- const title=esc(content.querySelector('#ccMenuName')?.value||'Menu');
- const occasion=esc(content.querySelector('#ccMenuOccasion')?.value||'');
- const date=esc(content.querySelector('#ccMenuDate')?.value||'');
  const clone=doc.cloneNode(true);clone.removeAttribute('contenteditable');clone.classList.add('cc-print-document');
  clone.querySelectorAll('.cc-block-controls').forEach(x=>x.remove());
  scaled.innerHTML='<div style="text-align:center;margin:0 0 10px"><h1 style="font:700 22px Georgia,serif;margin:0 0 3px">'+title+'</h1>'+(occasion?'<div style="font:12px Arial;margin-bottom:2px">'+occasion+'</div>':'')+(date?'<div style="font:11px Arial;color:#555">'+date+'</div>':'')+'</div>';
@@ -282,7 +309,13 @@ content.querySelectorAll('[data-align]').forEach(b=>{b.onmousedown=e=>e.preventD
    d.close();if(typeof window.ccReloadMenus==='function')await window.ccReloadMenus();
  };
  content.querySelector('#ccMenuSave').onclick=()=>save(false);
- content.querySelector('#ccMenuSaveAs').onclick=async()=>{const base=String(content.querySelector('#ccMenuName').value||menu.name||'Menu').trim();content.querySelector('#ccMenuName').value=base+' — Copy';await save(true)};
+ content.querySelector('#ccMenuSaveAs').onclick=async()=>{
+   const base=String(content.querySelector('#ccMenuName').value||menu.name||'Menu').trim()||'Menu';
+   const name=await ccPrompt('Enter a name for the copy. Your current edits will be saved into the new menu.', 'Save menu as', base+' — Copy');
+   if(!name)return;
+   content.querySelector('#ccMenuName').value=name;
+   await save(true);
+ };
  
  content.querySelector('#ccMenuDelete').onclick=async()=>{if(!menu.id||!(await ccConfirm('Delete this menu permanently?','Delete menu','Delete')))return;const q=await supabase.from('cc_menus').delete().eq('id',menu.id);if(q.error)return window.ccShowError(q.error.message,'Could not delete menu');d.close();await window.ccReloadMenus?.()};
  content.querySelector('#ccMenuShowOriginal').onclick=()=>showOriginal(menu);
@@ -313,8 +346,9 @@ async function showOriginal(menu){
  if(lower.endsWith('.pdf')){d.querySelector('#ccMenuEditorContent').innerHTML='<button class="close" id="ccOriginalBack">×</button><p class="eyebrow">ORIGINAL MENU</p><h2>'+esc(name)+'</h2><p class="small-note">Original uploaded file — retained unchanged.</p><iframe class="original-pdf" title="Original menu PDF" src="'+esc(url)+'"></iframe>';if(!d.open)d.showModal();d.querySelector('#ccOriginalBack').onclick=()=>openEditor(menu);return}
  d.querySelector('#ccMenuEditorContent').innerHTML='<button class="close" id="ccOriginalBack">×</button><p class="eyebrow">ORIGINAL MENU</p><h2>'+esc(name)+'</h2><p class="small-note">Original uploaded file — retained unchanged.</p><p><a class="primary" href="'+esc(url)+'" target="_blank" rel="noopener">Open original file</a></p>';d.showModal();d.querySelector('#ccOriginalBack').onclick=()=>openEditor(menu)
 }
-async function shareMenu(menu,content){
- const doc=await collectDocument();const text=doc.blocks.map(b=>b.type==='divider'?'---':String(b.html||'').replace(/<[^>]+>/g,' ')).join('\\n');
+async function shareMenu(menu,content=null){
+ const doc=content?.querySelector ? await collectDocument() : docFromMenu(menu);
+ const text=doc.blocks.map(b=>b.type==='divider'?'---':String(b.html||'').replace(/<[^>]+>/g,' ')).join('\\n');
  try{if(navigator.share){await navigator.share({title:menu.name||'Cooking Confidential menu',text});return}await navigator.clipboard.writeText(text);window.ccShowError('Menu text copied to the clipboard.','Share menu')}catch(e){if(e.name!=='AbortError')window.ccShowError(e.message||'Could not share menu.','Could not share menu')}
 }
 async function extractMenu(file){
@@ -379,5 +413,5 @@ function enhance(){
  styles();
  menuActions()
 }
-window.ccMenuEditor={openEditor,uploadExisting,newBlank,showOriginal,printMenu:async menu=>{await openEditor(menu);const c=document.querySelector('#ccMenuEditorContent');if(c)await printMenuDocument(c)},shareMenu:async menu=>{await openEditor(menu);const c=document.querySelector('#ccMenuEditorContent');if(c)await shareMenu(menu,c)}};
+window.ccMenuEditor={openEditor,uploadExisting,newBlank,showOriginal,printMenu:async menu=>printMenuDocument(menu),shareMenu:async menu=>shareMenu(menu)};
 const obs=new MutationObserver(()=>enhance());obs.observe(document.body,{subtree:true,childList:true});enhance();
