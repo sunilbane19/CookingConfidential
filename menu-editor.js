@@ -108,6 +108,25 @@ function styles(){
    .cc-menu-toolrow button,.cc-menu-toolrow select{min-height:40px}
    .cc-menu-block{padding-right:34px}
  }
+ @media(max-width:760px){
+   #ccMenuEditorDialog{max-width:98vw;width:98vw}
+   #ccMenuEditorDialog .dialog-card{padding:18px 14px;overflow-x:hidden}
+   .cc-menu-dialog-title{display:block;margin-bottom:14px;padding-right:34px}
+   .cc-menu-dialog-title .eyebrow{margin:0 0 3px}
+   .cc-menu-dialog-title h2{font-size:23px;line-height:1.15;margin:0}
+   .cc-menu-meta{grid-template-columns:1fr}
+   .cc-menu-document{padding:14px;min-height:420px;overflow-x:hidden}
+   .cc-menu-toolrow button,.cc-menu-toolrow select{min-height:40px}
+   .cc-menu-block{padding-right:92px!important}
+   .cc-menu-block .cc-block-controls{top:8px;right:4px}
+   .cc-menu-actions-grid{flex-wrap:nowrap;gap:6px}
+   .cc-menu-actions-grid button{min-width:0;flex:1 1 0;padding:9px 7px;font-size:12px;white-space:nowrap}
+   .cc-menu-original-viewer{overflow:auto;max-width:100%;padding:8px}
+   .cc-menu-original-viewer .docx-wrapper,.cc-menu-original-viewer .docx-wrapper>section.docx{width:100%!important;min-width:0!important;max-width:100%!important;margin:0!important}
+   .cc-menu-original-viewer .docx{width:100%!important;min-width:0!important;max-width:100%!important;box-sizing:border-box!important}
+   .cc-menu-original-viewer .docx table{max-width:100%!important;width:100%!important;table-layout:fixed!important}
+   .cc-menu-original-viewer img{max-width:100%!important;height:auto!important}
+ }
  .cc-menu-clear-selection{margin-left:auto}
  body.cc-menu-printing #ccMenuPrintPage{display:block!important}
  #ccMenuPrintPage{display:none}
