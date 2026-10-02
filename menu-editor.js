@@ -50,7 +50,7 @@ const normalizeBlocks=blocks=>blocks.map(b=>({...b,html:cleanHtml(b.html||'')}))
 const recipeCache=new Map();
 
 function styles(){
- /* menu editor UI refresh 1.9.13 */
+ /* menu editor UI refresh 1.9.14 */
  if(document.querySelector('#ccMenuEditorStyles'))return;
  const s=document.createElement('style');s.id='ccMenuEditorStyles';s.textContent=`
  #ccMenuEditorDialog{max-width:min(1120px,96vw);width:100%;max-height:94vh}
@@ -175,11 +175,31 @@ function fontSize(value){
  exec('fontSize',map[value]||3);
  const ed=getSelectionEditor();if(ed)ed.innerHTML=cleanHtml(ed.innerHTML)
 }
-function addLink(href,recipeId=null){
- const ed=getSelectionEditor();if(!ed)return window.ccShowError('Place the cursor in a menu line and select some text first.','Select menu text');
- if(!getSelection()?.toString())return window.ccShowError('Select the text you want to link first.','Select menu text');
- exec('createLink',href);
- const sel=getSelection();let node=sel?.anchorNode?.parentElement?.closest?.('a');if(recipeId&&ed){ed.querySelectorAll('a').forEach(a=>{if(a.getAttribute('href')===('#recipe-'+recipeId)||a.getAttribute('href')?.endsWith('#recipe-'+recipeId))a.dataset.recipeId=String(recipeId)})}if(ed)ed.innerHTML=cleanHtml(ed.innerHTML)
+function addLink(href,recipeId=null,linkText=''){
+ const ed=getSelectionEditor();if(!ed)return window.ccShowError('Place the cursor in a menu line first.','Select menu line');
+ restoreSelection();
+ const sel=getSelection();
+ const selectedText=sel?.toString()||'';
+ if(selectedText){
+   exec('createLink',href);
+ }else if(recipeId&&linkText){
+   const range=sel?.rangeCount?sel.getRangeAt(0):null;
+   if(!range||!ed.contains(range.commonAncestorContainer))return window.ccShowError('Place the cursor in a menu line first.','Select menu line');
+   const a=document.createElement('a');
+   a.href=href;a.dataset.recipeId=String(recipeId);a.textContent=linkText;
+   range.deleteContents();range.insertNode(a);
+   range.setStartAfter(a);range.collapse(true);
+   sel.removeAllRanges();sel.addRange(range);
+ }else{
+   return window.ccShowError('Select the text you want to link first.','Select menu text');
+ }
+ if(recipeId&&ed){
+   ed.querySelectorAll('a').forEach(a=>{
+     if(a.getAttribute('href')===('#recipe-'+recipeId)||a.getAttribute('href')?.endsWith('#recipe-'+recipeId))a.dataset.recipeId=String(recipeId)
+   })
+ }
+ if(ed)ed.innerHTML=cleanHtml(ed.innerHTML);
+ rememberSelection();
 }
 async function collectDocument(){
  const blocks=[...document.querySelectorAll('#ccMenuDocument .cc-menu-block')].map(el=>{
@@ -298,7 +318,7 @@ content.querySelectorAll('[data-align]').forEach(b=>{b.onmousedown=e=>e.preventD
  if(block&&block.parentNode===doc)block.after(line);else doc.appendChild(line);
  const editRange=document.createRange();editRange.selectNodeContents(line);editRange.collapse(true);s?.removeAllRanges();s?.addRange(editRange);lastEditorBlock=line;lastRange=editRange.cloneRange();line.focus();
 };
- content.querySelector('#ccMenuApplyRecipeLink').onclick=()=>{const id=content.querySelector('#ccMenuRecipeLink').value;if(!id)return;const r=recipes.find(x=>String(x.id)===String(id));if(!r)return;addLink('#recipe-'+id,id)};
+ content.querySelector('#ccMenuApplyRecipeLink').onclick=()=>{const id=content.querySelector('#ccMenuRecipeLink').value;if(!id)return;const r=recipes.find(x=>String(x.id)===String(id));if(!r)return;addLink('#recipe-'+id,id,r.name)};
  content.querySelector('#ccMenuApplyUrl').onclick=()=>{const u=content.querySelector('#ccMenuUrl').value.trim();if(/^https?:\/\//i.test(u))addLink(u)};
  d.querySelector('#ccMenuDocument').addEventListener('click',e=>{
    const del=e.target.closest('[data-delete]'),move=e.target.closest('[data-move]');
