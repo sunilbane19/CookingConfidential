@@ -113,20 +113,20 @@ function render(){
   if(view==='favourites')return renderFavourites(search.value.trim().toLowerCase());
   const list=recipes;
   const pager=recipePager();
-  content.innerHTML=`${{pager}<div class="section-head"><h2>Your recipes</h2><span class="count">${{list.length?recipeOffset+1+'–'+(recipeOffset+list.length):'0'} of ${{recipeTotalCount}</span></div>${{list.length?'<div class="grid">'+list.map(recipeCard).join('')+'</div>':'<div class="empty">No recipes found. Try another ingredient, cuisine or dish.</div>'}${{pager}`;
+  content.innerHTML=`${pager}<div class="section-head"><h2>Your recipes</h2><span class="count">${list.length?recipeOffset+1+'–'+(recipeOffset+list.length):'0'} of ${recipeTotalCount}</span></div>${list.length?'<div class="grid">'+list.map(recipeCard).join('')+'</div>':'<div class="empty">No recipes found. Try another ingredient, cuisine or dish.</div>'}${pager}`;
   content.querySelectorAll('.card').forEach(c=>c.onclick=()=>showRecipe(+c.dataset.id));
   wireRecipePager();
   window.dispatchEvent(new CustomEvent('cc:recipes-rendered'));
 }
 function favouriteMenuCard(m){
-  return `<article class="menu-card"><span class="tag">${{m.guest_count?m.guest_count+' guests':'Menu'} ${{m.menu_date?'· '+formatMenuDate(m.menu_date):''}</span><h3>${{esc(m.name)}</h3><div class="menu-items">${{esc(m.occasion||'')} · ★ Favourite</div><div class="cc-menu-card-actions"><button class="secondary" data-menu-action="open" data-id="${{m.id}">Edit</button><button class="secondary" data-menu-action="print" data-id="${{m.id}">Print</button><button class="secondary" data-menu-action="share" data-id="${{m.id}">Share</button><button class="secondary" data-menu-action="fav" data-id="${{m.id}">★ Unfavourite</button></div></article>`;
+  return `<article class="menu-card"><span class="tag">${m.guest_count?m.guest_count+' guests':'Menu'} ${m.menu_date?'· '+formatMenuDate(m.menu_date):''}</span><h3>${esc(m.name)}</h3><div class="menu-items">${esc(m.occasion||'')} · ★ Favourite</div><div class="cc-menu-card-actions"><button class="secondary" data-menu-action="open" data-id="${m.id}">Edit</button><button class="secondary" data-menu-action="print" data-id="${m.id}">Print</button><button class="secondary" data-menu-action="share" data-id="${m.id}">Share</button><button class="secondary" data-menu-action="fav" data-id="${m.id}">★ Unfavourite</button></div></article>`;
 }
 function renderFavourites(q=''){
   const menuMatches=menus.filter(m=>m.is_favourite&&(m.name+' '+(m.occasion||'')+' '+(m.notes||'')).toLowerCase().includes(q));
   const pager=recipePager();
-  const recipeSection=`<div class="section-head"><h2>Favourite recipes</h2><span class="count">${{recipeTotalCount} recipes</span></div>${{recipes.length?'<div class="grid">'+recipes.map(recipeCard).join('')+'</div>':'<div class="empty">No favourite recipes.</div>'}`;
-  const menuSection=`<div class="section-head cc-favourites-subhead"><h2>Favourite menus</h2><span class="count">${{menuMatches.length} menus</span></div>${{menuMatches.length?'<div class="cc-menu-library-grid" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;align-items:start">'+menuMatches.map(favouriteMenuCard).join('')+'</div>':'<div class="empty">No favourite menus.</div>'}`;
-  content.innerHTML=`${{pager}${{recipeSection}${{pager}${{menuSection}`;
+  const recipeSection=`<div class="section-head"><h2>Favourite recipes</h2><span class="count">${recipeTotalCount} recipes</span></div>${recipes.length?'<div class="grid">'+recipes.map(recipeCard).join('')+'</div>':'<div class="empty">No favourite recipes.</div>'}`;
+  const menuSection=`<div class="section-head cc-favourites-subhead"><h2>Favourite menus</h2><span class="count">${menuMatches.length} menus</span></div>${menuMatches.length?'<div class="cc-menu-library-grid" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;align-items:start">'+menuMatches.map(favouriteMenuCard).join('')+'</div>':'<div class="empty">No favourite menus.</div>'}`;
+  content.innerHTML=`${pager}${recipeSection}${pager}${menuSection}`;
   content.querySelectorAll('.card').forEach(c=>c.onclick=()=>showRecipe(+c.dataset.id));
   wireRecipePager();
   window.ccRenderMenus=()=>view==='favourites'?renderFavourites(search.value.trim().toLowerCase()):renderMenus(search.value.trim().toLowerCase());
