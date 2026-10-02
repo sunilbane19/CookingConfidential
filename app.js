@@ -87,10 +87,11 @@ async function loadMenus(){
 }
 
 async function loadData(){
-  if(view==='menus')content.innerHTML='<div class="empty">Loading your menus…</div>';
+  if(view==='menus'||view==='favourites')content.innerHTML='<div class="empty">Loading your library…</div>';
   else await loadRecipePage({reset:true});
   await loadMenus();
   if(view==='menus')renderMenus(search.value.trim().toLowerCase());
+  else if(view==='favourites')renderFavourites(search.value.trim().toLowerCase());
 }
 window.ccReloadRecipes=()=>loadRecipePage({offset:recipeOffset,refreshCount:true});
 function recipeCard(r){return `<article class="card" data-id="${r.id}"><div class="card-image" aria-hidden="true"></div><div class="card-body"><span class="tag">${esc(r.cuisine||'Uncategorised')}</span><h3>${esc(r.name)}</h3><div class="meta">${esc([r.course||'Recipe',r.recipe_type].filter(Boolean).join(' · '))} · ${stars(r.rating)}</div></div></article>`}
