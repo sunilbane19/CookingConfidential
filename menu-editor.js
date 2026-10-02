@@ -50,7 +50,7 @@ const normalizeBlocks=blocks=>blocks.map(b=>({...b,html:cleanHtml(b.html||'')}))
 const recipeCache=new Map();
 
 function styles(){
- /* menu editor UI refresh 1.9.12 */
+ /* menu editor UI refresh 1.9.13 */
  if(document.querySelector('#ccMenuEditorStyles'))return;
  const s=document.createElement('style');s.id='ccMenuEditorStyles';s.textContent=`
  #ccMenuEditorDialog{max-width:min(1120px,96vw);width:100%;max-height:94vh}
@@ -288,7 +288,16 @@ content.querySelectorAll('[data-align]').forEach(b=>{b.onmousedown=e=>e.preventD
  content.querySelector('#ccMenuBullet').onmousedown=e=>e.preventDefault();content.querySelector('#ccMenuBullet').onclick=()=>exec('insertUnorderedList');
  content.querySelector('#ccMenuNumber').onmousedown=e=>e.preventDefault();content.querySelector('#ccMenuNumber').onclick=()=>exec('insertOrderedList');
  content.querySelector('#ccMenuDivider').onclick=()=>{const doc=d.querySelector('#ccMenuDocument');doc.insertAdjacentHTML('beforeend','<div class="cc-menu-block cc-divider" contenteditable="false"><div class="cc-block-controls"><button type="button" data-move="-1">↑</button><button type="button" data-move="1">↓</button><button type="button" data-delete="1">×</button></div></div>')};
- content.querySelector('#ccMenuAddLine').onclick=()=>{const doc=d.querySelector('#ccMenuDocument');doc.insertAdjacentHTML('beforeend','<div class="cc-menu-block"><br><div class="cc-block-controls"><button type="button" data-move="-1">↑</button><button type="button" data-move="1">↓</button><button type="button" data-delete="1">×</button></div></div>');doc.lastElementChild.focus()};
+ content.querySelector('#ccMenuAddLine').onclick=()=>{
+ const doc=d.querySelector('#ccMenuDocument');if(!doc)return;
+ restoreSelection();
+ const s=getSelection(),range=s?.rangeCount?s.getRangeAt(0):null;
+ const current=range?.commonAncestorContainer?.nodeType===1?range.commonAncestorContainer:range?.commonAncestorContainer?.parentElement;
+ const block=current?.closest?.('.cc-menu-block')||lastEditorBlock||doc.lastElementChild;
+ const line=document.createElement('div');line.className='cc-menu-block';line.innerHTML='<br><div class="cc-block-controls"><button type="button" data-move="-1">↑</button><button type="button" data-move="1">↓</button><button type="button" data-delete="1">×</button></div>';
+ if(block&&block.parentNode===doc)block.after(line);else doc.appendChild(line);
+ const editRange=document.createRange();editRange.selectNodeContents(line);editRange.collapse(true);s?.removeAllRanges();s?.addRange(editRange);lastEditorBlock=line;lastRange=editRange.cloneRange();line.focus();
+};
  content.querySelector('#ccMenuApplyRecipeLink').onclick=()=>{const id=content.querySelector('#ccMenuRecipeLink').value;if(!id)return;const r=recipes.find(x=>String(x.id)===String(id));if(!r)return;addLink('#recipe-'+id,id)};
  content.querySelector('#ccMenuApplyUrl').onclick=()=>{const u=content.querySelector('#ccMenuUrl').value.trim();if(/^https?:\/\//i.test(u))addLink(u)};
  d.querySelector('#ccMenuDocument').addEventListener('click',e=>{
