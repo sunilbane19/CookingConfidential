@@ -109,13 +109,16 @@ function styles(){
    body.cc-menu-printing{padding:0!important;background:#fff!important}
    body.cc-menu-printing>*:not(#ccMenuPrintPage){display:none!important}
    body.cc-menu-printing #ccMenuPrintPage{display:block!important;width:194mm;margin:0 auto;background:#fff;color:#111}
-   #ccMenuPrintPage .cc-print-scaled{transform-origin:top left}
-   #ccMenuPrintPage .cc-print-document{font:13px/1.28 Georgia,"Times New Roman",serif}
-   #ccMenuPrintPage .cc-print-document h1,#ccMenuPrintPage .cc-print-document h2,#ccMenuPrintPage .cc-print-document h3,#ccMenuPrintPage .cc-print-document h4,#ccMenuPrintPage .cc-print-document h5,#ccMenuPrintPage .cc-print-document h6{margin:4px 0 6px}
-   #ccMenuPrintPage .cc-print-document p{margin:2px 0}
-   #ccMenuPrintPage .cc-print-document ul,#ccMenuPrintPage .cc-print-document ol{margin:3px 0;padding-left:22px}
-   #ccMenuPrintPage .cc-print-document .cc-menu-block{padding:2px 0!important;margin:1px 0!important;min-height:0!important}
-   #ccMenuPrintPage .cc-print-document .cc-divider{border-top:1px solid #aaa;height:1px;padding:0!important;margin:7px 0!important}
+   #ccMenuPrintPage .cc-print-page{width:100%}
+   #ccMenuPrintPage .cc-print-header{text-align:center;margin:0 0 .8em}
+   #ccMenuPrintPage .cc-print-header h1{font:700 22px Georgia,serif;margin:0 0 .2em}
+   #ccMenuPrintPage .cc-print-header div{font:11px Arial,sans-serif;line-height:1.35;margin:0}
+   #ccMenuPrintPage .cc-print-document{font:13px/1.35 Georgia,"Times New Roman",serif}
+   #ccMenuPrintPage .cc-print-document h1,#ccMenuPrintPage .cc-print-document h2,#ccMenuPrintPage .cc-print-document h3,#ccMenuPrintPage .cc-print-document h4,#ccMenuPrintPage .cc-print-document h5,#ccMenuPrintPage .cc-print-document h6{margin:0 0 .65em}
+   #ccMenuPrintPage .cc-print-document p{margin:0 0 .65em}
+   #ccMenuPrintPage .cc-print-document ul,#ccMenuPrintPage .cc-print-document ol{margin:0 0 .65em;padding-left:22px}
+   #ccMenuPrintPage .cc-print-document .cc-menu-block{padding:0!important;margin:0 0 .65em!important;min-height:0!important}
+   #ccMenuPrintPage .cc-print-document .cc-divider{border-top:1px solid #aaa;height:1px;padding:0!important;margin:.8em 0!important}
  }
  @media print{
    body:not(.cc-menu-printing)>*:not(#ccMenuEditorDialog){display:none!important}
@@ -211,39 +214,13 @@ async function collectDocument(){
 }
 async function printMenuDocument(contentOrMenu){
  let content=null,doc,title,occasion,date;
- if(contentOrMenu?.querySelector){
-   content=contentOrMenu;doc=content.querySelector('#ccMenuDocument');
-   title=esc(content.querySelector('#ccMenuName')?.value||'Menu');
-   occasion=esc(content.querySelector('#ccMenuOccasion')?.value||'');
-   date=esc(content.querySelector('#ccMenuDate')?.value||'');
- }else{
-   const menu=contentOrMenu||{};
-   const source=docFromMenu(menu);
-   doc=document.createElement('div');
-   doc.id='ccMenuDocument';
-   doc.className='cc-menu-document';
-   doc.innerHTML=(source.blocks||[]).map(blockMarkup).join('');
-   title=esc(menu.name||'Menu');
-   occasion=esc(menu.occasion||'');
-   date=esc(formatMenuDate(menu.menu_date||''));
- }
- if(!doc)return;
- const old=document.querySelector('#ccMenuPrintPage');if(old)old.remove();
- const sheet=document.createElement('div');sheet.id='ccMenuPrintPage';
- const scaled=document.createElement('div');scaled.className='cc-print-scaled';
- const clone=doc.cloneNode(true);clone.removeAttribute('contenteditable');clone.classList.add('cc-print-document');
- clone.querySelectorAll('.cc-block-controls').forEach(x=>x.remove());
- scaled.innerHTML='<div style="text-align:center;margin:0 0 10px"><h1 style="font:700 22px Georgia,serif;margin:0 0 3px">'+title+'</h1>'+(occasion?'<div style="font:12px Arial;margin-bottom:2px">'+occasion+'</div>':'')+(date?'<div style="font:11px Arial;color:#555">'+date+'</div>':'')+'</div>';
- scaled.appendChild(clone);sheet.appendChild(scaled);document.body.appendChild(sheet);document.body.classList.add('cc-menu-printing');
- await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
- const availableHeight=1040,availableWidth=733;
- const naturalHeight=Math.max(1,scaled.scrollHeight),naturalWidth=Math.max(1,scaled.scrollWidth);
- const scale=Math.min(1,availableHeight/naturalHeight,availableWidth/naturalWidth);
- scaled.style.transform='scale('+scale+')';sheet.style.height=Math.ceil(naturalHeight*scale)+'px';
- const cleanup=()=>{document.body.classList.remove('cc-menu-printing');sheet.remove()};
- window.addEventListener('afterprint',cleanup,{once:true});
- setTimeout(()=>window.print(),80);
- setTimeout(()=>{if(document.body.contains(sheet))cleanup()},10000);
+ if(contentOrMenu?.querySelector){content=contentOrMenu;doc=content.querySelector('#ccMenuDocument');title=esc(content.querySelector('#ccMenuName')?.value||'Menu');occasion=esc(content.querySelector('#ccMenuOccasion')?.value||'');date=esc(content.querySelector('#ccMenuDate')?.value||'');}
+ else{const menu=contentOrMenu||{},source=docFromMenu(menu);doc=document.createElement('div');doc.id='ccMenuDocument';doc.className='cc-menu-document';doc.innerHTML=(source.blocks||[]).map(blockMarkup).join('');title=esc(menu.name||'Menu');occasion=esc(menu.occasion||'');date=esc(formatMenuDate(menu.menu_date||''));}
+ if(!doc)return; const old=document.querySelector('#ccMenuPrintPage');if(old)old.remove();
+ const sheet=document.createElement('div');sheet.id='ccMenuPrintPage';const page=document.createElement('div');page.className='cc-print-page';
+ const clone=doc.cloneNode(true);clone.removeAttribute('contenteditable');clone.classList.add('cc-print-document');clone.querySelectorAll('.cc-block-controls').forEach(x=>x.remove());
+ page.innerHTML='<div class="cc-print-header"><h1>'+title+'</h1>'+(occasion?'<div>'+occasion+'</div>':'')+(date?'<div>'+date+'</div>':'')+'</div>';page.appendChild(clone);sheet.appendChild(page);document.body.appendChild(sheet);document.body.classList.add('cc-menu-printing');
+ const cleanup=()=>{document.body.classList.remove('cc-menu-printing');sheet.remove()};window.addEventListener('afterprint',cleanup,{once:true});setTimeout(()=>window.print(),80);setTimeout(()=>{if(document.body.contains(sheet))cleanup()},10000);
 }
 async function applyDocxParagraphAlignment(html,arrayBuffer){
   try{
