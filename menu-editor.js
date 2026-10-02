@@ -99,7 +99,7 @@ function styles(){
    .cc-menu-dialog-title{display:block;margin-bottom:14px}.cc-menu-dialog-title .eyebrow{display:block;margin-bottom:4px}.cc-menu-dialog-title h2{font-size:28px;line-height:1.08;max-width:100%;overflow-wrap:anywhere}
    .cc-menu-linkrow{width:100%;box-sizing:border-box;padding-right:34px;scroll-snap-type:x proximity}.cc-menu-linkrow select{flex-basis:390px}.cc-menu-linkrow input{flex-basis:310px}.cc-menu-linkrow button{flex:0 0 auto}.cc-menu-linkrow-wrap{position:relative}.cc-menu-linkrow-wrap::after{content:'↔ swipe';position:absolute;right:8px;bottom:2px;background:var(--card);padding:0 4px;font:10px Arial;color:var(--muted);pointer-events:none}
    .cc-menu-document[contenteditable="true"] .cc-menu-block{padding-right:112px}
-   .cc-menu-block .cc-block-controls{right:5px;top:50%;transform:translateY(-50%);opacity:.55;align-items:center;white-space:nowrap}
+   .cc-menu-block .cc-block-controls{right:5px;top:7px;transform:none;opacity:.55;align-items:center;white-space:nowrap}
    .cc-menu-actions-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}.cc-menu-actions-grid button{min-width:0;padding:8px 4px;font-size:11px}
    .cc-menu-original-viewer{overflow:hidden;padding:8px}.cc-menu-original-viewer .docx-wrapper{width:100%!important;min-width:0!important;margin:0!important}.cc-menu-original-viewer .docx-wrapper .docx{width:100%!important;min-width:0!important;box-sizing:border-box!important;margin:0!important}.cc-menu-original-viewer .docx-wrapper .docx *{max-width:100%!important;box-sizing:border-box!important}
    
@@ -118,7 +118,7 @@ function styles(){
    .cc-menu-document{padding:14px;min-height:420px;overflow-x:hidden}
    .cc-menu-toolrow button,.cc-menu-toolrow select{min-height:40px}
    .cc-menu-block{padding-right:92px!important}
-   .cc-menu-block .cc-block-controls{top:8px;right:4px}
+   .cc-menu-block .cc-block-controls{top:7px;right:4px;transform:none}
    .cc-menu-actions-grid{flex-wrap:nowrap;gap:6px}
    .cc-menu-actions-grid button{min-width:0;flex:1 1 0;padding:9px 7px;font-size:12px;white-space:nowrap}
    .cc-menu-original-viewer{overflow:auto;max-width:100%;padding:8px}
