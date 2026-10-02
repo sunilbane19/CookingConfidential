@@ -2,6 +2,23 @@ import { supabase } from './supabase-client.js?v=1.0.0';
 import * as mammoth from 'https://esm.sh/mammoth@1.6.0';
 
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const formatMenuDate=v=>{
+ const s=String(v??'').trim();
+ let m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+ if(m)return m[3]+'-'+m[2]+'-'+m[1];
+ m=/^(\d{2})[\/-](\d{2})[\/-](\d{4})$/.exec(s);
+ return m?m[1]+'-'+m[2]+'-'+m[3]:s;
+};
+const parseMenuDate=v=>{
+ const s=String(v??'').trim();
+ if(!s)return null;
+ const m=/^(\d{1,2})-(\d{1,2})-(\d{4})$/.exec(s);
+ if(!m)return null;
+ const d=Number(m[1]),mo=Number(m[2]),y=Number(m[3]);
+ const dt=new Date(Date.UTC(y,mo-1,d));
+ if(dt.getUTCFullYear()!==y||dt.getUTCMonth()!==mo-1||dt.getUTCDate()!==d)return null;
+ return y.toString().padStart(4,'0')+'-'+String(mo).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+};
 const cleanHtml=(html='')=>{
   const doc=new DOMParser().parseFromString('<div>'+String(html||'')+'</div>','text/html');
   const allowed=new Set(['DIV','P','BR','B','STRONG','I','EM','U','SPAN','A','UL','OL','LI','FONT','H1','H2','H3','H4','H5','H6','TABLE','THEAD','TBODY','TFOOT','TR','TD','TH']);
@@ -83,6 +100,22 @@ function styles(){
    .cc-menu-toolrow button,.cc-menu-toolrow select{min-height:40px}
    .cc-menu-block{padding-right:34px}
  }
+ .cc-menu-clear-selection{margin-left:auto}
+ body.cc-menu-printing #ccMenuPrintPage{display:block!important}
+ #ccMenuPrintPage{display:none}
+ @media print{
+   @page{size:A4 portrait;margin:8mm}
+   body.cc-menu-printing{padding:0!important;background:#fff!important}
+   body.cc-menu-printing>*:not(#ccMenuPrintPage){display:none!important}
+   body.cc-menu-printing #ccMenuPrintPage{display:block!important;width:194mm;margin:0 auto;background:#fff;color:#111}
+   #ccMenuPrintPage .cc-print-scaled{transform-origin:top left}
+   #ccMenuPrintPage .cc-print-document{font:13px/1.28 Georgia,"Times New Roman",serif}
+   #ccMenuPrintPage .cc-print-document h1,#ccMenuPrintPage .cc-print-document h2,#ccMenuPrintPage .cc-print-document h3,#ccMenuPrintPage .cc-print-document h4,#ccMenuPrintPage .cc-print-document h5,#ccMenuPrintPage .cc-print-document h6{margin:4px 0 6px}
+   #ccMenuPrintPage .cc-print-document p{margin:2px 0}
+   #ccMenuPrintPage .cc-print-document ul,#ccMenuPrintPage .cc-print-document ol{margin:3px 0;padding-left:22px}
+   #ccMenuPrintPage .cc-print-document .cc-menu-block{padding:2px 0!important;margin:1px 0!important;min-height:0!important}
+   #ccMenuPrintPage .cc-print-document .cc-divider{border-top:1px solid #aaa;height:1px;padding:0!important;margin:7px 0!important}
+ }
  @media print{
    body>*:not(#ccMenuEditorDialog){display:none!important}
    #ccMenuEditorDialog{display:block!important;position:static!important;width:auto!important;max-width:none!important;max-height:none!important}
@@ -120,6 +153,7 @@ async function recipesForLinks(){
 let lastEditorBlock=null,lastRange=null;
 function getSelectionEditor(){const s=getSelection();const n=s?.anchorNode?.parentElement?.closest?.('.cc-menu-block');return n||lastEditorBlock||null}
 function rememberSelection(){const s=getSelection();if(!s?.rangeCount)return;const n=s.anchorNode?.parentElement?.closest?.('.cc-menu-block');if(n){lastEditorBlock=n;lastRange=s.getRangeAt(0).cloneRange()}}
+function clearSelection(){try{getSelection()?.removeAllRanges()}catch{}lastEditorBlock=null;lastRange=null}
 function restoreSelection(){if(!lastRange)return;const s=getSelection();s.removeAllRanges();s.addRange(lastRange)}
 function exec(cmd,value=null){restoreSelection();document.execCommand('styleWithCSS',false,true);document.execCommand(cmd,false,value);rememberSelection()}
 function fontSize(value){
@@ -140,6 +174,29 @@ async function collectDocument(){
    return {type:'line',html:cleanHtml(clone.innerHTML)}
  }).filter((b,i)=>b.type==='divider'||b.html||i===0);
  return {version:1,blocks}
+}
+async function printMenuDocument(content){
+ const doc=content.querySelector('#ccMenuDocument');
+ if(!doc)return;
+ const old=document.querySelector('#ccMenuPrintPage');if(old)old.remove();
+ const sheet=document.createElement('div');sheet.id='ccMenuPrintPage';
+ const scaled=document.createElement('div');scaled.className='cc-print-scaled';
+ const title=esc(content.querySelector('#ccMenuName')?.value||'Menu');
+ const occasion=esc(content.querySelector('#ccMenuOccasion')?.value||'');
+ const date=esc(content.querySelector('#ccMenuDate')?.value||'');
+ const clone=doc.cloneNode(true);clone.removeAttribute('contenteditable');clone.classList.add('cc-print-document');
+ clone.querySelectorAll('.cc-block-controls').forEach(x=>x.remove());
+ scaled.innerHTML='<div style="text-align:center;margin:0 0 10px"><h1 style="font:700 22px Georgia,serif;margin:0 0 3px">'+title+'</h1>'+(occasion?'<div style="font:12px Arial;margin-bottom:2px">'+occasion+'</div>':'')+(date?'<div style="font:11px Arial;color:#555">'+date+'</div>':'')+'</div>';
+ scaled.appendChild(clone);sheet.appendChild(scaled);document.body.appendChild(sheet);document.body.classList.add('cc-menu-printing');
+ await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+ const availableHeight=1040,availableWidth=733;
+ const naturalHeight=Math.max(1,scaled.scrollHeight),naturalWidth=Math.max(1,scaled.scrollWidth);
+ const scale=Math.min(1,availableHeight/naturalHeight,availableWidth/naturalWidth);
+ scaled.style.transform='scale('+scale+')';sheet.style.height=Math.ceil(naturalHeight*scale)+'px';
+ const cleanup=()=>{document.body.classList.remove('cc-menu-printing');sheet.remove()};
+ window.addEventListener('afterprint',cleanup,{once:true});
+ setTimeout(()=>window.print(),80);
+ setTimeout(()=>{if(document.body.contains(sheet))cleanup()},10000);
 }
 async function applyDocxParagraphAlignment(html,arrayBuffer){
   try{
@@ -170,7 +227,7 @@ function blockMarkup(b,i){
 async function openEditor(menu,{blocks=null,sourceLabel='',newMenu=false}={}){
  styles();const d=ensureDialog();let source=blocks?{version:1,blocks}:docFromMenu(menu);if(!blocks&&menu.id&&!(source.blocks||[]).length){const legacy=await supabase.from('cc_menu_items').select('sort_order,custom_label,section,recipe_id,cc_recipes(id,name)').eq('menu_id',menu.id).order('sort_order');if(!legacy.error&&legacy.data?.length){source={version:1,blocks:legacy.data.map(x=>({type:'line',html:'<a href=\"#recipe-'+x.recipe_id+'\" data-recipe-id=\"'+x.recipe_id+'\">'+esc(x.custom_label||x.cc_recipes?.name||'Recipe')+'</a>'}))}}}const initial=normalizeBlocks(source.blocks||[]);
  const recipes=await recipesForLinks();
- d.querySelector('#ccMenuEditorContent').innerHTML='<button class="close" type="button" id="ccMenuEditorClose">×</button><p class="eyebrow">'+(newMenu?'NEW MENU':'MENU EDITOR')+'</p><h2>'+(newMenu?'Create a menu':esc(menu.name||'Edit menu'))+'</h2><div class="cc-menu-meta"><label>Menu name<input id="ccMenuName" value="'+esc(menu.name||'')+'" required></label><label>Date<input id="ccMenuDate" type="date" min="1900-01-01" max="2100-12-31" value="'+esc(menu.menu_date||'')+'"></label><label>Guests<input id="ccMenuGuests" type="number" min="1" value="'+esc(menu.guest_count??'')+'"></label></div><label>Occasion<input id="ccMenuOccasion" value="'+esc(menu.occasion||'')+'"></label><div class="cc-menu-original-note" id="ccMenuOriginalNote">'+(sourceLabel?'Original uploaded: <strong>'+esc(sourceLabel)+'</strong>. It is retained unchanged. <a href="#" id="ccMenuReviewOriginal">Review original</a>':'Menu content is editable. Your saved version is separate from any original upload.')+'</div><div class="cc-menu-toolbar"><div class="cc-menu-toolrow"><button type="button" data-cmd="bold"><b>B</b></button><button type="button" data-cmd="italic"><i>I</i></button><button type="button" data-cmd="underline"><u>U</u></button><select id="ccMenuFont" title="Font"><option value="Georgia">Georgia</option><option value="Arial">Arial</option><option value="Times New Roman">Times New Roman</option><option value="Verdana">Verdana</option></select><select id="ccMenuSize" title="Font size"><option value="12px">Small</option><option value="14px">14</option><option value="16px" selected>Normal</option><option value="18px">Large</option><option value="22px">Extra large</option><option value="30px">Title</option></select><button type="button" data-block-style="normal">Normal</button><button type="button" data-block-style="heading">Heading</button><button type="button" data-block-style="subheading">Subheading</button><button type="button" class="cc-menu-align" data-align="left" title="Align left">L</button><button type="button" class="cc-menu-align" data-align="center" title="Align center">C</button><button type="button" class="cc-menu-align" data-align="right" title="Align right">R</button><button type="button" id="ccMenuBullet">• List</button><button type="button" id="ccMenuNumber">1. List</button><button type="button" id="ccMenuDivider">Divider</button><button type="button" id="ccMenuAddLine">＋ Line</button></div><div class="cc-menu-linkrow"><select id="ccMenuRecipeLink"><option value="">Link selected text to a recipe…</option>'+recipes.map(r=>'<option value="'+r.id+'">'+esc(r.name)+'</option>').join('')+'</select><button type="button" id="ccMenuApplyRecipeLink">Link recipe</button><input id="ccMenuUrl" type="url" placeholder="https:// external link"><button type="button" id="ccMenuApplyUrl">Link URL</button></div></div><div id="ccMenuDocument" class="cc-menu-document" contenteditable="true" spellcheck="true">'+initial.map(blockMarkup).join('')+'</div><div class="cc-menu-actions-grid"><button class="secondary" type="button" id="ccMenuShowOriginal">Show Original</button><button class="secondary" type="button" id="ccMenuSaveAs">Save As</button><button class="secondary" type="button" id="ccMenuPrint">Print</button><button class="secondary" type="button" id="ccMenuShare">Share</button><button class="secondary" type="button" id="ccMenuFavourite">'+(menu.is_favourite?'★ Unfavourite':'☆ Favourite')+'</button><button class="secondary danger" type="button" id="ccMenuDelete" '+(newMenu?'disabled':'')+'>Delete</button><button class="primary" type="button" id="ccMenuSave">Save</button></div>';
+ d.querySelector('#ccMenuEditorContent').innerHTML='<button class="close" type="button" id="ccMenuEditorClose">×</button><p class="eyebrow">'+(newMenu?'NEW MENU':'MENU EDITOR')+'</p><h2>'+(newMenu?'Create a menu':esc(menu.name||'Edit menu'))+'</h2><div class="cc-menu-meta"><label>Menu name<input id="ccMenuName" value="'+esc(menu.name||'')+'" required></label><label>Date<input id="ccMenuDate" type="text" inputmode="numeric" maxlength="10" placeholder="DD-MM-YYYY" value="'+esc(formatMenuDate(menu.menu_date||''))+'"></label><label>Guests<input id="ccMenuGuests" type="number" min="1" value="'+esc(menu.guest_count??'')+'"></label></div><label>Occasion<input id="ccMenuOccasion" value="'+esc(menu.occasion||'')+'"></label><div class="cc-menu-toolbar"><div class="cc-menu-toolrow"><button type="button" data-cmd="bold"><b>B</b></button><button type="button" data-cmd="italic"><i>I</i></button><button type="button" data-cmd="underline"><u>U</u></button><select id="ccMenuFont" title="Font"><option value="Georgia">Georgia</option><option value="Arial">Arial</option><option value="Times New Roman">Times New Roman</option><option value="Verdana">Verdana</option></select><select id="ccMenuSize" title="Font size"><option value="12px">Small</option><option value="14px">14</option><option value="16px" selected>Normal</option><option value="18px">Large</option><option value="22px">Extra large</option><option value="30px">Title</option></select><button type="button" data-block-style="normal">Normal</button><button type="button" data-block-style="heading">Heading</button><button type="button" data-block-style="subheading">Subheading</button><button type="button" class="cc-menu-align" data-align="left" title="Align left">L</button><button type="button" class="cc-menu-align" data-align="center" title="Align center">C</button><button type="button" class="cc-menu-align" data-align="right" title="Align right">R</button><button type="button" id="ccMenuBullet">• List</button><button type="button" id="ccMenuNumber">1. List</button><button type="button" id="ccMenuDivider">Divider</button><button type="button" id="ccMenuAddLine">＋ Line</button></div><div class="cc-menu-linkrow"><select id="ccMenuRecipeLink"><option value="">Link selected text to a recipe…</option>'+recipes.map(r=>'<option value="'+r.id+'">'+esc(r.name)+'</option>').join('')+'</select><button type="button" id="ccMenuApplyRecipeLink">Link recipe</button><input id="ccMenuUrl" type="url" placeholder="https:// external link"><button type="button" id="ccMenuApplyUrl">Link URL</button><button type="button" class="secondary cc-menu-clear-selection" id="ccMenuClearSelection">Clear selection</button></div></div><div id="ccMenuDocument" class="cc-menu-document" contenteditable="true" spellcheck="true">'+initial.map(blockMarkup).join('')+'</div><div class="cc-menu-actions-grid"><button class="secondary" type="button" id="ccMenuShowOriginal">Show Original</button><button class="secondary" type="button" id="ccMenuSaveAs">Save As</button><button class="secondary" type="button" id="ccMenuPrint">Print</button><button class="secondary" type="button" id="ccMenuShare">Share</button><button class="secondary" type="button" id="ccMenuFavourite">'+(menu.is_favourite?'★ Unfavourite':'☆ Favourite')+'</button><button class="secondary danger" type="button" id="ccMenuDelete" '+(newMenu?'disabled':'')+'>Delete</button><button class="primary" type="button" id="ccMenuSave">Save</button></div>';
  d.showModal();
  const content=d.querySelector('#ccMenuEditorContent');
  requestAnimationFrame(()=>{d.scrollTop=0;content.scrollTop=0;});
@@ -178,8 +235,13 @@ async function openEditor(menu,{blocks=null,sourceLabel='',newMenu=false}={}){
  content.querySelector('#ccMenuDocument').addEventListener('mouseup',rememberSelection);
  content.querySelector('#ccMenuDocument').addEventListener('keyup',rememberSelection);
  content.querySelector('#ccMenuDocument').addEventListener('focusin',e=>{const b=e.target.closest('.cc-menu-block');if(b)lastEditorBlock=b;});
- document.addEventListener('selectionchange',rememberSelection);
- content.querySelector('#ccMenuEditorClose').onclick=()=>d.close();
+ const selectionListener=()=>rememberSelection();document.addEventListener('selectionchange',selectionListener);d.addEventListener('close',()=>document.removeEventListener('selectionchange',selectionListener),{once:true});
+ const dateInput=content.querySelector('#ccMenuDate');
+dateInput.addEventListener('input',e=>{const digits=Array.from(e.target.value).filter(ch=>ch>='0'&&ch<='9').slice(0,8).join('');e.target.value=digits.length<=2?digits:digits.length<=4?digits.slice(0,2)+'-'+digits.slice(2):digits.slice(0,2)+'-'+digits.slice(2,4)+'-'+digits.slice(4)});
+content.querySelector('#ccMenuClearSelection').onclick=()=>clearSelection();
+content.querySelector('#ccMenuDocument').addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();clearSelection()}});
+content.querySelector('#ccMenuDocument').addEventListener('click',e=>{if(e.target===e.currentTarget)clearSelection()});
+content.querySelector('#ccMenuEditorClose').onclick=()=>d.close();
  const reviewOriginal=content.querySelector('#ccMenuReviewOriginal');if(reviewOriginal)reviewOriginal.onclick=e=>{e.preventDefault();showOriginal(menu)};
  content.querySelectorAll('[data-cmd]').forEach(b=>{b.onmousedown=e=>e.preventDefault();b.onclick=()=>{const ed=getSelectionEditor();if(!ed)return;ed.focus();exec(b.dataset.cmd)}});
  content.querySelector('#ccMenuFont').onmousedown=e=>e.preventDefault();content.querySelector('#ccMenuFont').onchange=e=>{const ed=getSelectionEditor();if(ed){ed.focus();exec('fontName',e.target.value)}};
@@ -212,7 +274,7 @@ content.querySelectorAll('[data-align]').forEach(b=>{b.onmousedown=e=>e.preventD
  const save=async asNew=>{
    const name=String(content.querySelector('#ccMenuName').value||'').trim();if(!name)return window.ccShowError('Please enter a menu name.','Menu name required');
    const documentData=await collectDocument();const {data:{user}}=await supabase.auth.getUser();if(!user)return window.ccShowError('Please sign in again.','Sign-in required');
-   const payload={name,menu_date:content.querySelector('#ccMenuDate').value||null,guest_count:content.querySelector('#ccMenuGuests').value?Number(content.querySelector('#ccMenuGuests').value):null,occasion:String(content.querySelector('#ccMenuOccasion').value||'').trim()||null,content:JSON.stringify(documentData),document:documentData,visibility:'private',created_by:user.id,status:menu.status==='draft'?'published':'published'};
+   const payload={name,menu_date:(()=>{const raw=content.querySelector('#ccMenuDate').value.trim();if(!raw)return null;const iso=parseMenuDate(raw);if(!iso){window.ccShowError('Please enter the date as DD-MM-YYYY.','Invalid date');throw new Error('Invalid menu date')}return iso})(),guest_count:content.querySelector('#ccMenuGuests').value?Number(content.querySelector('#ccMenuGuests').value):null,occasion:String(content.querySelector('#ccMenuOccasion').value||'').trim()||null,content:JSON.stringify(documentData),document:documentData,visibility:'private',created_by:user.id,status:menu.status==='draft'?'published':'published'};
    if(!asNew&&menu.id)payload.id=menu.id;
    if(menu.original_file_path){payload.original_file_path=menu.original_file_path;payload.original_file_name=menu.original_file_name;payload.original_mime_type=menu.original_mime_type}
    const q=asNew||!menu.id?await supabase.from('cc_menus').insert(payload).select().single():await supabase.from('cc_menus').update(payload).eq('id',menu.id).select().single();
@@ -221,7 +283,7 @@ content.querySelectorAll('[data-align]').forEach(b=>{b.onmousedown=e=>e.preventD
  };
  content.querySelector('#ccMenuSave').onclick=()=>save(false);
  content.querySelector('#ccMenuSaveAs').onclick=async()=>{const base=String(content.querySelector('#ccMenuName').value||menu.name||'Menu').trim();content.querySelector('#ccMenuName').value=base+' — Copy';await save(true)};
- content.querySelector('#ccMenuPrint').onclick=()=>window.print();
+ content.querySelector('#ccMenuPrint').onclick=()=>printMenuDocument(content);
  content.querySelector('#ccMenuShare').onclick=async()=>shareMenu(menu,content);
  content.querySelector('#ccMenuFavourite').onclick=async()=>{if(!menu.id)return;const next=!menu.is_favourite;const q=await supabase.from('cc_menus').update({is_favourite:next}).eq('id',menu.id);if(q.error)return window.ccShowError(q.error.message,'Could not update favourite');menu.is_favourite=next;content.querySelector('#ccMenuFavourite').textContent=next?'★ Unfavourite':'☆ Favourite'};
  content.querySelector('#ccMenuDelete').onclick=async()=>{if(!menu.id||!(await ccConfirm('Delete this menu permanently?','Delete menu','Delete')))return;const q=await supabase.from('cc_menus').delete().eq('id',menu.id);if(q.error)return window.ccShowError(q.error.message,'Could not delete menu');d.close();await window.ccReloadMenus?.()};
