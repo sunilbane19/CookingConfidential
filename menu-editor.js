@@ -284,8 +284,6 @@ content.querySelectorAll('[data-align]').forEach(b=>{b.onmousedown=e=>e.preventD
  content.querySelector('#ccMenuSave').onclick=()=>save(false);
  content.querySelector('#ccMenuSaveAs').onclick=async()=>{const base=String(content.querySelector('#ccMenuName').value||menu.name||'Menu').trim();content.querySelector('#ccMenuName').value=base+' — Copy';await save(true)};
  
- content.querySelector('#ccMenuShare').onclick=async()=>shareMenu(menu,content);
- content.querySelector('#ccMenuFavourite').onclick=async()=>{if(!menu.id)return;const next=!menu.is_favourite;const q=await supabase.from('cc_menus').update({is_favourite:next}).eq('id',menu.id);if(q.error)return window.ccShowError(q.error.message,'Could not update favourite');menu.is_favourite=next;content.querySelector('#ccMenuFavourite').textContent=next?'★ Unfavourite':'☆ Favourite'};
  content.querySelector('#ccMenuDelete').onclick=async()=>{if(!menu.id||!(await ccConfirm('Delete this menu permanently?','Delete menu','Delete')))return;const q=await supabase.from('cc_menus').delete().eq('id',menu.id);if(q.error)return window.ccShowError(q.error.message,'Could not delete menu');d.close();await window.ccReloadMenus?.()};
  content.querySelector('#ccMenuShowOriginal').onclick=()=>showOriginal(menu);
 }
