@@ -56,7 +56,7 @@ function styles(){
  #ccMenuEditorDialog{max-width:min(1120px,96vw);width:100%;max-height:94vh}
  #ccMenuEditorDialog .dialog-card{max-height:90vh;overflow:auto;padding:30px 36px}
  .cc-menu-toolbar{position:sticky;top:0;z-index:5;background:var(--card);border-bottom:1px solid var(--line);padding:10px 0 12px;margin-bottom:14px}
- .cc-menu-toolrow{display:flex;flex-wrap:nowrap;gap:5px;align-items:center;overflow-x:auto;overflow-y:hidden;padding-bottom:2px;scrollbar-width:thin}
+ .cc-menu-toolrow{display:flex;flex-wrap:nowrap;gap:5px;align-items:center;overflow-x:auto;overflow-y:hidden;padding-bottom:7px;scrollbar-width:thin;position:relative}.cc-menu-toolrow-wrap{position:relative}.cc-menu-toolrow-wrap::after{content:"↔ swipe";position:absolute;right:5px;bottom:0;background:linear-gradient(90deg,transparent,var(--card) 28%);padding-left:18px;font:600 10px Arial;color:var(--muted);pointer-events:none}
  .cc-menu-toolrow button,.cc-menu-toolrow select,.cc-menu-toolrow input{min-height:36px;flex:0 0 auto;border:1px solid var(--line);border-radius:8px;background:#fff;padding:6px 9px;font:13px Arial;color:var(--ink)}
  .cc-menu-toolrow button{cursor:pointer;font-weight:600}.cc-menu-align{min-width:42px}.cc-menu-align.active{background:var(--accent);color:#fff;border-color:var(--accent)}
  .cc-menu-toolrow .cc-tool-primary{background:var(--paper)}
@@ -64,7 +64,7 @@ function styles(){
  .cc-menu-document[contenteditable="true"] .cc-menu-block{position:relative;min-height:30px;padding:7px 42px 7px 6px;margin:2px 0;border-radius:7px;outline:none;line-height:1.45;font-family:Georgia,"Times New Roman",serif}
  .cc-menu-block:focus{box-shadow:inset 0 0 0 1px rgba(155,63,47,.35)} .cc-menu-block h1,.cc-menu-block h2,.cc-menu-block h3,.cc-menu-block h4,.cc-menu-block h5,.cc-menu-block h6{margin:0 0 8px}.cc-menu-block table{border-collapse:collapse;width:100%;margin:6px 0;table-layout:auto}.cc-menu-block th,.cc-menu-block td{border:1px solid var(--line);padding:5px 7px;vertical-align:top;text-align:inherit}
  .cc-menu-block.cc-divider{border-top:1px solid var(--line);height:1px;min-height:1px;padding:0;margin:16px 4px}
- .cc-menu-block .cc-block-controls{position:absolute;right:6px;top:50%;transform:translateY(-50%);display:flex;gap:3px;opacity:.35}
+ .cc-menu-block .cc-block-controls{position:absolute;right:6px;top:7px;transform:none;display:flex;gap:3px;opacity:.35;z-index:4;align-items:center;white-space:nowrap}
  .cc-menu-block:hover .cc-block-controls,.cc-menu-block:focus-within .cc-block-controls{opacity:1}
  .cc-block-controls button{border:1px solid var(--line);background:var(--paper);border-radius:5px;width:28px;height:28px;padding:0;font:12px Arial}
  .cc-menu-meta{display:grid;grid-template-columns:2fr 1fr 1fr;gap:12px}
@@ -98,10 +98,10 @@ function styles(){
    #ccMenuEditorDialog .dialog-card{padding:18px 14px;overflow-x:hidden}
    .cc-menu-dialog-title{display:block;margin-bottom:14px}.cc-menu-dialog-title .eyebrow{display:block;margin-bottom:4px}.cc-menu-dialog-title h2{font-size:28px;line-height:1.08;max-width:100%;overflow-wrap:anywhere}
    .cc-menu-linkrow{width:100%;box-sizing:border-box;padding-right:34px;scroll-snap-type:x proximity}.cc-menu-linkrow select{flex-basis:390px}.cc-menu-linkrow input{flex-basis:310px}.cc-menu-linkrow button{flex:0 0 auto}.cc-menu-linkrow-wrap{position:relative}.cc-menu-linkrow-wrap::after{content:'↔ swipe';position:absolute;right:8px;bottom:2px;background:var(--card);padding:0 4px;font:10px Arial;color:var(--muted);pointer-events:none}
-   .cc-menu-document[contenteditable="true"] .cc-menu-block{padding-right:104px}
-   .cc-menu-block .cc-block-controls{right:6px;top:50%;transform:translateY(-50%);opacity:.45}
+   .cc-menu-document[contenteditable="true"] .cc-menu-block{padding-right:112px}
+   .cc-menu-block .cc-block-controls{right:5px;top:7px;transform:none;opacity:.55;align-items:center;white-space:nowrap}
    .cc-menu-actions-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}.cc-menu-actions-grid button{min-width:0;padding:8px 4px;font-size:11px}
-   .cc-menu-original-viewer{overflow:hidden;padding:8px}.cc-menu-original-viewer .docx-wrapper{width:100%!important;min-width:0!important;margin:0!important}.cc-menu-original-viewer .docx-wrapper .docx{width:100%!important;min-width:0!important;box-sizing:border-box!important;margin:0!important}.cc-menu-original-viewer .docx-wrapper .docx *{max-width:100%!important;box-sizing:border-box!important}
+   .cc-menu-original-viewer{overflow:auto;padding:8px;touch-action:none;-webkit-overflow-scrolling:touch;position:relative}.cc-menu-original-viewer .docx-wrapper{width:100%!important;min-width:0!important;margin:0!important}.cc-menu-original-viewer .docx-wrapper .docx{width:100%!important;min-width:0!important;box-sizing:border-box!important;margin:0!important;transform-origin:top left}.cc-menu-original-viewer .docx-wrapper .docx *{max-width:100%!important;box-sizing:border-box!important}
    
    .cc-menu-meta{grid-template-columns:1fr}
    .cc-menu-document{padding:14px;min-height:420px}
@@ -367,6 +367,16 @@ async function showOriginal(menu){
      try{
        const mod=await import('https://esm.sh/docx-preview@0.4.1?bundle');
        await mod.renderAsync(bytes,viewer,d.querySelector('#ccDocxOriginalStyles'),{className:'ccDocx',inWrapper:true,breakPages:true,ignoreLastRenderedPageBreak:false});
+       const page=viewer.querySelector('.docx-wrapper .docx');
+       if(page){
+         let zoom=1;
+         const fit=()=>{const base=Math.max(1,page.scrollWidth||page.offsetWidth||1);zoom=Math.min(1,viewer.clientWidth/base);page.style.transform='scale('+zoom+')';page.style.transformOrigin='top left';viewer.style.minHeight=(page.scrollHeight*zoom+16)+'px';};
+         requestAnimationFrame(fit);
+         let pinchStart=null;
+         viewer.addEventListener('touchstart',e=>{if(e.touches.length===2){pinchStart={distance:Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY),zoom};}},{passive:true});
+         viewer.addEventListener('touchmove',e=>{if(!pinchStart||e.touches.length!==2)return;const dist=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);zoom=Math.max(.35,Math.min(2.5,pinchStart.zoom*(dist/pinchStart.distance)));page.style.transform='scale('+zoom+')';viewer.style.minHeight=(page.scrollHeight*zoom+16)+'px';e.preventDefault();},{passive:false});
+         viewer.addEventListener('touchend',e=>{if(e.touches.length<2)pinchStart=null;},{passive:true});
+       }
      }catch(previewError){
        viewer.innerHTML='<p class="small-note">The in-app Word preview could not be rendered. Use <strong>Open original file</strong> above to view the unchanged document.</p>';
      }
@@ -380,7 +390,7 @@ async function showOriginal(menu){
 }
 async function shareMenu(menu,content=null){
  const doc=content?.querySelector ? await collectDocument() : docFromMenu(menu);
- const text=doc.blocks.map(b=>b.type==='divider'?'---':String(b.html||'').replace(/<[^>]+>/g,' ')).join('\\n');
+ const text=doc.blocks.map(b=>b.type==='divider'?'---':String(b.html||'').replace(/<br\s*\/?>/gi,'\n').replace(/<[^>]+>/g,' ')).join('\n').replace(/\\n/g,'\n').replace(/[ \t]+\n/g,'\n').replace(/\n{3,}/g,'\n\n').trim();
  try{if(navigator.share){await navigator.share({title:menu.name||'Cooking Confidential menu',text});return}await navigator.clipboard.writeText(text);window.ccShowError('Menu text copied to the clipboard.','Share menu')}catch(e){if(e.name!=='AbortError')window.ccShowError(e.message||'Could not share menu.','Could not share menu')}
 }
 async function extractMenu(file){
