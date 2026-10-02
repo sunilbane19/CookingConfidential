@@ -191,8 +191,9 @@ document.querySelector('#addRecipeBtn').onclick=()=>recipeDialog.showModal();con
  importQueue.querySelectorAll('.import-select').forEach(cb=>cb.onchange=()=>{const x=importItems.find(i=>i.localId===cb.dataset.localId);if(x)x.selected=cb.checked;renderImportQueue()});
 }window.addEventListener('cc:import-queue-changed',()=>render());
 search.oninput=()=>{
-  if(view==='menus'){
-    renderMenus(search.value.trim().toLowerCase());
+  if(view==='menus'||view==='favourites'){
+    if(view==='menus')renderMenus(search.value.trim().toLowerCase());
+    else loadRecipePage({offset:0,refreshCount:true}).catch(e=>showUiError(e.message,'Could not search favourites'));
     return;
   }
   clearTimeout(searchTimer);
@@ -202,7 +203,7 @@ document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
   view=t.dataset.view;
   document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===t));
   if(view==='menus')renderMenus(search.value.trim().toLowerCase());
-  else loadRecipePage({offset:0,refreshCount:true}).catch(e=>showUiError(e.message,'Could not load recipes'));
+  else loadRecipePage({offset:0,refreshCount:true}).catch(e=>showUiError(e.message,view==='favourites'?'Could not load favourites':'Could not load recipes'));
 });
 async function boot(sessionOverride=null){let session=sessionOverride;if(!session){const{data:{session:currentSession}}=await supabase.auth.getSession();session=currentSession}if(!session){loginPanel.hidden=false;appPanel.hidden=true;return}loginPanel.hidden=true;appPanel.hidden=false;userBadge.textContent=session.user.email||'Signed in';try{await loadData()}catch(e){content.innerHTML='<div class="empty">'+esc(e.message)+'</div>'}}
 supabase.auth.onAuthStateChange((_event,session)=>{if(session)setTimeout(()=>boot(session),0);else{loginPanel.hidden=false;appPanel.hidden=true}});boot();
