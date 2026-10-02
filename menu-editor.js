@@ -117,7 +117,7 @@ function styles(){
    #ccMenuPrintPage .cc-print-document .cc-divider{border-top:1px solid #aaa;height:1px;padding:0!important;margin:7px 0!important}
  }
  @media print{
-   body>*:not(#ccMenuEditorDialog){display:none!important}
+   body:not(.cc-menu-printing)>*:not(#ccMenuEditorDialog){display:none!important}
    #ccMenuEditorDialog{display:block!important;position:static!important;width:auto!important;max-width:none!important;max-height:none!important}
    #ccMenuEditorDialog::backdrop{display:none}
    #ccMenuEditorDialog .dialog-card{box-shadow:none;border:0;max-height:none;overflow:visible}
