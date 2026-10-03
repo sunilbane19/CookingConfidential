@@ -42,6 +42,37 @@ function showUiError(message,title='Something went wrong',onClose=null){
 }
 window.ccShowError=showUiError;
 const cleanSearchTerm=value=>String(value||'').trim().replace(/\s+/g,' ').slice(0,80);
+function menuSearchText(m){
+  const parts=[m?.name,m?.occasion,m?.notes,m?.menu_date,m?.guest_count];
+  const sources=[m?.document,m?.content];
+  const seen=new Set();
+  const addValue=value=>{
+    if(value==null)return;
+    if(typeof value==='string'){
+      const s=value.trim();
+      if(!s)return;
+      try{
+        const parsed=JSON.parse(s);
+        if(parsed&&typeof parsed==='object')return addValue(parsed);
+      }catch{}
+      const holder=document.createElement('div');
+      holder.innerHTML=s;
+      const text=holder.textContent||holder.innerText||s;
+      if(text.trim())parts.push(text);
+      return;
+    }
+    if(Array.isArray(value)){value.forEach(addValue);return}
+    if(typeof value==='object'){
+      Object.entries(value).forEach(([key,val])=>{
+        if(key==='version'||key==='type')return;
+        addValue(val);
+      });
+    }
+  };
+  sources.forEach(addValue);
+  return parts.filter(Boolean).map(x=>String(x)).join(' ').replace(/\s+/g,' ').trim().toLowerCase();
+}
+const menuMatchesSearch=(m,q)=>!q||menuSearchText(m).includes(q);
 
 async function loadRecipePage({offset=0,refreshCount=true,silent=false}={}) {
   const requestId=++recipeRequestId;
@@ -135,14 +166,14 @@ function render(){
 }
 function favouriteMenuCard(m){return `<article class="menu-card"><span class="tag menu-date-only">${m.menu_date?formatMenuDate(m.menu_date):''}</span><h3>${esc(m.name)}</h3><div class="menu-items">${esc(m.occasion||'')}</div><div class="cc-menu-card-actions"><button class="secondary" data-menu-action="open" data-id="${m.id}">Edit</button><button class="secondary" data-menu-action="print" data-id="${m.id}">Print</button><button class="secondary" data-menu-action="share" data-id="${m.id}">Share</button><button class="secondary cc-favourite" data-active="1" data-menu-action="fav" data-id="${m.id}" aria-label="Unfavourite menu" title="Unfavourite menu">♥</button></div></article>`}
 function renderFavourites(q=''){
-  const menuMatches=menus.filter(m=>m.is_favourite&&(m.name+' '+(m.occasion||'')+' '+(m.notes||'')).toLowerCase().includes(q));
+  const menuMatches=menus.filter(m=>m.is_favourite&&menuMatchesSearch(m,q));
   const recipeSection=`<div class="section-head"><h2>Recipes</h2><span class="count">${recipeTotalCount} recipes</span></div>${recipes.length?'<div class="grid">'+recipes.map(recipeCard).join('')+'</div>':'<div class="empty">No favourite recipes.</div>'}`;
   const menuSection=`<div class="section-head cc-favourites-subhead"><h2>Menus</h2><span class="count">${menuMatches.length} menus</span></div>${menuMatches.length?'<div class="cc-menu-library-grid" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;align-items:start">'+menuMatches.map(favouriteMenuCard).join('')+'</div>':'<div class="empty">No favourite menus.</div>'}`;
   content.innerHTML=recipeSection+menuSection; content.querySelectorAll('.card').forEach(c=>c.onclick=()=>showRecipe(+c.dataset.id)); window.ccMenus=menuMatches; window.ccRenderMenus=()=>view==='favourites'?renderFavourites(search.value.trim().toLowerCase()):renderMenus(search.value.trim().toLowerCase()); setTimeout(()=>window.ccEnsureLibraryToolbar?.(),0); window.dispatchEvent(new CustomEvent('cc:recipes-rendered'));
 }
 async function ccMenuAction(action){try{if(!window.ccMenuEditor){await import('./menu-editor.js?v=1.9.24')}const m=window.ccMenuEditor;if(!m||typeof m[action]!=='function')throw new Error('Menu editor action unavailable');m[action]()}catch(e){console.error('Cooking Confidential menu action:',e);window.ccShowError?.(e.message||'Could not open menu editor','Menu editor')}}
 window.ccMenuAction=ccMenuAction;
-function renderMenus(q){const list=menus.filter(m=>(m.name+' '+(m.occasion||'')+' '+(m.notes||'')).toLowerCase().includes(q));window.ccMenus=list;content.innerHTML=`<div class="section-head"><h2>Your menus</h2><span class="count">${list.length} menus</span></div><div class="cc-menu-library-grid" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;align-items:start">${list.length?list.map(m=>`<article class="menu-card"><span class="tag menu-date-only">${m.menu_date?formatMenuDate(m.menu_date):''}</span><h3>${esc(m.name)}</h3><div class="menu-items">${esc(m.occasion||'')}</div><div class="cc-menu-card-actions"><button class="secondary" data-menu-action="open" data-id="${m.id}">Edit</button><button class="secondary" data-menu-action="print" data-id="${m.id}">Print</button><button class="secondary" data-menu-action="share" data-id="${m.id}">Share</button><button class="secondary cc-favourite" data-active="${m.is_favourite?1:0}" data-menu-action="fav" data-id="${m.id}" aria-label="${m.is_favourite?'Unfavourite menu':'Favourite menu'}" title="${m.is_favourite?'Unfavourite menu':'Favourite menu'}">${m.is_favourite?'♥':'♡'}</button></div></article>`).join(''):'<div class="empty">No menus yet. Create a new menu or upload an existing one.</div>'}</div>`;
+function renderMenus(q){const list=menus.filter(m=>menuMatchesSearch(m,q));window.ccMenus=list;content.innerHTML=`<div class="section-head"><h2>Your menus</h2><span class="count">${list.length} menus</span></div><div class="cc-menu-library-grid" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;align-items:start">${list.length?list.map(m=>`<article class="menu-card"><span class="tag menu-date-only">${m.menu_date?formatMenuDate(m.menu_date):''}</span><h3>${esc(m.name)}</h3><div class="menu-items">${esc(m.occasion||'')}</div><div class="cc-menu-card-actions"><button class="secondary" data-menu-action="open" data-id="${m.id}">Edit</button><button class="secondary" data-menu-action="print" data-id="${m.id}">Print</button><button class="secondary" data-menu-action="share" data-id="${m.id}">Share</button><button class="secondary cc-favourite" data-active="${m.is_favourite?1:0}" data-menu-action="fav" data-id="${m.id}" aria-label="${m.is_favourite?'Unfavourite menu':'Favourite menu'}" title="${m.is_favourite?'Unfavourite menu':'Favourite menu'}">${m.is_favourite?'♥':'♡'}</button></div></article>`).join(''):'<div class="empty">No menus yet. Create a new menu or upload an existing one.</div>'}</div>`;
  window.ccRenderMenus=()=>renderMenus(search.value.trim().toLowerCase()); setTimeout(()=>window.ccEnsureLibraryToolbar?.(),0);
 }
 /* Contain iOS page scrolling at the top and bottom of the main site scroll surface. */
