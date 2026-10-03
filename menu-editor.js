@@ -378,10 +378,89 @@ async function showOriginal(menu){
  if(lower.endsWith('.pdf')){d.querySelector('#ccMenuEditorContent').innerHTML='<button class="close" id="ccOriginalBack">×</button><p class="eyebrow">ORIGINAL MENU</p><h2>'+esc(name)+'</h2></div><iframe class="original-pdf" title="Original menu PDF" src="'+esc(url)+'"></iframe>';if(!d.open)d.showModal();d.querySelector('#ccOriginalBack').onclick=()=>openEditor(menu);return}
  d.querySelector('#ccMenuEditorContent').innerHTML='<button class="close" id="ccOriginalBack">×</button><p class="eyebrow">ORIGINAL MENU</p><h2>'+esc(name)+'</h2><p class="small-note">Original uploaded file — retained unchanged.</p><p><a class="primary" href="'+esc(url)+'" target="_blank" rel="noopener">Open original file</a></p>';d.showModal();d.querySelector('#ccOriginalBack').onclick=()=>openEditor(menu)
 }
-async function shareMenu(menu,content=null){
+let menuPdfLibrariesPromise=null;
+async function menuPdfLibraries(){
+ if(!menuPdfLibrariesPromise){
+   menuPdfLibrariesPromise=Promise.all([
+     import('https://esm.sh/jspdf@2.5.2?bundle'),
+     import('https://esm.sh/html2canvas@1.4.1?bundle')
+   ]).then(([pdfMod,canvasMod])=>({jsPDF:pdfMod.jsPDF||pdfMod.default,html2canvas:canvasMod.default||canvasMod}));
+ }
+ return menuPdfLibrariesPromise;
+}
+function buildMenuPdfPage(menu,doc){
+ const wrap=document.createElement('div');
+ wrap.style.cssText='position:fixed;left:-10000px;top:0;width:794px;background:#fff;color:#111;z-index:-1;box-sizing:border-box;padding:38px 42px;font-family:Georgia,"Times New Roman",serif;';
+ const header=document.createElement('div');
+ header.style.cssText='text-align:center;margin:0 0 24px;';
+ const title=document.createElement('div');
+ title.textContent=menu?.name||'Menu';
+ title.style.cssText='font:700 30px Georgia,"Times New Roman",serif;margin:0 0 7px;';
+ header.appendChild(title);
+ const meta=[menu?.occasion,formatMenuDate(menu?.menu_date||'')].filter(Boolean).join(' · ');
+ if(meta){const m=document.createElement('div');m.textContent=meta;m.style.cssText='font:13px Arial,sans-serif;color:#666;line-height:1.4;';header.appendChild(m)}
+ wrap.appendChild(header);
+ const body=document.createElement('div');
+ body.style.cssText='font:16px/1.45 Georgia,"Times New Roman",serif;';
+ body.innerHTML=(doc.blocks||[]).map(blockMarkup).join('');
+ body.querySelectorAll('.cc-block-controls').forEach(x=>x.remove());
+ body.querySelectorAll('.cc-menu-block').forEach(el=>{
+   el.style.position='static';el.style.minHeight='0';el.style.padding='0';el.style.margin='0 0 11px';el.style.borderRadius='0';
+ });
+ body.querySelectorAll('.cc-divider').forEach(el=>{el.style.borderTop='1px solid #aaa';el.style.height='1px';el.style.margin='16px 0';el.style.padding='0'});
+ wrap.appendChild(body);
+ document.body.appendChild(wrap);
+ return wrap;
+}
+async function generateMenuPdfFile(menu,content=null){
  const doc=content?.querySelector ? await collectDocument() : docFromMenu(menu);
- const text=doc.blocks.map(b=>b.type==='divider'?'---':String(b.html||'').replace(/<br\s*\/?>/gi,'\n').replace(/<[^>]+>/g,' ')).join('\n').replace(/\\n/g,'\n').replace(/[ \t]+\n/g,'\n').replace(/\n{3,}/g,'\n\n').trim();
- try{if(navigator.share){await navigator.share({title:menu.name||'Cooking Confidential menu',text});return}await navigator.clipboard.writeText(text);window.ccShowError('Menu text copied to the clipboard.','Share menu')}catch(e){if(e.name!=='AbortError')window.ccShowError(e.message||'Could not share menu.','Could not share menu')}
+ const {jsPDF,html2canvas}=await menuPdfLibraries();
+ const node=buildMenuPdfPage(menu,doc);
+ try{
+   await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+   const canvas=await html2canvas(node,{backgroundColor:'#fff',scale:2,useCORS:true,logging:false,windowWidth:794});
+   const pdf=new jsPDF({orientation:'portrait',unit:'mm',format:'a4',compress:true});
+   const margin=10, pageW=210, pageH=297, imageW=pageW-margin*2, imageH=pageH-margin*2;
+   const slicePx=Math.max(1,Math.floor(canvas.width*(imageH/imageW)));
+   let y=0,page=0;
+   while(y<canvas.height){
+     const h=Math.min(slicePx,canvas.height-y);
+     const slice=document.createElement('canvas');slice.width=canvas.width;slice.height=h;
+     const ctx=slice.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,slice.width,slice.height);
+     ctx.drawImage(canvas,0,y,canvas.width,h,0,0,canvas.width,h);
+     if(page)pdf.addPage();
+     const renderedH=imageW*(h/canvas.width);
+     pdf.addImage(slice.toDataURL('image/jpeg',0.92),'JPEG',margin,margin,imageW,renderedH,undefined,'FAST');
+     y+=h;page++;
+   }
+   const safe=(String(menu?.name||'Menu').replace(/[^a-z0-9]+/gi,'-').replace(/^-+|-+$/g,'')||'Menu');
+   return new File([pdf.output('blob')],safe+'.pdf',{type:'application/pdf'});
+ }finally{node.remove()}
+}
+async function showMenuShareReady(menu,file){
+ const existing=document.querySelector('#ccMenuShareDialog');if(existing)existing.remove();
+ const d=document.createElement('dialog');d.id='ccMenuShareDialog';
+ d.innerHTML='<div class="cc-confirm-card"><button class="close" type="button" id="ccMenuShareClose">×</button><p class="eyebrow">COOKING CONFIDENTIAL</p><h2>PDF ready</h2><p>The menu has been formatted as a PDF.</p><div class="cc-confirm-actions"><button type="button" class="secondary" id="ccMenuShareCancel">Cancel</button><button type="button" class="primary" id="ccMenuShareNow">Share PDF</button></div></div>';
+ document.body.appendChild(d);
+ const close=()=>{try{d.close()}catch{};d.remove()};
+ d.querySelector('#ccMenuShareClose').onclick=close;d.querySelector('#ccMenuShareCancel').onclick=close;
+ d.querySelector('#ccMenuShareNow').onclick=async()=>{
+   try{
+     if(navigator.share&&(!navigator.canShare||navigator.canShare({files:[file]}))){await navigator.share({title:menu.name||'Cooking Confidential menu',files:[file]});close();return}
+     const url=URL.createObjectURL(file);const a=document.createElement('a');a.href=url;a.download=file.name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);close();
+   }catch(e){if(e.name!=='AbortError')window.ccShowError(e.message||'Could not share PDF.','Could not share PDF')}
+ };
+ d.addEventListener('cancel',close,{once:true});d.showModal();
+}
+async function shareMenu(menu,content=null){
+ try{
+   const file=await generateMenuPdfFile(menu,content);
+   if(navigator.share&&(!navigator.canShare||navigator.canShare({files:[file]}))){
+     try{await navigator.share({title:menu.name||'Cooking Confidential menu',files:[file]});return}
+     catch(e){if(e.name==='AbortError')return}
+   }
+   await showMenuShareReady(menu,file);
+ }catch(e){console.error('Cooking Confidential menu PDF:',e);window.ccShowError(e.message||'Could not create the menu PDF.','Could not share menu')}
 }
 async function extractMenu(file){
  const name=file.name||'Imported menu';const lower=name.toLowerCase();
