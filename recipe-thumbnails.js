@@ -1,15 +1,15 @@
 // Event-driven recipe thumbnail layer. Local asset only; no MutationObserver.
 const IMAGE_POOL=[
-  {keys:/pasta|noodle|spaghetti|macaroni/i,url:'https://images.unsplash.com/photo-1551183053-bf91a1d81141?auto=format&fit=crop&w=900&q=80',alt:'Pasta dish'},
-  {keys:/salad|slaw|lettuce|greens|vegetable/i,url:'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=900&q=80',alt:'Fresh salad'},
-  {keys:/pork|beef|lamb|steak|meat|ham|chicken/i,url:'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=900&q=80',alt:'Prepared meat dish'},
-  {keys:/soup|broth|stew/i,url:'https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=900&q=80',alt:'Bowl of soup'},
-  {keys:/curry|masala|spicy|sriracha/i,url:'https://images.unsplash.com/photo-1601050690597-df0568f70950?auto=format&fit=crop&w=900&q=80',alt:'Spiced dish'},
-  {keys:/cake|dessert|sweet|chocolate/i,url:'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=900&q=80',alt:'Dessert'},
-  {keys:/pancake|waffle|breakfast/i,url:'https://images.unsplash.com/photo-1528207776546-365bb710ee93?auto=format&fit=crop&w=900&q=80',alt:'Breakfast dish'},
-  {keys:/rice|risotto/i,url:'https://images.unsplash.com/photo-1512058564366-18510be2db19?auto=format&fit=crop&w=900&q=80',alt:'Rice dish'}
+  {keys:/pasta|noodle|spaghetti|macaroni/i,url:'https://images.unsplash.com/photo-1551183053-bf91a1d81141?auto=format&fit=max&w=900&q=80',alt:'Pasta dish'},
+  {keys:/salad|slaw|lettuce|greens|vegetable/i,url:'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=max&w=900&q=80',alt:'Fresh salad'},
+  {keys:/pork|beef|lamb|steak|meat|ham|chicken/i,url:'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=max&w=900&q=80',alt:'Prepared meat dish'},
+  {keys:/soup|broth|stew/i,url:'https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=max&w=900&q=80',alt:'Bowl of soup'},
+  {keys:/curry|masala|spicy|sriracha/i,url:'https://images.unsplash.com/photo-1601050690597-df0568f70950?auto=format&fit=max&w=900&q=80',alt:'Spiced dish'},
+  {keys:/cake|dessert|sweet|chocolate/i,url:'https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=max&w=900&q=80',alt:'Dessert'},
+  {keys:/pancake|waffle|breakfast/i,url:'https://images.unsplash.com/photo-1528207776546-365bb710ee93?auto=format&fit=max&w=900&q=80',alt:'Breakfast dish'},
+  {keys:/rice|risotto/i,url:'https://images.unsplash.com/photo-1512058564366-18510be2db19?auto=format&fit=max&w=900&q=80',alt:'Rice dish'}
 ];
-const DEFAULT_IMAGE='https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=900&q=80';
+const DEFAULT_IMAGE='https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=max&w=900&q=80';
 let recipes=[];
 function textOf(r){return[r?.name,r?.cuisine,r?.course,r?.recipe_type].join(' ').toLowerCase()}
 function candidates(r){const chosen=String(r?.image_url||'').trim();const t=textOf(r);const match=IMAGE_POOL.find(x=>x.keys.test(t));const fallback={url:DEFAULT_IMAGE,alt:'Default food photograph'};if(chosen)return[{url:chosen,alt:'Recipe image'},...(match?[match]:[]),fallback];return match?[match,fallback]:[fallback]}
