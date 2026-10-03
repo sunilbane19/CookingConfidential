@@ -14,6 +14,8 @@
 #importDialog{max-width:min(820px,94vw);width:100%}
 /* Larger review-import editor: more room for checking recipes before saving. */
 #detailDialog{max-width:min(900px,94vw);width:100%;height:auto;max-height:92vh}
+/* Recipe editor desktop size */
+#detailDialog{max-width:min(900px,94vw);width:100%;height:auto;max-height:92vh}
 #detailDialog .dialog-card{max-height:88vh;overflow:auto;padding:34px 40px}
 @media(max-width:700px){
   #detailDialog{max-width:96vw;max-height:94vh}
@@ -81,8 +83,6 @@
 @media(max-width:760px){.cc-menu-library-grid{grid-template-columns:repeat(3,1fr);gap:10px}.cc-menu-library-grid .menu-card{padding:12px}.cc-menu-library-grid .menu-card h3{font-size:16px}.cc-menu-library-grid .menu-items{font-size:11px}}
 @media(max-width:480px){.cc-menu-library-grid{grid-template-columns:repeat(3,1fr);gap:8px}.cc-menu-library-grid .menu-card{padding:9px}.cc-menu-library-grid .menu-card h3{font-size:14px}.cc-menu-library-grid .menu-items{font-size:10px}.cc-menu-library-grid .cc-menu-card-actions{gap:6px}.cc-menu-library-grid .cc-menu-card-actions button{padding:7px 5px;min-height:36px;font-size:10px}}
 
-/* Centre the application error dialog independently of the large editor dialog */
-#detailDialog{position:fixed!important;top:50%!important;left:50%!important;right:auto!important;bottom:auto!important;transform:translate(-50%,-50%)!important;width:min(520px,92vw)!important;max-width:520px!important;height:auto!important;max-height:90vh!important;margin:0!important;padding:0!important;z-index:100000!important;overflow:visible!important}
 #detailDialog .error-card{width:100%!important;max-width:520px!important;box-sizing:border-box!important;margin:0!important}
 
 /* Independent centred error dialog */
