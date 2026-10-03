@@ -112,3 +112,6 @@
 
 /* Prevent iOS/page rubber-band scrolling beyond the fixed footer. */
 html,body{overscroll-behavior-y:none;overflow-x:hidden}
+
+/* Force complete recipe-card images even if another image rule sets cover. */
+.card-image img.cc-recipe-image{width:100%!important;height:100%!important;display:block!important;object-fit:contain!important;object-position:center!important;position:static!important}
