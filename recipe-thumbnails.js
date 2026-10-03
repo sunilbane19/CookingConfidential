@@ -28,9 +28,10 @@ function setImage(box,r,list,index=0){
   image.alt=chosen.alt;
   image.decoding='async';
   image.className='cc-recipe-image';
+  image.style.cssText='width:100%;height:100%;display:block;object-fit:contain;object-position:center;position:static';
   image.onload=()=>box.replaceChildren(image);
   image.onerror=()=>setImage(box,r,list,index+1);
-  image.src=chosen.url;
+  image.src=String(chosen.url||'').replace(/^https:\/\/thumb\.wikimedia\.org\//,'https://upload.wikimedia.org/');
   box.replaceChildren(image);
 }
 let imageObserver=null;
