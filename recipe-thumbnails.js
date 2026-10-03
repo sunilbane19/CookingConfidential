@@ -28,7 +28,7 @@ function setImage(box,r,list,index=0){
   image.alt=chosen.alt;
   image.decoding='async';
   image.className='cc-recipe-image';
-  image.style.cssText='width:100%;height:100%;display:block;object-fit:contain;object-position:center;position:static';
+  image.style.cssText='width:auto!important;height:100%!important;max-width:100%!important;display:block!important;object-fit:contain!important;object-position:center!important;position:static!important;margin:0 auto!important';
   image.onload=()=>box.replaceChildren(image);
   image.onerror=()=>setImage(box,r,list,index+1);
   image.src=String(chosen.url||'').replace(/^https:\/\/thumb\.wikimedia\.org\//,'https://upload.wikimedia.org/');
