@@ -8,7 +8,7 @@ const content=document.querySelector('#content'),search=document.querySelector('
 let importItems=[],recipes=[],menus=[],view='recipes';
 const RECIPE_PAGE_SIZE=12;
 const RECIPE_CARD_FIELDS='id,name,cuisine,country,region,course,recipe_type,rating,is_favourite,image_url,updated_at';
-const RECIPE_DETAIL_FIELDS='id,name,description,cuisine,country,region,course,recipe_type,ingredients,method,personal_notes,rating,source_url,source_title,is_favourite,image_url,updated_at,servings,original_file_path,original_file_name,original_mime_type,source_type';
+const RECIPE_DETAIL_FIELDS='id,name,description,cuisine,country,region,course,recipe_type,ingredients,method,personal_notes,rating,source_url,source_title,is_favourite,image_url,updated_at,servings,original_file_path,original_file_name,original_mime_type,source_type,created_by';
 // Full recipe cache: fetch a recipe once when it is first opened during this session.
 const recipeDetailCache=new Map();
 let recipeOffset=0,recipeTotalCount=0,recipeLoading=false,recipeRequestId=0,searchTimer=null;
@@ -272,6 +272,8 @@ async function boot(sessionOverride=null){
     return
   }
   currentMember=member;
+  window.ccCurrentMember=member;
+  window.ccCurrentUserId=session.user.id;
   loginPanel.hidden=true;
   appPanel.hidden=false;
   userBadge.textContent=member.display_name||session.user.email||'Signed in';
