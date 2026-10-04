@@ -255,7 +255,7 @@ async function boot(sessionOverride=null){
     currentMember=null;
     loginPanel.hidden=false;
     appPanel.hidden=true;
-    document.querySelector('#adminLink')?.setAttribute('hidden','');
+    const adminLink=document.querySelector('#adminLink');if(adminLink){adminLink.hidden=true;adminLink.style.display='none'}
     return
   }
   if(bootedUserId===session.user.id)return;
@@ -267,7 +267,7 @@ async function boot(sessionOverride=null){
     appPanel.hidden=true;
     loginPanel.hidden=false;
     loginMessage.textContent='This email is not currently enabled for Cooking Confidential.';
-    document.querySelector('#adminLink')?.setAttribute('hidden','');
+    const adminLink=document.querySelector('#adminLink');if(adminLink){adminLink.hidden=true;adminLink.style.display='none'}
     await supabase.auth.signOut();
     return
   }
@@ -275,8 +275,9 @@ async function boot(sessionOverride=null){
   loginPanel.hidden=true;
   appPanel.hidden=false;
   userBadge.textContent=member.display_name||session.user.email||'Signed in';
+  userBadge.hidden=false;
   const adminLink=document.querySelector('#adminLink');
-  if(adminLink)adminLink.hidden=member.role!=='owner';
+  if(adminLink){adminLink.hidden=member.role!=='owner';adminLink.style.display=member.role==='owner'?'inline-flex':'none'}
   try{await loadData()}catch(e){content.innerHTML='<div class="empty">'+esc(e.message)+'</div>'}
 }
-supabase.auth.onAuthStateChange((_event,session)=>{if(session)setTimeout(()=>boot(session),0);else{bootedUserId=null;currentMember=null;loginPanel.hidden=false;appPanel.hidden=true;document.querySelector('#adminLink')?.setAttribute('hidden','')}});boot();
+supabase.auth.onAuthStateChange((_event,session)=>{if(session)setTimeout(()=>boot(session),0);else{bootedUserId=null;currentMember=null;loginPanel.hidden=false;appPanel.hidden=true;const adminLink=document.querySelector('#adminLink');if(adminLink){adminLink.hidden=true;adminLink.style.display='none'}}});boot();
