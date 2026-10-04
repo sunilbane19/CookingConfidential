@@ -243,5 +243,6 @@ document.querySelectorAll('.tab').forEach(t=>t.onclick=async()=>{
   }
   loadRecipePage({offset:0,refreshCount:true}).catch(e=>showUiError(e.message,'Could not load recipes'));
 });
-async function boot(sessionOverride=null){let session=sessionOverride;if(!session){const{data:{session:currentSession}}=await supabase.auth.getSession();session=currentSession}if(!session){loginPanel.hidden=false;appPanel.hidden=true;return}loginPanel.hidden=true;appPanel.hidden=false;userBadge.textContent=session.user.email||'Signed in';try{await loadData()}catch(e){content.innerHTML='<div class="empty">'+esc(e.message)+'</div>'}}
-supabase.auth.onAuthStateChange((_event,session)=>{if(session)setTimeout(()=>boot(session),0);else{loginPanel.hidden=false;appPanel.hidden=true}});boot();
+let bootedUserId=null;
+async function boot(sessionOverride=null){let session=sessionOverride;if(!session){const{data:{session:currentSession}}=await supabase.auth.getSession();session=currentSession}if(!session){bootedUserId=null;loginPanel.hidden=false;appPanel.hidden=true;return}if(bootedUserId===session.user.id)return;bootedUserId=session.user.id;loginPanel.hidden=true;appPanel.hidden=false;userBadge.textContent=session.user.email||'Signed in';try{await loadData()}catch(e){content.innerHTML='<div class="empty">'+esc(e.message)+'</div>'}}
+supabase.auth.onAuthStateChange((_event,session)=>{if(session)setTimeout(()=>boot(session),0);else{bootedUserId=null;loginPanel.hidden=false;appPanel.hidden=true}});boot();
