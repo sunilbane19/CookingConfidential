@@ -142,3 +142,12 @@ html,body{overscroll-behavior-y:none;overflow-x:hidden}
   .search-wrap input{min-width:0}
   .section-head{min-width:0}
 }
+
+/* Mobile import mode controls: keep Single / Multiple / count on separate, readable controls. */
+@media(max-width:760px){
+  .import-mode-row{display:flex!important;align-items:center;flex-wrap:wrap;gap:6px!important}
+  .import-mode-options{display:flex!important;flex:1 1 190px;gap:6px!important;min-width:0}
+  .import-mode-option{flex:1 1 0!important;min-width:0!important;white-space:nowrap}
+  .multi-count-wrap{flex:0 0 auto!important;margin:0!important}
+  .multi-count-wrap input{width:64px!important}
+}
