@@ -8,7 +8,7 @@ const content=document.querySelector('#content'),search=document.querySelector('
 let importItems=[],recipes=[],menus=[],view='recipes';
 const RECIPE_PAGE_SIZE=12;
 const RECIPE_CARD_FIELDS='id,name,cuisine,country,region,course,recipe_type,rating,is_favourite,image_url,updated_at';
-const RECIPE_DETAIL_FIELDS='id,name,description,cuisine,country,region,course,recipe_type,ingredients,method,personal_notes,rating,source_url,source_title,is_favourite,image_url,updated_at,servings,original_file_path,original_file_name,original_mime_type,source_type,created_by';
+const RECIPE_DETAIL_FIELDS='id,name,description,cuisine,country,region,course,recipe_type,ingredients,method,personal_notes,rating,source_url,source_title,is_favourite,image_url,updated_at,servings,original_file_path,original_file_name,original_mime_type,source_type,created_by,dietary_tags';
 // Full recipe cache: fetch a recipe once when it is first opened during this session.
 const recipeDetailCache=new Map();
 let recipeOffset=0,recipeTotalCount=0,recipeLoading=false,recipeRequestId=0,searchTimer=null;
@@ -99,7 +99,10 @@ async function loadRecipePage({offset=0,refreshCount=true,silent=false}={}) {
     const rows=Array.isArray(pageResult.data)?pageResult.data:[];
     const rawCount=countResult.data;
     recipeTotalCount=Number(Array.isArray(rawCount)?rawCount[0]:rawCount)||0;
-    recipes=rows;
+    const creatorIds=[...new Set(rows.map(r=>r.created_by).filter(Boolean))];
+    let creatorMap=new Map();
+    if(creatorIds.length){const members=await supabase.from('cc_members').select('auth_user_id,display_name').in('auth_user_id',creatorIds);if(!members.error)creatorMap=new Map((members.data||[]).map(m=>[m.auth_user_id,m.display_name]));}
+    recipes=rows.map(r=>({...r,creator_name:creatorMap.get(r.created_by)||''}));
     window.ccRecipes=recipes;
     if(!silent){render();window.dispatchEvent(new CustomEvent('cc:recipes-rendered'));}
   }finally{
@@ -124,7 +127,7 @@ async function loadData(){
   else if(view==='favourites')renderFavourites(search.value.trim().toLowerCase());
 }
 window.ccReloadRecipes=()=>loadRecipePage({offset:recipeOffset,refreshCount:true});window.ccRecipePageOffset=()=>recipeOffset;
-function recipeCard(r){return `<article class="card" data-id="${r.id}"><div class="card-image" aria-hidden="true"></div><div class="card-body"><span class="tag">${esc(r.cuisine||'Uncategorised')}</span><h3>${esc(r.name)}</h3><div class="meta">${esc([r.course||'Recipe',r.recipe_type].filter(Boolean).join(' · '))} · ${stars(r.rating)}</div></div></article>`}
+function recipeCard(r){const tags=Array.isArray(r.dietary_tags)?r.dietary_tags:[];return `<article class="card" data-id="${r.id}"><div class="card-image" aria-hidden="true"></div><div class="card-body"><span class="tag">${esc(r.cuisine||'Uncategorised')}</span><h3>${esc(r.name)}</h3><div class="meta">${esc([r.course||'Recipe',r.recipe_type].filter(Boolean).join(' · '))} · ${stars(r.rating)}</div>${tags.length?`<div class="meta">${esc(tags.join(' · '))}</div>`:''}<div class="created-by">Created by: <strong>${esc(r.creator_name||'')}</strong></div></div></article>`}
 function recipePager(){
   const totalPages=Math.max(1,Math.ceil(recipeTotalCount/RECIPE_PAGE_SIZE));
   const page=Math.floor(recipeOffset/RECIPE_PAGE_SIZE)+1;
