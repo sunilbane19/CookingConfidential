@@ -124,3 +124,11 @@ html,body{overscroll-behavior-y:none;overflow-x:hidden}
 .cc-multi-option{display:flex;align-items:center;gap:9px;padding:8px 9px;border-radius:7px;cursor:pointer;font:14px Arial;color:var(--ink);margin:0!important}
 .cc-multi-option:hover{background:rgba(0,0,0,.04)}
 .cc-multi-option input{width:auto;margin:0}
+
+/* Mobile recipe cards: keep the index focused on image, cuisine, name and basic type. */
+@media(max-width:760px){
+  .card-body>.meta:nth-of-type(2),.card-body>.created-by{display:none!important}
+  .card-body{padding:9px 8px!important}
+  .card h3{font-size:15px!important;line-height:1.12!important;margin:3px 0 4px!important}
+  .card-body>.meta{font-size:10px!important;line-height:1.2!important}
+}
