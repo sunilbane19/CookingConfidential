@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f6f1e8">
+<title>Cooking Confidential · Admin</title>
+<script>(function(){const p=location.pathname.split('/').filter(Boolean);const b=location.hostname.endsWith('github.io')&&p[0]?'/'+p[0]+'/':'/';document.write('<base href="'+b+'">')})();</script>
+<link rel="stylesheet" href="styles.css?v=1.4.31">
+<style>
+body{min-height:100vh}
+.admin-main{max-width:1000px;margin:0 auto;padding:42px 28px 70px}
+.admin-head{display:flex;align-items:flex-start;justify-content:space-between;gap:24px;margin-bottom:28px}
+.admin-head h1{margin:.2rem 0 .4rem}
+.admin-actions{display:flex;gap:10px;flex-wrap:wrap}
+.admin-card{background:var(--card,#fff);border:1px solid rgba(0,0,0,.08);border-radius:16px;padding:22px;box-shadow:0 8px 28px rgba(0,0,0,.05);margin-bottom:20px}
+.admin-card h2{margin:0 0 16px;font-size:20px}
+.admin-form{display:grid;grid-template-columns:1fr 1fr auto;gap:12px;align-items:end}
+.admin-form label{display:grid;gap:6px;font-size:13px;font-weight:600}
+.admin-form input{padding:11px 12px;border:1px solid #d8d0c4;border-radius:9px;background:#fff;font:inherit}
+.admin-table{width:100%;border-collapse:collapse}
+.admin-table th,.admin-table td{padding:12px 10px;border-bottom:1px solid rgba(0,0,0,.08);text-align:left;vertical-align:middle}
+.admin-table th{font-size:12px;text-transform:uppercase;letter-spacing:.06em;opacity:.65}
+.status{display:inline-block;padding:4px 8px;border-radius:999px;font-size:12px;font-weight:700}
+.status.active{background:#e8f4e9;color:#2f6b35}.status.pending{background:#fff3d8;color:#8a6511}.status.off{background:#eee;color:#666}
+.member-actions{display:flex;gap:7px;flex-wrap:wrap}
+.admin-note{margin:8px 0 0;color:#666;font-size:13px}
+@media(max-width:720px){.admin-main{padding:28px 16px}.admin-head{flex-direction:column}.admin-form{grid-template-columns:1fr}.admin-table{font-size:13px}.admin-table th:nth-child(2),.admin-table td:nth-child(2){display:none}}
+</style>
+</head>
+<body>
+<header class="topbar">
+<a class="brand" href="index.html" aria-label="Cooking Confidential home"><span class="brand-mark">CC</span><span><strong>Cooking</strong> Confidential</span></a>
+<div class="top-actions"><a class="secondary" href="index.html">Back to recipes</a><button class="secondary" id="adminSignOut" type="button">Sign out</button></div>
+</header>
+<main class="admin-main">
+<div id="adminState" class="admin-card">Checking administrator access…</div>
+<div id="adminContent" hidden>
+<div class="admin-head">
+<div><p class="eyebrow">COOKING CONFIDENTIAL</p><h1>Admin</h1><p class="small-note">Manage the people who can access the shared recipe library.</p></div>
+</div>
+<section class="admin-card">
+<h2>Add user</h2>
+<form id="addUserForm" class="admin-form">
+<label>Name<input id="newName" required placeholder="Full name"></label>
+<label>Email<input id="newEmail" required type="email" placeholder="name@example.com"></label>
+<button class="primary" type="submit">Add user</button>
+</form>
+<p class="admin-note">New users are added as members. They become active in the app when they sign in with their email.</p>
+</section>
+<section class="admin-card">
+<h2>Users</h2>
+<div id="memberList"></div>
+</section>
+</div>
+</main>
+<script type="module" src="admin.js?v=1.0.1"></script>
+</body>
+</html>
