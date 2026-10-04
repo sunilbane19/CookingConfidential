@@ -14,6 +14,15 @@ let recipes=[];
 function textOf(r){return[r?.name,r?.cuisine,r?.course,r?.recipe_type].join(' ').toLowerCase()}
 function candidates(r){const chosen=String(r?.image_url||'').trim();const t=textOf(r);const match=IMAGE_POOL.find(x=>x.keys.test(t));const fallback={url:DEFAULT_IMAGE,alt:'Default food photograph'};if(chosen)return[{url:chosen,alt:'Recipe image'},...(match?[match]:[]),fallback];return match?[match,fallback]:[fallback]}
 function svgFallback(r){const t=textOf(r);let accent='#9b3f2f',secondary='#d7b56d';if(/salad|green|vegetable|spinach/.test(t)){accent='#6d8b4d';secondary='#b8c98c'}else if(/pasta|noodle|rice/.test(t)){accent='#c76b3f';secondary='#e2c06e'}else if(/soup|curry|sauce|masala/.test(t)){accent='#c65b35';secondary='#e6b34f'}else if(/cake|dessert|sweet/.test(t)){accent='#9b5b65';secondary='#e2b6bd'}const svg=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 500"><rect width="900" height="500" fill="#ddd2bd"/><ellipse cx="450" cy="275" rx="285" ry="145" fill="#f9f6ef"/><ellipse cx="450" cy="275" rx="220" ry="105" fill="#eee7d8"/><ellipse cx="450" cy="270" rx="170" ry="78" fill="${secondary}" opacity=".85"/><circle cx="385" cy="255" r="34" fill="${accent}"/><circle cx="470" cy="285" r="42" fill="${accent}"/><circle cx="535" cy="245" r="28" fill="${accent}"/><path d="M330 340 Q450 385 570 340" fill="none" stroke="#b7a88f" stroke-width="12" stroke-linecap="round"/><text x="450" y="95" text-anchor="middle" font-family="Georgia,serif" font-size="34" fill="#5e584f">Cooking Confidential</text></svg>`;return 'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent(svg)}
+function fitImage(box,image){
+  const boxWidth=box.clientWidth;
+  const boxHeight=box.clientHeight;
+  const naturalWidth=image.naturalWidth;
+  const naturalHeight=image.naturalHeight;
+  if(!boxWidth||!boxHeight||!naturalWidth||!naturalHeight)return;
+  const scale=Math.min(boxWidth/naturalWidth,boxHeight/naturalHeight);
+  image.style.cssText=`width:${Math.round(naturalWidth*scale)}px!important;height:${Math.round(naturalHeight*scale)}px!important;max-width:none!important;max-height:none!important;display:block!important;object-fit:contain!important;object-position:center!important;position:static!important;margin:0 auto!important`;
+}
 function setImage(box,r,list,index=0){
   const chosen=list[index];
   if(!chosen){
@@ -21,6 +30,7 @@ function setImage(box,r,list,index=0){
     fallback.src=svgFallback(r);
     fallback.alt='Recipe illustration';
     fallback.className='cc-recipe-image';
+    fallback.onload=()=>fitImage(box,fallback);
     box.replaceChildren(fallback);
     return;
   }
@@ -29,17 +39,13 @@ function setImage(box,r,list,index=0){
   image.decoding='async';
   image.className='cc-recipe-image';
   image.style.cssText='width:auto!important;height:auto!important;max-width:100%!important;max-height:100%!important;display:block!important;object-fit:contain!important;object-position:center!important;position:static!important;margin:0 auto!important';
-  image.onload=()=>box.replaceChildren(image);
+  image.onload=()=>{fitImage(box,image);box.replaceChildren(image)};
   image.onerror=()=>setImage(box,r,list,index+1);
   image.src=String(chosen.url||'').replace(/^https:\/\/thumb\.wikimedia\.org\/wikipedia\/commons\/thumb\/([^/]+\/[^/]+)\/([^/]+)\/[^?]+(?:\?[^]*)?$/,(_,hash,file)=>'https://upload.wikimedia.org/wikipedia/commons/'+hash+'/'+file);
   box.replaceChildren(image);
 }
 let imageObserver=null;
-function loadVisibleImage(box,r){
-  if(box.dataset.ccImageLoaded==='1')return;
-  box.dataset.ccImageLoaded='1';
-  setImage(box,r,candidates(r));
-}
+function loadVisibleImage(box,r){if(box.dataset.ccImageLoaded==='1')return;box.dataset.ccImageLoaded='1';setImage(box,r,candidates(r))}
 function apply(){
   const cards=[...document.querySelectorAll('#content .card')];
   if(imageObserver)imageObserver.disconnect();
