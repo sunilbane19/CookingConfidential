@@ -243,6 +243,40 @@ document.querySelectorAll('.tab').forEach(t=>t.onclick=async()=>{
   }
   loadRecipePage({offset:0,refreshCount:true}).catch(e=>showUiError(e.message,'Could not load recipes'));
 });
-let bootedUserId=null;
-async function boot(sessionOverride=null){let session=sessionOverride;if(!session){const{data:{session:currentSession}}=await supabase.auth.getSession();session=currentSession}if(!session){bootedUserId=null;loginPanel.hidden=false;appPanel.hidden=true;return}if(bootedUserId===session.user.id)return;bootedUserId=session.user.id;loginPanel.hidden=true;appPanel.hidden=false;userBadge.textContent=session.user.email||'Signed in';try{await loadData()}catch(e){content.innerHTML='<div class="empty">'+esc(e.message)+'</div>'}}
-supabase.auth.onAuthStateChange((_event,session)=>{if(session)setTimeout(()=>boot(session),0);else{bootedUserId=null;loginPanel.hidden=false;appPanel.hidden=true}});boot();
+let bootedUserId=null,currentMember=null;
+async function boot(sessionOverride=null){
+  let session=sessionOverride;
+  if(!session){
+    const{data:{session:currentSession}}=await supabase.auth.getSession();
+    session=currentSession
+  }
+  if(!session){
+    bootedUserId=null;
+    currentMember=null;
+    loginPanel.hidden=false;
+    appPanel.hidden=true;
+    document.querySelector('#adminLink')?.setAttribute('hidden','');
+    return
+  }
+  if(bootedUserId===session.user.id)return;
+  bootedUserId=session.user.id;
+  const{data:member,error:memberError}=await supabase.from('cc_members').select('id,email,display_name,role,active').eq('auth_user_id',session.user.id).maybeSingle();
+  if(memberError||!member||!member.active){
+    bootedUserId=null;
+    currentMember=null;
+    appPanel.hidden=true;
+    loginPanel.hidden=false;
+    loginMessage.textContent='This email is not currently enabled for Cooking Confidential.';
+    document.querySelector('#adminLink')?.setAttribute('hidden','');
+    await supabase.auth.signOut();
+    return
+  }
+  currentMember=member;
+  loginPanel.hidden=true;
+  appPanel.hidden=false;
+  userBadge.textContent=member.display_name||session.user.email||'Signed in';
+  const adminLink=document.querySelector('#adminLink');
+  if(adminLink)adminLink.hidden=member.role!=='owner';
+  try{await loadData()}catch(e){content.innerHTML='<div class="empty">'+esc(e.message)+'</div>'}
+}
+supabase.auth.onAuthStateChange((_event,session)=>{if(session)setTimeout(()=>boot(session),0);else{bootedUserId=null;currentMember=null;loginPanel.hidden=false;appPanel.hidden=true;document.querySelector('#adminLink')?.setAttribute('hidden','')}});boot();
