@@ -132,3 +132,13 @@ html,body{overscroll-behavior-y:none;overflow-x:hidden}
   .card h3{font-size:15px!important;line-height:1.12!important;margin:3px 0 4px!important}
   .card-body>.meta{font-size:10px!important;line-height:1.2!important}
 }
+
+/* Mobile viewport lock: prevent oversized headings/controls from shifting the frame. */
+@media(max-width:760px){
+  html,body{width:100%;max-width:100%;overflow-x:hidden}
+  main,.hero,.tabs,.content{width:100%;max-width:100%;min-width:0}
+  h1{white-space:normal!important;max-width:100%;overflow-wrap:anywhere}
+  .hero-copy,.search-wrap,.tabs,.content{min-width:0}
+  .search-wrap input{min-width:0}
+  .section-head{min-width:0}
+}
