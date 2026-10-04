@@ -118,7 +118,7 @@ async function loadMenus(){
 
 async function loadData(){
   if(view==='menus'||view==='favourites')content.innerHTML='<div class="empty">Loading your library…</div>';
-  else await loadRecipePage({reset:true});
+  else {const savedOffset=Number(sessionStorage.getItem('ccRecipeReturnOffset'));sessionStorage.removeItem('ccRecipeReturnOffset');await loadRecipePage({offset:Number.isFinite(savedOffset)&&savedOffset>=0?savedOffset:0,refreshCount:true});}
   await loadMenus();
   if(view==='menus')renderMenus(search.value.trim().toLowerCase());
   else if(view==='favourites')renderFavourites(search.value.trim().toLowerCase());
