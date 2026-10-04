@@ -117,7 +117,7 @@ html,body{overscroll-behavior-y:none;overflow-x:hidden}
 .card-image img.cc-recipe-image{width:auto!important;height:auto!important;max-width:100%!important;max-height:100%!important;display:block!important;object-fit:contain!important;object-position:center!important;position:static!important;margin:0 auto!important}
 
 /* Recipe dietary multi-select: match adjacent select height and top alignment */
-.cc-multi-select{position:relative;width:100%}
+.cc-multi-select{position:relative;width:100%;margin-top:7px}
 .cc-multi-trigger{width:100%;min-height:49px;box-sizing:border-box;text-align:left;padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;font:15px Arial;color:var(--ink);cursor:pointer;line-height:1.2}
 .cc-multi-trigger::after{content:'▾';float:right;color:var(--muted);margin-left:8px}
 .cc-multi-panel{position:absolute;left:0;right:0;top:calc(100% + 5px);z-index:30;background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 25px rgba(0,0,0,.14);padding:7px;max-height:240px;overflow:auto}
