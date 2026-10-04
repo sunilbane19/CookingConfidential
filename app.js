@@ -35,7 +35,7 @@ function showUiError(message,title='Something went wrong',onClose=null){
  }
  errorDialog.querySelector('h2').textContent=heading;
  errorDialog.querySelector('.error-message').textContent=friendly;
- const close=()=>{try{errorDialog.close()}catch{};if(typeof onClose==='function')onClose()};
+ const close=()=>{if(window.ccImportReviewActive){try{document.querySelector('#detailDialog')?.close()}catch{};try{document.querySelector('#importDialog')?.close()}catch{};window.ccImportReviewActive=false;window.ccReturnToImportInbox=false;}try{errorDialog.close()}catch{};if(typeof onClose==='function')onClose()};
  errorDialog.querySelector('.close').onclick=close;
  errorDialog.querySelector('#uiErrorClose').onclick=close;
  if(!errorDialog.open)errorDialog.showModal();
