@@ -26,3 +26,7 @@ html, body {
 .created-by{margin-top:10px;font-size:12px;color:var(--muted,#777);letter-spacing:.01em}.created-by strong{font-weight:700;color:var(--text,#24231f)}
 
 .cc-multi-select{position:relative}.cc-multi-trigger{width:100%;text-align:left;padding:11px 12px;border:1px solid var(--line,#ddd6ca);border-radius:10px;background:var(--card,#fff);font:inherit;cursor:pointer}.cc-multi-trigger::after{content:'▾';float:right;color:var(--muted,#777)}.cc-multi-panel{position:absolute;left:0;right:0;top:calc(100% + 5px);z-index:30;background:var(--card,#fff);border:1px solid var(--line,#ddd6ca);border-radius:10px;box-shadow:0 10px 25px rgba(0,0,0,.14);padding:7px;max-height:240px;overflow:auto}.cc-multi-option{display:flex;align-items:center;gap:9px;padding:8px 9px;border-radius:7px;cursor:pointer;font-weight:400}.cc-multi-option:hover{background:rgba(0,0,0,.04)}.cc-multi-option input{width:auto;margin:0}
+
+/* Keep Admin and Sign out visually identical in the header. */
+#adminLink,#signOutBtn{display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:12px 20px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink);font:600 13px Arial,sans-serif;text-decoration:none;box-sizing:border-box;}
+#adminLink{text-decoration:none;}
