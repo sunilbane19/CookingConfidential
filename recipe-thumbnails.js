@@ -1,7 +1,7 @@
 // Event-driven recipe thumbnail layer. Local asset only; no MutationObserver.
 const IMAGE_POOL=[
   {keys:/pasta|noodle|spaghetti|macaroni/i,url:'https://images.unsplash.com/photo-1551183053-bf91a1d81141?auto=format&fit=max&w=900&q=80',alt:'Pasta dish'},
-  {keys:/salad|slaw|lettuce|greens|vegetable/i,url:'https://images.unsplash.com/photo-1512621776951-a57141e2eefd?auto=format&fit=max&w=900&q=80',alt:'Fresh salad'},
+  {keys:/salad|slaw|lettuce|greens|vegetable/i,url:'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=max&w=900&q=80',alt:'Fresh salad'},
   {keys:/pork|beef|lamb|steak|meat|ham|chicken/i,url:'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=max&w=900&q=80',alt:'Prepared meat dish'},
   {keys:/soup|broth|stew/i,url:'https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=max&w=900&q=80',alt:'Bowl of soup'},
   {keys:/curry|masala|spicy|sriracha/i,url:'https://images.unsplash.com/photo-1601050690597-df0568f70950?auto=format&fit=max&w=900&q=80',alt:'Spiced dish'},
@@ -14,9 +14,6 @@ let recipes=[];
 function textOf(r){return[r?.name,r?.cuisine,r?.course,r?.recipe_type].join(' ').toLowerCase()}
 function candidates(r){const chosen=String(r?.image_url||'').trim();const t=textOf(r);const match=IMAGE_POOL.find(x=>x.keys.test(t));const fallback={url:DEFAULT_IMAGE,alt:'Default food photograph'};if(chosen)return[{url:chosen,alt:'Recipe image'},...(match?[match]:[]),fallback];return match?[match,fallback]:[fallback]}
 function svgFallback(r){const t=textOf(r);let accent='#9b3f2f',secondary='#d7b56d';if(/salad|green|vegetable|spinach/.test(t)){accent='#6d8b4d';secondary='#b8c98c'}else if(/pasta|noodle|rice/.test(t)){accent='#c76b3f';secondary='#e2c06e'}else if(/soup|curry|sauce|masala/.test(t)){accent='#c65b35';secondary='#e6b34f'}else if(/cake|dessert|sweet/.test(t)){accent='#9b5b65';secondary='#e2b6bd'}const svg=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 500"><rect width="900" height="500" fill="#ddd2bd"/><ellipse cx="450" cy="275" rx="285" ry="145" fill="#f9f6ef"/><ellipse cx="450" cy="275" rx="220" ry="105" fill="#eee7d8"/><ellipse cx="450" cy="270" rx="170" ry="78" fill="${secondary}" opacity=".85"/><circle cx="385" cy="255" r="34" fill="${accent}"/><circle cx="470" cy="285" r="42" fill="${accent}"/><circle cx="535" cy="245" r="28" fill="${accent}"/><path d="M330 340 Q450 385 570 340" fill="none" stroke="#b7a88f" stroke-width="12" stroke-linecap="round"/><text x="450" y="95" text-anchor="middle" font-family="Georgia,serif" font-size="34" fill="#5e584f">Cooking Confidential</text></svg>`;return 'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent(svg)}
-function styleImage(image){
-  image.style.cssText='width:240px!important;height:150px!important;max-width:calc(100% - 20px)!important;max-height:150px!important;display:block!important;object-fit:contain!important;object-position:center!important;position:static!important;margin:10px auto!important;box-sizing:border-box!important;border:1px solid #d7d0c4!important;border-radius:8px!important;background:#fff!important;padding:3px!important';
-}
 function setImage(box,r,list,index=0){
   const chosen=list[index];
   if(!chosen){
@@ -24,7 +21,6 @@ function setImage(box,r,list,index=0){
     fallback.src=svgFallback(r);
     fallback.alt='Recipe illustration';
     fallback.className='cc-recipe-image';
-    styleImage(fallback);
     box.replaceChildren(fallback);
     return;
   }
@@ -32,13 +28,18 @@ function setImage(box,r,list,index=0){
   image.alt=chosen.alt;
   image.decoding='async';
   image.className='cc-recipe-image';
-  styleImage(image);
+  image.style.cssText='width:auto!important;height:auto!important;max-width:100%!important;max-height:100%!important;display:block!important;object-fit:contain!important;object-position:center!important;position:static!important;margin:0 auto!important';
+  image.onload=()=>box.replaceChildren(image);
   image.onerror=()=>setImage(box,r,list,index+1);
   image.src=String(chosen.url||'').replace(/^https:\/\/thumb\.wikimedia\.org\/wikipedia\/commons\/thumb\/([^/]+\/[^/]+)\/([^/]+)\/[^?]+(?:\?[^]*)?$/,(_,hash,file)=>'https://upload.wikimedia.org/wikipedia/commons/'+hash+'/'+file);
   box.replaceChildren(image);
 }
 let imageObserver=null;
-function loadVisibleImage(box,r){if(box.dataset.ccImageLoaded==='1')return;box.dataset.ccImageLoaded='1';setImage(box,r,candidates(r))}
+function loadVisibleImage(box,r){
+  if(box.dataset.ccImageLoaded==='1')return;
+  box.dataset.ccImageLoaded='1';
+  setImage(box,r,candidates(r));
+}
 function apply(){
   const cards=[...document.querySelectorAll('#content .card')];
   if(imageObserver)imageObserver.disconnect();
