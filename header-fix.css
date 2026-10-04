@@ -21,3 +21,6 @@ html, body {
 @media (max-width: 760px) {
   main { padding-top: 70px; }
 }
+
+.user-badge{font-weight:700}
+.created-by{margin-top:10px;font-size:12px;color:var(--muted,#777);letter-spacing:.01em}.created-by strong{font-weight:700;color:var(--text,#24231f)}
