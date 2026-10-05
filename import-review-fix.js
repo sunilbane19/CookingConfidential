@@ -48,7 +48,7 @@ async function invokeExtract(itemId){
   const controller=new AbortController();
   const timer=setTimeout(()=>controller.abort(),90000);
   try{
-    const res=await fetch(SUPABASE_URL+'/functions/v1/cc-import-extract-staging',{
+    const res=await fetch(SUPABASE_URL+'/functions/v1/cc-import-extract-staging-v2',{
       method:'POST',
       headers:{
         'Content-Type':'application/json',
