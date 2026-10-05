@@ -179,58 +179,98 @@ function parsePdfRecipe(text:string,file:string){
     .replace(/\r/g,"")
     .replace(/\u00a0/g," ")
     .replace(/[\uFB00-\uFB06]/g,m=>({"ﬀ":"ff","ﬁ":"fi","ﬂ":"fl","ﬃ":"ffi","ﬄ":"ffl","ﬅ":"ft","ﬆ":"st"}[m]||m));
-  const pageClean=raw
-    .replace(/^\s*[-=]{2,}\s*Page\s+\d+\s*[-=]{2,}\s*$/gim,"")
-    .replace(/^\s*Page\s+\d+\s*$/gim,"");
-  const src=pageClean.split("\n").map(x=>x.trim()).filter(Boolean);
+  const src=raw
+    .split("\n")
+    .map(x=>x.replace(/\s+/g," ").trim())
+    .filter(Boolean)
+    .filter(x=>!/^[-=]{2,}\s*Page\s+\d+/i.test(x))
+    .filter(x=>!/^Page\s+\d+$/i.test(x));
   if(src.length<8)return null;
-  const normalizeIngredient=(x:string)=>{
-    let v=x.replace(/\s+/g," ").trim();
-    v=v.replace(/^(\d+(?:\/\d+)?(?:\s+\d+\/\d+)?|[½¼¾⅓⅔⅛⅜⅝⅞]+)\s*(cup|cups|tablespoon|tablespoons|teaspoon|teaspoons|tbsp|tsp|oz|ounce|ounces|lb|lbs|pound|pounds|g|gram|grams|kg|ml|l|litre|litres|liter|liters)\s*(?=[A-Za-z])/i,"$1 $2 ");
-    v=v.replace(/^(\d+(?:\/\d+)?)\s*(medium|small|large)\s*(?=[A-Za-z])/i,"$1 $2 ");
-    return v.replace(/\s{2,}/g," ");
-  };
-  const shell=src.findIndex(x=>/^shell$/i.test(x));
-  const filling=shell>=0?src.findIndex((x,i)=>i>shell&&/^filling$/i.test(x)):-1;
-  if(shell<0||filling<0)return null;
-  const title=clean(src[0]||file.replace(/\.pdf$/i,"").replace(/[_-]+/g," "));
-  if(!title || /^by\s+/i.test(title) || /^serves?\b/i.test(title))return null;
-  const authorIndex=src.findIndex((x,i)=>i>0&&/^by\s+/i.test(x));
-  const servesIndex=src.findIndex((x,i)=>i>0&&/^(?:serves?|servings?|yield)\b/i.test(x));
-  const descriptionStart=Math.max(authorIndex,servesIndex)+1;
-  const descriptionLines=src.slice(Math.max(1,descriptionStart),shell)
-    .filter(x=>!/^by\s+/i.test(x))
-    .filter(x=>!/^(?:serves?|servings?|yield)\b/i.test(x));
-  const description=clean(descriptionLines.join(" "));
-  const methodStart=src.findIndex((x,i)=>i>filling&&/^shell$/i.test(x));
-  const ingredientLines=src.slice(shell+1,filling).filter(x=>x.length>1);
-  const fillingIngredients=methodStart>filling
-    ? src.slice(filling+1,methodStart).filter(x=>x.length>1)
-    : [];
-  const ingredients=[...ingredientLines,...fillingIngredients].map(normalizeIngredient).filter(Boolean);
-  if(ingredients.length<4)return null;
-  const methodParts:string[]=[];
-  let current="";
-  const flush=()=>{if(current){methodParts.push(current);current="";}};
-  for(const x of src.slice(methodStart>=0?methodStart:filling+1)){
-    if(/^shell$/i.test(x)||/^filling$/i.test(x)){flush();methodParts.push(x);continue;}
-    if(/^step\s*\d+$/i.test(x)){flush();methodParts.push(x);continue;}
-    current=current?current+" "+x:x;
-  }
-  flush();
-  const method=clean(methodParts.join("\n\n"));
-  if(!method)return null;
-  return {
-    name:title,
-    description:description||null,
-    ingredients,
-    method,
-    cuisine:null,
-    course:null,
-    servings:servesIndex>=0?clean((src[servesIndex].match(/^(?:serves?|servings?|yield)\b.*?(?=\s+prep\s+time\b|\s+cook\s+time\b|$)/i)||[])[0]||src[servesIndex]):null
-  };
-}
 
+  const heading=(x:string)=>cleanRecipeLine(x).replace(/^#{1,6}\s*/,"").trim();
+  const isIng=(x:string)=>/^(?:ingredients?|what you need|ingredients required)\s*:?\s*$/i.test(heading(x));
+  const isMethod=(x:string)=>/^(?:directions?|instructions?|method|preparation|preparations|steps?)\s*:?\s*$/i.test(heading(x));
+  const isStop=(x:string)=>/^(?:special equipment|notes?|make-ahead and storage|nutrition(?: facts)?|reviews?|related articles|related recipes?|comments?|video)\b/i.test(heading(x));
+
+  const noise=/^(?:get|the app|app|save|rate|print|share|jump to|keep (?:the )?screen awake|credit:|advertisement|advert|reviews?\s*\(|featured tweaks|most helpful|related articles|editorial guidelines|privacy|contact|peopleinc\.|follow us|newsletters?)\b/i;
+  const stripItem=(x:string)=>{
+    let v=cleanRecipeLine(x).replace(/^\s*[|¦\]\[=_-]+\s*/,"").trim();
+    v=v.replace(/^step\s+\d+\s*[:.)-]?\s*/i,"");
+    return v;
+  };
+  const ingredientLike=(x:string)=>{
+    const v=stripItem(x);
+    if(!v||noise.test(v)||isStop(v))return false;
+    if(/^(?:for\s+.+:|fritters?|shell|filling)$/i.test(v))return false;
+    return /\d/.test(v)
+      || /[½¼¾⅓⅔⅛⅜⅝⅞]/.test(v)
+      || /\b(?:cup|cups|tbsp|tsp|tablespoons?|teaspoons?|oz|ounces?|lb|lbs|pounds?|g|grams?|kg|ml|lit(?:re|er)s?|cloves?|slices?|sticks?|pieces?|eggs?)\b/i.test(v)
+      || /^(?:freshly ground|salt and pepper|black pepper|salt)\b/i.test(v);
+  };
+  const cleanIngredient=(x:string)=>{
+    let v=stripItem(x);
+    v=v.replace(/^(\d+)\s*([½¼¾⅓⅔⅛⅜⅝⅞])\s*/,"$1 $2 ");
+    v=v.replace(/^(\d+)\s*\/\s*(\d+)/,"$1/$2");
+    v=v.replace(/^(\d+)\s*([A-Za-z])(?=\s)/,"$1$2");
+    return v;
+  };
+
+  const ingIndexes:number[]=[];
+  for(let i=0;i<src.length;i++)if(isIng(src[i]))ingIndexes.push(i);
+  let best:any=null;
+
+  for(const ii of ingIndexes){
+    let mi=-1;
+    for(let j=ii+1;j<src.length;j++){ if(isMethod(src[j])){mi=j;break;} if(isStop(src[j]))break; }
+    if(mi<0)continue;
+
+    let methodEnd=src.length;
+    for(let j=mi+1;j<src.length;j++){if(isStop(src[j])){methodEnd=j;break;}}
+    const ingredients=src.slice(ii+1,mi)
+      .map(cleanIngredient)
+      .filter(x=>x.length>1&&!noise.test(x)&&!isPageNoise(x)&&!isNutritionNoise(x))
+      .filter(x=>!/^(?:for\s+[^:]+:|fritters?|ingredients?)$/i.test(x))
+      .filter(ingredientLike);
+
+    const methodLines:string[]=[];
+    let current="";
+    const flush=()=>{if(current.trim()){methodLines.push(current.trim());current="";}};
+    for(const rawLine of src.slice(mi+1,methodEnd)){
+      const v=stripItem(rawLine);
+      if(!v||noise.test(v)||isNutritionNoise(v))continue;
+      if(/^step\s+\d+/i.test(rawLine)){flush();continue;}
+      if(/^(?:shell|filling|for\s+[^:]+:)\s*$/i.test(v)){flush();continue;}
+      current=current?current+" "+v:v;
+    }
+    flush();
+    const method=clean(methodLines.join("\n"));
+    if(ingredients.length<4||method.length<40)continue;
+
+    const quantityScore=ingredients.reduce((n,x)=>n+(ingredientLike(x)?1:0),0);
+    const methodScore=methodLines.length;
+    const score=ingredients.length*5+quantityScore*2+Math.min(methodScore,8);
+    if(!best||score>best.score){
+      best={
+        score,
+        name:recipeTitleFromSource(raw,file,src.slice(0,ii).join("\n").length),
+        description:null,
+        ingredients:ingredients.slice(0,200),
+        method,
+        cuisine:null,
+        course:null,
+        servings:null
+      };
+      const serveLine=src.slice(0,ii).find(x=>/^(?:serves?|servings?|yield)\b/i.test(x));
+      if(serveLine)best.servings=cleanRecipeLine(serveLine);
+      const descCandidates=src.slice(0,ii)
+        .map(cleanRecipeLine)
+        .filter(x=>x.length>=30&&x.length<500&&!noise.test(x)&&!isPageNoise(x)&&!isNutritionNoise(x))
+        .filter(x=>!/^by\s+/i.test(x)&&!/(?:published|first published|prep time|cook time|resting time|total time|jump to nutrition)/i.test(x));
+      if(descCandidates.length)best.description=cleanDescription(descCandidates[0]);
+    }
+  }
+  return best;
+}
 function htmlTextForParsing(input:string){
   return String(input||"")
     .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi," ")
@@ -325,43 +365,60 @@ function parseTextRecipeHeadings(text:string,file:string,isUrl=false){
   const normalized=/<(?:html|body|div|section|article|script|style)\b/i.test(raw)?htmlTextForParsing(raw):raw;
   const src=normalized.split("\n").map(x=>clean(x)).filter(Boolean);
   if(src.length<8)return null;
+
   const cleanHeading=(x:string)=>cleanRecipeLine(x).replace(/^#{1,6}\s*/,"").replace(/\s*[:\-–—]\s*$/,"").trim();
-  const isIng=(x:string)=>/^(?:ingredients?|ingredient list|what you need|ingredients required)\s*$/i.test(cleanHeading(x));
+  const isIng=(x:string)=>/^(?:ingredients?|ingredient list|what you need|ingredients required|shopping list)\s*$/i.test(cleanHeading(x));
   const isMeth=(x:string)=>/^(?:directions?|instructions?|method|preparation|preparations|steps?)\s*$/i.test(cleanHeading(x));
-  const isStop=(x:string)=>/^(?:notes?|nutrition(?: facts)?|special equipment|make-ahead and storage|video|comments?|related articles|more ideas)\b/i.test(cleanHeading(x));
+  const isStop=(x:string)=>/^(?:notes?|nutrition(?: facts)?|special equipment|make-ahead and storage|video|comments?|related articles|related recipes?|more ideas|reviews?)\b/i.test(cleanHeading(x));
   const stripItem=(x:string)=>cleanUrlMethodLine(x).replace(/^▢\s*/,"").trim();
+  const ingredientLike=(x:string)=>{
+    const v=stripItem(x);
+    if(!v||isPageNoise(v)||isNutritionNoise(v))return false;
+    return /\d/.test(v)
+      || /[½¼¾⅓⅔⅛⅜⅝⅞]/.test(v)
+      || /\b(?:cup|cups|tbsp|tsp|tablespoons?|teaspoons?|oz|ounces?|lb|lbs|pounds?|g|grams?|kg|ml|lit(?:re|er)s?|cloves?|slices?|sticks?|pieces?|eggs?)\b/i.test(v)
+      || /^(?:salt|pepper|freshly ground)\b/i.test(v);
+  };
+  const methodLike=(x:string)=>/\b(?:preheat|heat|cook|bake|roast|grill|fry|sauté|saute|boil|simmer|mix|combine|stir|add|place|put|pour|toss|season|rub|cover|remove|transfer|serve|sprinkle|brush|whisk|drain|squeeze|shape|form)\b/i.test(x);
   const h1=src.find(x=>/^#{1}\s+/.test(x));
   const title=h1?cleanRecipeLine(h1):"";
   let best:any=null;
+
   for(let i=0;i<src.length;i++){
     if(!isIng(src[i]))continue;
-    const mi=src.findIndex((x,j)=>j>i&&isMeth(x));
+    let mi=-1;
+    for(let j=i+1;j<src.length;j++){
+      if(isMeth(src[j])){mi=j;break;}
+      if(isStop(src[j]))break;
+    }
     if(mi<0)continue;
-    const ingEnd=mi;
-    const methodEnd=src.findIndex((x,j)=>j>mi&&isStop(x));
-    const end=methodEnd>mi?methodEnd:src.length;
-    const ingredients=src.slice(i+1,ingEnd)
+    let end=src.length;
+    for(let j=mi+1;j<src.length;j++){if(isStop(src[j])){end=j;break;}}
+    const ingredients=src.slice(i+1,mi)
       .map(stripItem)
       .filter(x=>x.length>1)
       .filter(x=>!isPageNoise(x)&&!isNutritionNoise(x))
-      .filter(x=>x.toLowerCase().indexOf('image')!==0)
       .filter(x=>!/^(?:1x|2x|3x|for .*:|button|input)$/i.test(x))
-      .filter(x=>x.toLowerCase()!=='[input]');
+      .filter(x=>x.toLowerCase().indexOf("image")!==0);
     const method=src.slice(mi+1,end)
       .map(stripItem)
       .filter(x=>x.length>1)
       .filter(x=>!isPageNoise(x)&&!isNutritionNoise(x))
       .filter(x=>!/^(?:featured video|see all food52 videos|button|input)$/i.test(x))
-      .filter(x=>x.toLowerCase().indexOf('image')!==0)
+      .filter(x=>x.toLowerCase().indexOf("image")!==0)
       .join("\n");
     if(ingredients.length<3||!method.trim())continue;
-    const notesIndex=src.findIndex((x,j)=>j>end&&/^#{0,6}\s*notes?\s*$/i.test(x));
-    const notesEnd=notesIndex>=0?src.findIndex((x,j)=>j>notesIndex&&isStop(x)&&!/^#{0,6}\s*notes?\s*$/i.test(x)):-1;
-    const noteLines=notesIndex>=0?src.slice(notesIndex+1,notesEnd>notesIndex?notesEnd:src.length)
-      .map(cleanRecipeLine).filter(x=>x.length>1&&!isNutritionNoise(x)&&!isPageNoise(x)&&!/^(?:\[?image\b)/i.test(x)):[];
-    const score=ingredients.length+Math.min(method.split("\n").length,10);
-    if(!best||score>best.score)best={score,name:title||recipeTitleFromSource(raw,file),description:null,ingredients,method:clean(method),cuisine:null,course:null,servings:null,personal_notes:noteLines.length?noteLines.join("\n"):null};
+
+    const quantityCount=ingredients.reduce((n,x)=>n+(ingredientLike(x)?1:0),0);
+    const methodVerbCount=method.split("\n").reduce((n,x)=>n+(methodLike(x)?1:0),0);
+    const prosePenalty=ingredients.reduce((n,x)=>n+(x.length>140&&!ingredientLike(x)?3:0),0);
+    const score=ingredients.length*5+quantityCount*4+Math.min(methodVerbCount,8)*2-prosePenalty;
+
+    if(!best||score>best.score){
+      best={score,name:title||recipeTitleFromSource(raw,file),description:null,ingredients,method:clean(method),cuisine:null,course:null,servings:null,personal_notes:null};
+    }
   }
+
   if(!best)return null;
   const titleIndex=h1?src.indexOf(h1):-1;
   if(titleIndex>=0){
