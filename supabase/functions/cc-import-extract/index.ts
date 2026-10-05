@@ -258,8 +258,8 @@ function htmlTextForParsing(input:string){
     .trim();
 }
 
-function wprmFieldAll(html:string, className:string){
-  const re=new RegExp("<(?:h[1-6]|div|span|p|li)[^>]*class=[\\\"']([^\\\"']*\\\\b"+className+"\\\\b[^\\\"']*)[\\\"'][^>]*>([\\\\s\\\\S]*?)</(?:h[1-6]|div|span|p|li)>","gi");
+function wprmFieldAll(html:string,className:string){
+  const re=new RegExp('<(?:h[1-6]|div|span|p|li)[^>]*class=["']([^"']*'+className+'[^"']*)["'][^>]*>([\s\S]*?)</(?:h[1-6]|div|span|p|li)>',"gi");
   const out:string[]=[];
   for(const m of html.matchAll(re)){
     const v=cleanRecipeLine(htmlTextForParsing(m[2]||""));
@@ -269,18 +269,18 @@ function wprmFieldAll(html:string, className:string){
 }
 function parseWprmRecipe(text:string,file:string){
   const html=String(text||"");
-  if(!/wprm-recipe-(?:container|name|ingredient|instruction)\\b/i.test(html))return null;
+  if(!/wprm-recipe-(?:container|name|ingredient|instruction)\b/i.test(html))return null;
   const names=wprmFieldAll(html,"wprm-recipe-name");
   const summaries=wprmFieldAll(html,"wprm-recipe-summary");
   const ingredients=wprmFieldAll(html,"wprm-recipe-ingredient").filter(x=>!isNutritionNoise(x)&&x.length>1);
   const methods=wprmFieldAll(html,"wprm-recipe-instruction").filter(x=>!isPageNoise(x)&&x.length>1).map(cleanUrlMethodLine);
   if(ingredients.length<2||!methods.length)return null;
-  const badName=(x:string)=>!x||/^#?wprm[-\\s]recipe[-\\s]container\\b/i.test(x)||/^recipe container\\b/i.test(x);
+  const badName=(x:string)=>!x||/^#?wprm[-\s]recipe[-\s]container\b/i.test(x)||/^recipe container\b/i.test(x);
   const name=names.find(x=>!badName(x))||recipeTitleFromSource(html,file);
   if(!name||badName(name))return null;
   const notes=wprmFieldAll(html,"wprm-recipe-notes");
-  const servings=wprmFieldAll(html,"wprm-recipe-servings").find(x=>/\\d/.test(x))||null;
-  return {name:cleanRecipeLine(name),description:summaries.length?cleanDescription(summaries.join("\\n")):null,ingredients:ingredients.slice(0,200),method:clean(methods.join("\\n")),cuisine:null,course:null,servings};
+  const servings=wprmFieldAll(html,"wprm-recipe-servings").find(x=>/\d/.test(x))||null;
+  return {name:cleanRecipeLine(name),description:summaries.length?cleanDescription(summaries.join("\n")):null,ingredients:ingredients.slice(0,200),method:clean(methods.join("\n")),cuisine:null,course:null,servings,personal_notes:notes.length?notes.join("\n"):null};
 }
 
 function parseHtmlRecipeSections(text:string,file:string){
