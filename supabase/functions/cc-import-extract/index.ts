@@ -259,7 +259,7 @@ function htmlTextForParsing(input:string){
 }
 
 function wprmFieldAll(html:string,className:string){
-  const re=new RegExp('<(?:h[1-6]|div|span|p|li)[^>]*class=["']([^"']*'+className+'[^"']*)["'][^>]*>([\s\S]*?)</(?:h[1-6]|div|span|p|li)>',"gi");
+  const re=new RegExp("<(?:h[1-6]|div|span|p|li)[^>]*class=[\"']([^\"']*"+className+"[^\"']*)[\"'][^>]*>([\s\S]*?)</(?:h[1-6]|div|span|p|li)>","gi");
   const out:string[]=[];
   for(const m of html.matchAll(re)){
     const v=cleanRecipeLine(htmlTextForParsing(m[2]||""));
