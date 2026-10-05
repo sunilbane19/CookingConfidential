@@ -344,15 +344,15 @@ function parseTextRecipeHeadings(text:string,file:string,isUrl=false){
       .map(stripItem)
       .filter(x=>x.length>1)
       .filter(x=>!isPageNoise(x)&&!isNutritionNoise(x))
-      .filter(x=>!/^\\s*(?:Image\\b|\\[?Image\\b)/i.test(x))
+      .filter(x=>x.toLowerCase().indexOf('image')!==0)
       .filter(x=>!/^(?:1x|2x|3x|for .*:|button|input)$/i.test(x))
-      .filter(x=>!/^\\[?input\\]?$/i.test(x));
+      .filter(x=>x.toLowerCase()!=='[input]');
     const method=src.slice(mi+1,end)
       .map(stripItem)
       .filter(x=>x.length>1)
       .filter(x=>!isPageNoise(x)&&!isNutritionNoise(x))
       .filter(x=>!/^(?:featured video|see all food52 videos|button|input)$/i.test(x))
-      .filter(x=>!/^\\s*(?:Image\\b|\\[?Image\\b)/i.test(x))
+      .filter(x=>x.toLowerCase().indexOf('image')!==0)
       .join("\\n");
     if(ingredients.length<3||!method.trim())continue;
     const notesIndex=src.findIndex((x,j)=>j>end&&/^#{0,6}\\s*notes?\\s*$/i.test(x));
