@@ -104,8 +104,14 @@ async function uploadSelected(){
     // Uploaded files have now moved into the persistent Import Inbox.
     // Remove successful items from this temporary upload queue so they are not shown twice.
     if(Array.isArray(window.ccImportItems)){
-      window.ccImportItems.splice(0,window.ccImportItems.length,...window.ccImportItems.filter(x=>x.status!=='Uploaded'));
-      window.dispatchEvent(new CustomEvent('cc:import-queue-changed'));
+      const remaining=window.ccImportItems.filter(x=>x.status!=='Uploaded');
+      window.ccImportItems.length=0;
+      window.ccImportItems.push(...remaining);
+      window.ccImportItems.forEach(x=>{if(x.status==='Queued')x.selected=false});
+      const fileInput=document.querySelector('#fileInput');
+      if(fileInput)fileInput.value='';
+      if(typeof window.ccRenderImportQueue==='function')window.ccRenderImportQueue();
+      else window.dispatchEvent(new CustomEvent('cc:import-queue-changed'));
     }
     if(button){button.disabled=false;button.textContent='Upload selected'}
     if(typeof window.ccReloadImportInbox==='function')await window.ccReloadImportInbox();
