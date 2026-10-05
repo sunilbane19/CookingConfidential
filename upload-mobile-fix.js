@@ -68,6 +68,15 @@ async function uploadSelected(){
       }
       const file=item.file;
       if(!file){item.status='Failed';setStatusForName(displayName,'Failed');continue}
+      // Persistent duplicate guard: the temporary queue guard cannot catch a file
+      // that has already reached the Import Inbox.
+      const duplicateRows=await api('/rest/v1/cc_import_items?select=id&created_by=eq.'+encodeURIComponent(userId)+'&file_name=eq.'+encodeURIComponent(file.name)+'&limit=1');
+      if(Array.isArray(duplicateRows)&&duplicateRows.length){
+        item.status='Skipped';
+        setStatusForName(displayName,'Already in Import Inbox');
+        message(displayName+' is already in the Import Inbox. It was not uploaded again.');
+        continue;
+      }
       const imports=await api('/rest/v1/cc_imports?select=id',{
         method:'POST',
         headers:{'Content-Type':'application/json','Prefer':'return=representation'},
