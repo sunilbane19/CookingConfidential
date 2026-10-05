@@ -180,3 +180,14 @@ dialog .dialog-card{box-sizing:border-box;max-width:100%;min-width:0;overflow-x:
 #detailDialog:has(.import-preparing) .dialog-card{
   padding:24px!important;
 }
+
+/* Import inbox bulk selection */
+.import-inbox-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.import-inbox-head>span{margin-right:auto}
+.import-select-all{display:flex;align-items:center;gap:7px;margin:0!important;font:600 12px Arial!important;color:var(--ink)!important}
+.import-select-all input,.import-select-item input{width:16px!important;height:16px!important;margin:0!important;accent-color:var(--accent)}
+.import-select-item{flex:0 0 28px!important;width:28px!important;margin:0!important;padding:0!important;display:flex!important;align-items:center!important;justify-content:center!important}
+.import-select-item .import-select-mark{display:none}
+.review-item:has(.import-select-item){display:grid!important;grid-template-columns:28px 1fr auto!important;align-items:center!important;gap:10px!important}
+.import-inbox-head #ccDeleteSelected{padding:7px 11px!important;font-size:11px!important;min-height:34px!important}
+.import-inbox-head #ccDeleteSelected:disabled{opacity:.45;cursor:not-allowed}
