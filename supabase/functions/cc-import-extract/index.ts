@@ -344,7 +344,7 @@ function parseTextRecipeHeadings(text:string,file:string,isUrl=false){
       .map(stripItem)
       .filter(x=>x.length>1)
       .filter(x=>!isPageNoise(x)&&!isNutritionNoise(x))
-      .filter(x=>!/^\\[?image\\b/i.test(x))
+      .filter(x=>!/^\\s*(?:Image\\b|\\[?Image\\b)/i.test(x))
       .filter(x=>!/^(?:1x|2x|3x|for .*:|button|input)$/i.test(x))
       .filter(x=>!/^\\[?input\\]?$/i.test(x));
     const method=src.slice(mi+1,end)
@@ -352,7 +352,7 @@ function parseTextRecipeHeadings(text:string,file:string,isUrl=false){
       .filter(x=>x.length>1)
       .filter(x=>!isPageNoise(x)&&!isNutritionNoise(x))
       .filter(x=>!/^(?:featured video|see all food52 videos|button|input)$/i.test(x))
-      .filter(x=>!/^(?:\\[?image\\b)/i.test(x))
+      .filter(x=>!/^\\s*(?:Image\\b|\\[?Image\\b)/i.test(x))
       .join("\\n");
     if(ingredients.length<3||!method.trim())continue;
     const notesIndex=src.findIndex((x,j)=>j>end&&/^#{0,6}\\s*notes?\\s*$/i.test(x));
