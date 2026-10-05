@@ -225,7 +225,7 @@ document.querySelector('#addRecipeBtn').onclick=()=>recipeDialog.showModal();con
  const selectAll=document.querySelector('#selectAllImports');
  if(selectAll)selectAll.onchange=()=>{queued.forEach(x=>x.selected=selectAll.checked);renderImportQueue()};importQueue.querySelectorAll('.cc-local-review').forEach(b=>b.onclick=async()=>{const id=Number(b.dataset.dbId);if(b.dataset.docx==='1'&&typeof window.ccReviewImportDocx==='function')return window.ccReviewImportDocx(id);if(typeof window.ccReviewImportItem==='function')return window.ccReviewImportItem(id,b.dataset.image==='1')});
  importQueue.querySelectorAll('.import-select').forEach(cb=>cb.onchange=()=>{const x=importItems.find(i=>i.localId===cb.dataset.localId);if(x)x.selected=cb.checked;renderImportQueue()});
-}window.addEventListener('cc:import-queue-changed',()=>render());
+}window.ccRenderImportQueue=renderImportQueue;window.addEventListener('cc:import-queue-changed',()=>render());
 search.oninput=()=>{
   if(view==='menus'||view==='favourites'){
     if(view==='menus')renderMenus(search.value.trim().toLowerCase());
