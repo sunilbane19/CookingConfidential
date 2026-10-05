@@ -165,3 +165,4 @@ dialog .dialog-card{box-sizing:border-box;max-width:100%;min-width:0;overflow-x:
 
 /* Match recipe editor field heights so text inputs, dropdowns and multi-select boxes align. */
 #detailDialog .dialog-card label input,#detailDialog .dialog-card label select,#detailDialog .dialog-card .cc-multi-trigger{min-height:49px!important;height:49px!important;box-sizing:border-box!important;}
+#detailDialog{max-width:520px;width:92vw}#detailDialog:has(.import-preparing){max-width:520px;width:92vw}.import-preparing{padding:24px}.import-preparing .small-note{max-width:520px}
