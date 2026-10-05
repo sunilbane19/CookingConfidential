@@ -326,7 +326,7 @@ function parseRaw(text:string,file:string,isUrl=false){
   if(isUrl){
     const structured=structuredRecipe(text,true);
     if(structured?.ingredients?.length && structured.method)return structured;
-    const htmlRecipe=parseHtmlRecipeSections(text,file);
+    const wprmRecipe=parseWprmRecipe(text,file);\n    if(wprmRecipe?.ingredients?.length && wprmRecipe.method)return wprmRecipe;\n    const htmlRecipe=parseHtmlRecipeSections(text,file);
     if(htmlRecipe?.ingredients?.length && htmlRecipe.method)return htmlRecipe;
     text=htmlTextForParsing(text);
   }
@@ -492,7 +492,7 @@ function finalizeParsedRecipe(recipe:any,sourceText:string){
   const personalNotes=noteParts.length?noteParts.join("\n"):String(recipe.personal_notes||"").trim();
   const noteSet=new Set(personalNotes.split(/\n+/).map(x=>cleanRecipeLine(x).toLowerCase()).filter(Boolean));
   const method=cleanExtractedMethod(String(recipe.method||"").split(/\n+/).filter(x=>!noteSet.has(cleanRecipeLine(x).toLowerCase())).join("\n"));
-  return {...recipe,description:meta.description||recipe.description||null,method,personal_notes:personalNotes||null};
+  return {...recipe,description:recipe.description||meta.description||null,method,personal_notes:recipe.personal_notes||personalNotes||null};
 }
 function parse(text:string,file:string,isUrl=false){
   const recipe=parseRaw(text,file,isUrl);
