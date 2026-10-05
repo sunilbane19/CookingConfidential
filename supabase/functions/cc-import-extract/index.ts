@@ -326,7 +326,8 @@ function parseRaw(text:string,file:string,isUrl=false){
   if(isUrl){
     const structured=structuredRecipe(text,true);
     if(structured?.ingredients?.length && structured.method)return structured;
-    const wprmRecipe=parseWprmRecipe(text,file);\n    if(wprmRecipe?.ingredients?.length && wprmRecipe.method)return wprmRecipe;\n    const htmlRecipe=parseHtmlRecipeSections(text,file);
+    const wprmRecipe=parseWprmRecipe(text,file);
+    if(wprmRecipe?.ingredients?.length && wprmRecipe.method)return wprmRecipe;\n    const htmlRecipe=parseHtmlRecipeSections(text,file);
     if(htmlRecipe?.ingredients?.length && htmlRecipe.method)return htmlRecipe;
     text=htmlTextForParsing(text);
   }
