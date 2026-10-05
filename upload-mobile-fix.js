@@ -73,7 +73,7 @@ async function uploadSelected(){
       const duplicateRows=await api('/rest/v1/cc_import_items?select=id&created_by=eq.'+encodeURIComponent(userId)+'&file_name=eq.'+encodeURIComponent(file.name)+'&limit=1');
       if(Array.isArray(duplicateRows)&&duplicateRows.length){
         item.status='Skipped';
-        setStatusForName(displayName,'Already in Import Inbox');
+        setStatusForName(displayName,'Skipped — already in Import Inbox');
         message(displayName+' is already in the Import Inbox. It was not uploaded again.');
         continue;
       }
