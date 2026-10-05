@@ -30,13 +30,33 @@ function parseRecipe(x){
     if(/^(?:\*\s*)+$/.test(s))return '';
     return s;
   };
+  const titleQuality=s=>{
+    const v=usableTitle(s); if(!v)return 0;
+    const letters=(v.match(/[A-Za-zÀ-ÖØ-öø-ÿ]/g)||[]).length;
+    const words=v.split(/\s+/).filter(Boolean);
+    let score=letters/Math.max(1,v.length);
+    if(words.length>=2)score+=.18;
+    if(/[A-Za-zÀ-ÖØ-öø-ÿ].*[A-Za-zÀ-ÖØ-öø-ÿ]/.test(v))score+=.08;
+    if(/[,:;()\[\]{}]/.test(v))score-=.08;
+    return score;
+  };
+  const filenameTitle=v=>{
+    const s=clean(String(v||'').replace(/\.[^.]+$/,'').replace(/[_-]+/g,' ').replace(/\s+/g,' ').trim());
+    if(!s||/^\d+$/.test(s))return '';
+    return s.replace(/\s+recipe$/i,'').trim();
+  };
   let r={name:fileTitle,ingredients:[],method:'',cuisine:x?.inferred_cuisine||'',course:x?.inferred_course||'',servings:'',description:''};
   if(x?.extracted_text){
     try{
       const j=JSON.parse(x.extracted_text),s=j.recipe&&typeof j.recipe==='object'?j.recipe:j;
       const n=usableTitle(s.name);
+      const fileFallback=filenameTitle(x?.file_name);
+      const descriptionTitle=usableTitle(String(s.description||'').split(/[.!?]/)[0]);
+      const bestFallback=fileFallback||descriptionTitle||fileTitle;
       const long=n.length>100||/\b(we will|here is|to make|using|ingredients list)\b/i.test(n);
-      r={...r,name:long?fileTitle:(n||fileTitle),personal_notes:s.personal_notes||s.notes||'',ingredients:s.ingredients||s.recipeIngredient||[],method:s.method||s.recipeInstructions||'',cuisine:s.cuisine||s.recipeCuisine||r.cuisine,course:s.course||s.recipeCategory||r.course,servings:s.servings||s.recipeYield||'',description:s.description||(long?clean(n):'')};
+      const weak=n&&titleQuality(n)<.68;
+      const fallbackName=titleQuality(bestFallback)>=.68?bestFallback:fileTitle;
+      r={...r,name:(long||weak||!n)?fallbackName:n,personal_notes:s.personal_notes||s.notes||'',ingredients:s.ingredients||s.recipeIngredient||[],method:s.method||s.recipeInstructions||'',cuisine:s.cuisine||s.recipeCuisine||r.cuisine,course:s.course||s.recipeCategory||r.course,servings:s.servings||s.recipeYield||'',description:s.description||(long?clean(n):'')};
       if(Array.isArray(r.method))r.method=r.method.map(v=>typeof v==='string'?v:v?.text||v?.name||'').join('\n');
     }catch{}
   }
