@@ -161,3 +161,7 @@ dialog .dialog-card{box-sizing:border-box;max-width:100%;min-width:0;overflow-x:
   #importDialog,#detailDialog,#ccErrorDialog{left:50%!important;right:auto!important;transform:translateX(-50%)!important;}
   #importDialog .dialog-card,#detailDialog .dialog-card,#ccErrorDialog .error-card{width:100%!important;max-width:100%!important;min-width:0!important;overflow-x:hidden!important;}
 }
+
+
+/* Match recipe editor field heights so text inputs, dropdowns and multi-select boxes align. */
+#detailDialog .dialog-card label input,#detailDialog .dialog-card label select,#detailDialog .dialog-card .cc-multi-trigger{min-height:49px!important;height:49px!important;box-sizing:border-box!important;}
