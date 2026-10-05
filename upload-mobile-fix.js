@@ -101,6 +101,12 @@ async function uploadSelected(){
       }else if(isImage){setStatusForName(displayName,'Reading image…');await startImageReview(itemRow.id)}
       else{setStatusForName(displayName,'Uploaded');message('Upload completed. Open Review in the Import Inbox to extract the recipe.')}
     }
+    // Uploaded files have now moved into the persistent Import Inbox.
+    // Remove successful items from this temporary upload queue so they are not shown twice.
+    if(Array.isArray(window.ccImportItems)){
+      window.ccImportItems.splice(0,window.ccImportItems.length,...window.ccImportItems.filter(x=>x.status!=='Uploaded'));
+      window.dispatchEvent(new CustomEvent('cc:import-queue-changed'));
+    }
     if(button){button.disabled=false;button.textContent='Upload selected'}
     if(typeof window.ccReloadImportInbox==='function')await window.ccReloadImportInbox();
   }catch(error){
