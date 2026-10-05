@@ -9,7 +9,7 @@
 .import-kind{display:inline-block;font-size:.68rem;letter-spacing:.08em;font-weight:700;opacity:.72;margin-right:.35rem}.import-source-link{display:block;max-width:58ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.78rem;margin-top:.18rem}.import-source-link:hover{text-decoration:underline}
 
 /* Import Inbox visibility */
-.import-inbox-panel{margin-top:18px;padding-top:12px;border-top:1px solid var(--line);max-height:230px;overflow:auto}.import-inbox-panel .queue-head{padding-bottom:8px}.import-inbox-panel .review-item{background:var(--card)}
+.import-inbox-panel{margin-top:18px;padding-top:12px;border-top:1px solid var(--line);max-height:min(34vh,330px);overflow:auto;scroll-padding-bottom:14px;padding-bottom:8px;box-sizing:border-box}.import-inbox-panel .queue-head{padding-bottom:8px;position:sticky;top:0;background:var(--card);z-index:2}.import-inbox-panel .review-item{background:var(--card);min-height:56px;box-sizing:border-box}
 /* Larger upload/import dialog: gives the file picker and import options more room. */
 #importDialog{max-width:min(820px,94vw);width:100%}
 /* Larger recipe editor dialog */
