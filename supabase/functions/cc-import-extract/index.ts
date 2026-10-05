@@ -322,15 +322,15 @@ function parseHtmlRecipeSections(text:string,file:string){
 function parseTextRecipeHeadings(text:string,file:string,isUrl=false){
   if(!isUrl)return null;
   const raw=String(text||"");
-  const normalized=/<(?:html|body|div|section|article|script|style)\\b/i.test(raw)?htmlTextForParsing(raw):raw;
-  const src=normalized.split("\\n").map(x=>clean(x)).filter(Boolean);
+  const normalized=/<(?:html|body|div|section|article|script|style)\b/i.test(raw)?htmlTextForParsing(raw):raw;
+  const src=normalized.split("\n").map(x=>clean(x)).filter(Boolean);
   if(src.length<8)return null;
-  const cleanHeading=(x:string)=>cleanRecipeLine(x).replace(/^#{1,6}\\s*/,"").replace(/\\s*[:\\-–—]\\s*$/,"").trim();
-  const isIng=(x:string)=>/^(?:ingredients?|ingredient list|what you need|ingredients required)\\s*$/i.test(cleanHeading(x));
-  const isMeth=(x:string)=>/^(?:directions?|instructions?|method|preparation|preparations|steps?)\\s*$/i.test(cleanHeading(x));
-  const isStop=(x:string)=>/^(?:notes?|nutrition(?: facts)?|special equipment|make-ahead and storage|video|comments?|related articles|more ideas)\\b/i.test(cleanHeading(x));
-  const stripItem=(x:string)=>cleanUrlMethodLine(x).replace(/^▢\\s*/,"").trim();
-  const h1=src.find(x=>/^#{1}\\s+/.test(x));
+  const cleanHeading=(x:string)=>cleanRecipeLine(x).replace(/^#{1,6}\s*/,"").replace(/\s*[:\-–—]\s*$/,"").trim();
+  const isIng=(x:string)=>/^(?:ingredients?|ingredient list|what you need|ingredients required)\s*$/i.test(cleanHeading(x));
+  const isMeth=(x:string)=>/^(?:directions?|instructions?|method|preparation|preparations|steps?)\s*$/i.test(cleanHeading(x));
+  const isStop=(x:string)=>/^(?:notes?|nutrition(?: facts)?|special equipment|make-ahead and storage|video|comments?|related articles|more ideas)\b/i.test(cleanHeading(x));
+  const stripItem=(x:string)=>cleanUrlMethodLine(x).replace(/^▢\s*/,"").trim();
+  const h1=src.find(x=>/^#{1}\s+/.test(x));
   const title=h1?cleanRecipeLine(h1):"";
   let best:any=null;
   for(let i=0;i<src.length;i++){
@@ -353,25 +353,25 @@ function parseTextRecipeHeadings(text:string,file:string,isUrl=false){
       .filter(x=>!isPageNoise(x)&&!isNutritionNoise(x))
       .filter(x=>!/^(?:featured video|see all food52 videos|button|input)$/i.test(x))
       .filter(x=>x.toLowerCase().indexOf('image')!==0)
-      .join("\\n");
+      .join("\n");
     if(ingredients.length<3||!method.trim())continue;
-    const notesIndex=src.findIndex((x,j)=>j>end&&/^#{0,6}\\s*notes?\\s*$/i.test(x));
-    const notesEnd=notesIndex>=0?src.findIndex((x,j)=>j>notesIndex&&isStop(x)&&!/^#{0,6}\\s*notes?\\s*$/i.test(x)):-1;
+    const notesIndex=src.findIndex((x,j)=>j>end&&/^#{0,6}\s*notes?\s*$/i.test(x));
+    const notesEnd=notesIndex>=0?src.findIndex((x,j)=>j>notesIndex&&isStop(x)&&!/^#{0,6}\s*notes?\s*$/i.test(x)):-1;
     const noteLines=notesIndex>=0?src.slice(notesIndex+1,notesEnd>notesIndex?notesEnd:src.length)
-      .map(cleanRecipeLine).filter(x=>x.length>1&&!isNutritionNoise(x)&&!isPageNoise(x)&&!/^(?:\\[?image\\b)/i.test(x)):[];
-    const score=ingredients.length+Math.min(method.split("\\n").length,10);
-    if(!best||score>best.score)best={score,name:title||recipeTitleFromSource(raw,file),description:null,ingredients,method:clean(method),cuisine:null,course:null,servings:null,personal_notes:noteLines.length?noteLines.join("\\n"):null};
+      .map(cleanRecipeLine).filter(x=>x.length>1&&!isNutritionNoise(x)&&!isPageNoise(x)&&!/^(?:\[?image\b)/i.test(x)):[];
+    const score=ingredients.length+Math.min(method.split("\n").length,10);
+    if(!best||score>best.score)best={score,name:title||recipeTitleFromSource(raw,file),description:null,ingredients,method:clean(method),cuisine:null,course:null,servings:null,personal_notes:noteLines.length?noteLines.join("\n"):null};
   }
   if(!best)return null;
   const titleIndex=h1?src.indexOf(h1):-1;
   if(titleIndex>=0){
-    const nextHeading=src.findIndex((x,j)=>j>titleIndex&&/^#{1,6}\\s+/.test(x));
+    const nextHeading=src.findIndex((x,j)=>j>titleIndex&&/^#{1,6}\s+/.test(x));
     const descLines=src.slice(titleIndex+1,nextHeading>titleIndex?nextHeading:Math.min(src.length,titleIndex+12))
       .map(cleanRecipeLine)
       .filter(x=>x.length>=30&&x.length<500)
       .filter(x=>!isPageNoise(x)&&!isNutritionNoise(x))
-      .filter(x=>!/^\[?(?:input|button|image)\\b/i.test(x))
-      .filter(x=>!/^(?:by|updated|published|jump to recipe|jump to video|save|rate|print)\\b/i.test(x));
+      .filter(x=>!/^\[?(?:input|button|image)\b/i.test(x))
+      .filter(x=>!/^(?:by|updated|published|jump to recipe|jump to video|save|rate|print)\b/i.test(x));
     if(descLines.length)best.description=cleanDescription(descLines[0]);
   }
   return best;
