@@ -4,6 +4,8 @@ import * as mammoth from 'https://esm.sh/mammoth@1.6.0';
 import JSZip from 'https://esm.sh/jszip@3.10.1';
 import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
 import { createGenericEditor, editorValue, sanitizeRichHtml } from './generic-editor.js?v=1.3.5';
+import { checkRecipeQuality } from './recipe-quality.js?v=1.0.0';
+import { readSourceTextWithVision } from './vision-text-reader.js?v=1.0.0';
 
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
@@ -207,7 +209,64 @@ async function ocrBookPage(worker,bitmap){const W=bitmap.width,H=bitmap.height;c
 
 async function ocrImage(blob,status){status('Reading image…');const worker=await createWorker('eng',1,{logger:m=>{if(m.status==='recognizing text')status(`Reading image… ${Math.round((m.progress||0)*100)}%`);}});try{const full=await worker.recognize(blob);const fullLines=ocrLines(full.data.words||[]);let recipes=[];status('Finding recipe sections…');const book=bookFromLines(fullLines);if(book)recipes=[book];if(!recipes.length)recipes=buildFromLines(fullLines);const bitmap=await createImageBitmap(blob),W=bitmap.width,H=bitmap.height,ratio=W/H;if(!recipes.length){status('Reading recipe sections…');const book=await ocrBookPage(worker,bitmap);if(book)recipes=[book];}if(!recipes.length&&ratio>=.98){status('Looking for multiple recipes…');const grids=ratio<1.1?[[3,3],[2,2]]:[[3,2],[2,2]];for(const[cols,rows]of grids){const found=[],tw=W/cols,th=H/rows;for(let ry=0;ry<rows;ry++)for(let cx=0;cx<cols;cx++){const res=await recognizeTile(worker,bitmap,cx*tw,ry*th,tw,th),tileRecipes=buildFromLines(ocrLines(res.data.words||[]));if(tileRecipes.length)found.push(...tileRecipes);}const unique=dedupeRecipes(found);if(unique.length>recipes.length)recipes=unique;if(recipes.length>=6)break;}}bitmap.close();if(!recipes.length){const r=makeRecipe('Imported image');r.ingredients=cleanIngredientLines(fullLines.map(x=>x.text));recipes=[r];}return recipes;}finally{await worker.terminate();}}
 async function loadOriginal(x){const signedUrl=await getCachedSignedUrl(sb,'cooking-confidential',x.file_path);const r=await fetch(signedUrl);if(!r.ok)throw Error('Could not load the original file.');return r.blob();}
-async function extract(id,show=true){if(show){dialog.querySelector('#detailContent').innerHTML='<div class="dialog-card"><p class="eyebrow">EXTRACTING</p><h2>Preparing recipes…</h2><p class="small-note" id="multiStatus">Reading the original file.</p></div>';dialog.showModal();}const status=t=>{const e=document.querySelector('#multiStatus');if(e)e.textContent=t;};const{data:x,error}=await sb.from('cc_import_items').select('*').eq('id',id).single();if(error||!x)return fail(error?.message||'Import item not found.');const expected=Number(window.ccExpectedRecipeCount||JSON.parse(localStorage.getItem('ccMultiImport:'+id)||'{}').expectedCount||0);try{const cached=typeof x.extracted_text==='string'?JSON.parse(x.extracted_text||'{}'):x.extracted_text;if(x.extraction_status==='ready'&&cached?.multiple&&Array.isArray(cached.recipes)&&cached.recipes.length&&( !expected||cached.recipes.length===expected)){render(id,x,cached.recipes);return;}}catch(e){console.warn('Cooking Confidential cached multi-recipe result:',e)}dialog.querySelector('#detailContent').innerHTML='<div class="dialog-card"><p class="eyebrow">EXTRACTING</p><h2>Preparing recipes…</h2><p class="small-note" id="multiStatus">Reading the original file.</p></div>';dialog.showModal();try{const blob=await loadOriginal(x);let recipes=[];if(/\.(png|jpe?g|webp)$/i.test(x.file_name||'')||String(x.mime_type||'').startsWith('image/'))recipes=await ocrImage(blob,status);else if(/\.docx$/i.test(x.file_name||'')){status('Reading document structure…');const arrayBuffer=await blob.arrayBuffer();recipes=await parseDocxRawMulti(arrayBuffer,x.file_name||'Imported document');if(!recipes.length){const html=(await mammoth.convertToHtml({arrayBuffer},{ignoreEmptyParagraphs:false})).value||'';recipes=parseDocxMulti(html,x.file_name||'Imported document');}}else if((x.mime_type||'').startsWith('text/')){recipes=parseTextMulti(await blob.text(),x.file_name||'Imported document');if(!recipes.length){const r=makeRecipe(x.file_name||'Imported recipe');r.ingredients=cleanIngredientLines(await blob.text());recipes=[r];}}else throw Error('This multi-recipe importer currently supports images, DOCX and text documents.');if(!recipes.length)throw Error('No recipes could be detected.');recipes=recipes.map(r=>({...r,ingredients:cleanIngredientLines(r.ingredients),method:Array.isArray(r.method)?r.method.map(clean).filter(x=>!isOcrGarbage(x)):lines(r.method),notes:r.notes.map(clean).filter(x=>!isOcrGarbage(x))}));await sb.from('cc_import_items').update({extracted_text:JSON.stringify({version:6,multiple:true,recipes}),source_title:recipes[0]?.name||x.file_name,extraction_status:'ready',review_status:'pending',error_message:null}).eq('id',id);if(show)render(id,x,recipes);return {item:x,recipes};}catch(e){if(show)fail(e?.message||String(e));throw e;}}
+async function reviewImageImport(id){
+  try{
+    const text=await readSourceTextWithVision(id);
+    const {data:{session}}=await sb.auth.getSession();
+    if(!session?.access_token)throw Error('Your sign-in session has expired. Please sign in again.');
+    const rr=await fetch(SUPABASE_URL+'/functions/v1/cc-import-extract-staging-v2',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.access_token,'apikey':session.access_token},
+      body:JSON.stringify({import_item_id:Number(id),text_override:text})
+    });
+    const body=await rr.json().catch(()=>({}));
+    if(!rr.ok)throw Error(body?.error||'Structure parser failed after Vision reading.');
+    const item=await getItem(id);
+    const parsed0=typeof item.extracted_text==='string'?JSON.parse(item.extracted_text||'{}'):item.extracted_text;
+    const recipe=parsed0?.recipe&&typeof parsed0.recipe==='object'?parsed0.recipe:parsed0;
+    const q=checkRecipeQuality(recipe,{mode:'single'});
+    if(q.good){
+      const mod=await import('./import-review-fix.js?v=1.4.35');
+      return mod.reviewImportFixed(id);
+    }
+    await sb.from('cc_import_items').update({extracted_text:JSON.stringify({...parsed0,raw_text:text,quality:q}),extraction_status:'ready',review_status:'pending'}).eq('id',id);
+    const rescue=await import('./rescue-ocr.js?v=1.0.2'); return rescue.rescueImport(id);
+  }catch(e){
+    console.warn('Vision image review failed; using existing OCR as fallback:',e);
+    try{
+      const blob=await original(await getItem(id));
+      const recipes=await ocrImage(blob,()=>{});
+      const r=recipes[0];
+      const q=checkRecipeQuality(r,{mode:'single'});
+      if(q.good){
+        const rescue=await import('./rescue-ocr.js?v=1.0.2');
+        // Keep existing image OCR as a fallback only; normal review remains available.
+        const item=await getItem(id);
+        await sb.from('cc_import_items').update({extracted_text:JSON.stringify({recipe:r,raw_text:(r.ingredients||[]).join('\n')+'\n'+(r.method||[]).join('\n')}),extraction_status:'ready',review_status:'pending'}).eq('id',id);
+        const mod=await import('./import-review-fix.js?v=1.4.35'); return mod.reviewImportFixed(id);
+      }
+      const rescue=await import('./rescue-ocr.js?v=1.0.2'); return rescue.rescueImport(id);
+    }catch(fallbackError){
+      const rescue=await import('./rescue-ocr.js?v=1.0.2'); return rescue.rescueImport(id);
+    }
+  }
+}
+async function extract(id,show=true){if(show){dialog.querySelector('#detailContent').innerHTML='<div class="dialog-card"><p class="eyebrow">EXTRACTING</p><h2>Preparing recipes…</h2><p class="small-note" id="multiStatus">Reading the original file.</p></div>';dialog.showModal();}const status=t=>{const e=document.querySelector('#multiStatus');if(e)e.textContent=t;};const{data:x,error}=await sb.from('cc_import_items').select('*').eq('id',id).single();if(error||!x)return fail(error?.message||'Import item not found.');const expected=Number(window.ccExpectedRecipeCount||JSON.parse(localStorage.getItem('ccMultiImport:'+id)||'{}').expectedCount||0);try{const cached=typeof x.extracted_text==='string'?JSON.parse(x.extracted_text||'{}'):x.extracted_text;if(x.extraction_status==='ready'&&cached?.multiple&&Array.isArray(cached.recipes)&&cached.recipes.length&&( !expected||cached.recipes.length===expected)){render(id,x,cached.recipes);return;}}catch(e){console.warn('Cooking Confidential cached multi-recipe result:',e)}dialog.querySelector('#detailContent').innerHTML='<div class="dialog-card"><p class="eyebrow">EXTRACTING</p><h2>Preparing recipes…</h2><p class="small-note" id="multiStatus">Reading the original file.</p></div>';dialog.showModal();try{const blob=await loadOriginal(x);let recipes=[];if(/\.(png|jpe?g|webp)$/i.test(x.file_name||'')||String(x.mime_type||'').startsWith('image/')){
+  try{
+    status('Reading image text…');
+    const visionText=await readSourceTextWithVision(id);
+    recipes=parseTextMulti(visionText,x.file_name||'Imported image');
+    recipes=recipes.map(r=>({...r,ingredients:cleanIngredientLines(r.ingredients),method:Array.isArray(r.method)?r.method.map(clean):lines(r.method),notes:r.notes.map(clean)}));
+    const checks=recipes.map(r=>checkRecipeQuality(r,{mode:'multiple'}));
+    if(!recipes.length||!checks.every(q=>q.good)){
+      await sb.from('cc_import_items').update({extracted_text:JSON.stringify({version:7,multiple:true,reader:'vision-text',raw_text:visionText,recipes}),extraction_status:'ready',review_status:'pending'}).eq('id',id);
+      const rescue=await import('./rescue-ocr.js?v=1.0.2'); return rescue.rescueImport(id);
+    }
+  }catch(e){
+    console.warn('Vision multi-image reader failed; falling back to existing OCR:',e);
+    recipes=await ocrImage(blob,status);
+  }
+}else if(/\.docx$/i.test(x.file_name||'')){status('Reading document structure…');const arrayBuffer=await blob.arrayBuffer();recipes=await parseDocxRawMulti(arrayBuffer,x.file_name||'Imported document');if(!recipes.length){const html=(await mammoth.convertToHtml({arrayBuffer},{ignoreEmptyParagraphs:false})).value||'';recipes=parseDocxMulti(html,x.file_name||'Imported document');}}else if((x.mime_type||'').startsWith('text/')){recipes=parseTextMulti(await blob.text(),x.file_name||'Imported document');if(!recipes.length){const r=makeRecipe(x.file_name||'Imported recipe');r.ingredients=cleanIngredientLines(await blob.text());recipes=[r];}}else throw Error('This multi-recipe importer currently supports images, DOCX and text documents.');if(!recipes.length)throw Error('No recipes could be detected.');recipes=recipes.map(r=>({...r,ingredients:cleanIngredientLines(r.ingredients),method:Array.isArray(r.method)?r.method.map(clean).filter(x=>!isOcrGarbage(x)):lines(r.method),notes:r.notes.map(clean).filter(x=>!isOcrGarbage(x))}));await sb.from('cc_import_items').update({extracted_text:JSON.stringify({version:6,multiple:true,recipes}),source_title:recipes[0]?.name||x.file_name,extraction_status:'ready',review_status:'pending',error_message:null}).eq('id',id);if(show)render(id,x,recipes);return {item:x,recipes};}catch(e){if(show)fail(e?.message||String(e));throw e;}}
 function fail(msg){dialog.querySelector('#detailContent').innerHTML=`<button class="close" type="button">×</button><p class="eyebrow">IMPORT ERROR</p><h2>Recipe extraction failed</h2><p class="small-note">${esc(msg)}</p>`;dialog.querySelector('.close').onclick=()=>dialog.close();}
 function render(id,x,recipes){const cards=recipes.map((r,i)=>{const reviewed=!!r._reviewed;return `<article class="multi-recipe-card"><label class="multi-select"><input type="checkbox" data-r="${i}" ${reviewed?'checked':''}><span><strong>${esc(r.name)}</strong></span></label><button type="button" class="secondary multi-edit ${reviewed?'reviewed':''}" data-r="${i}">${reviewed?'✓ Reviewed':'Review'}</button></article>`}).join('');dialog.querySelector('#detailContent').innerHTML=`<button class="close" type="button">×</button><p class="eyebrow">MULTI-RECIPE IMPORT</p><h2>${recipes.length} recipes</h2><p class="small-note">Review the recipes below and select the ones you want to save.</p><div class="multi-list">${cards}</div><div class="detail-actions multi-list-actions"><button class="secondary multi-cancel" id="multiCancel">Cancel</button><button class="primary multi-save" id="multiSave">Save selected</button></div>`;dialog.querySelector('.close').onclick=()=>dialog.close();dialog.querySelector('#multiCancel').onclick=()=>dialog.close();
  dialog.querySelectorAll('.multi-edit').forEach(b=>b.onclick=()=>editOne(id,x,recipes,Number(b.dataset.r)));dialog.querySelector('#multiSave').onclick=async()=>{const selected=[...dialog.querySelectorAll('input[data-r]:checked')].map(e=>Number(e.dataset.r));await saveMany(id,x,recipes.filter((_,i)=>selected.includes(i)));};}
@@ -298,4 +357,4 @@ async function saveMany(id,x,selectedRecipes){
 }
 window.ccMultiReview=extract;
 
-export { ocrImage };
+export { ocrImage, reviewImageImport };
