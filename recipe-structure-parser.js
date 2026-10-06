@@ -1,0 +1,15 @@
+// Shared recipe structure rules for client-side extraction and rescue.
+export const INGREDIENT_HEADING=/^(?:ingredients?|general ingredients?|what you need|ingredient list)\s*:?[ \t]*$/i;
+export const METHOD_HEADING=/^(?:method|directions?|instructions?|preparation|preparations|steps?|cooking steps|recipe steps|cooking instructions|preparation steps|recipe method|cooking method|procedure)\s*:?[ \t]*$/i;
+export const NOTES_HEADING=/^(?:notes?|nutrition|special equipment|make[- ]?ahead(?: and storage)?|video|comments|related articles|more ideas|reviews)\b/i;
+export const GENERIC_HEADING=/^(?:ingredients?|general ingredients?|what you need|ingredient list|method|directions?|instructions?|preparation|preparations|steps?|cooking steps|recipe steps|cooking instructions|preparation steps|recipe method|cooking method|procedure|notes?|nutrition|special equipment|make[- ]?ahead(?: and storage)?|video|comments|related articles|more ideas|reviews|description|servings?|recipe)\s*:?[ \t]*$/i;
+export function parseLabeledRecipeText(raw){
+  const a=String(raw??'').replace(/\r/g,'').split('\n').map(v=>String(v).replace(/[\u0000-\u001F\u007F\uFFFD]/g,' ').replace(/\s+/g,' ').trim()).filter(Boolean);
+  const ii=a.findIndex(x=>INGREDIENT_HEADING.test(x)); if(ii<0)return null;
+  const mi=a.findIndex((x,i)=>i>ii&&METHOD_HEADING.test(x));
+  const ni=mi>=0?a.findIndex((x,i)=>i>mi&&NOTES_HEADING.test(x)):-1;
+  const end=ni>=0?ni:a.length;
+  const before=a.slice(0,ii).filter(x=>!GENERIC_HEADING.test(x));
+  const name=before.find(x=>x.length>=3&&x.length<=160)||'Imported recipe';
+  return {name,description:before.filter(x=>x!==name).join(' '),ingredients:a.slice(ii+1,mi>=0?mi:end),method:mi>=0?a.slice(mi+1,end):[],notes:ni>=0?a.slice(ni+1):[],unassigned:[]};
+}
