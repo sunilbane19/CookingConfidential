@@ -26,7 +26,7 @@ function structuredText(value){
   }catch{return ''}
 }
 async function sourceText(x,status){
-  const structured=structuredText(x.extracted_text);
+  const structured=(()=>{try{const j=typeof x.extracted_text==='string'?JSON.parse(x.extracted_text||'{}'):x.extracted_text;return String(j?.raw_text||'').trim()||structuredText(x.extracted_text)}catch{return structuredText(x.extracted_text)}})();
   if(structured.trim())return structured;
   const name=String(x.file_name||'').toLowerCase(), b=await blob(x);
   if(/\.docx$/i.test(name)||b.type==='application/vnd.openxmlformats-officedocument.wordprocessingml.document'){
