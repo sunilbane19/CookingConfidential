@@ -230,7 +230,7 @@ async function reviewImageImport(id){
       return mod.reviewImportFixed(id);
     }
     await sb.from('cc_import_items').update({extracted_text:JSON.stringify({...parsed0,raw_text:text,quality:q}),extraction_status:'ready',review_status:'pending'}).eq('id',id);
-    const rescue=await import('./rescue-ocr.js?v=1.1.0'); return rescue.rescueImport(id);
+    const rescue=await import('./rescue-ocr.js?v=1.1.1'); return rescue.rescueImport(id);
   }catch(e){
     console.warn('Vision image review failed; using existing OCR as fallback:',e);
     try{
@@ -239,15 +239,15 @@ async function reviewImageImport(id){
       const r=recipes[0];
       const q=checkRecipeQuality(r,{mode:'single'});
       if(q.good){
-        const rescue=await import('./rescue-ocr.js?v=1.1.0');
+        const rescue=await import('./rescue-ocr.js?v=1.1.1');
         // Keep existing image OCR as a fallback only; normal review remains available.
         const item=await getItem(id);
         await sb.from('cc_import_items').update({extracted_text:JSON.stringify({recipe:r,raw_text:(r.ingredients||[]).join('\n')+'\n'+(r.method||[]).join('\n')}),extraction_status:'ready',review_status:'pending'}).eq('id',id);
         const mod=await import('./import-review-fix.js?v=1.4.35'); return mod.reviewImportFixed(id);
       }
-      const rescue=await import('./rescue-ocr.js?v=1.1.0'); return rescue.rescueImport(id);
+      const rescue=await import('./rescue-ocr.js?v=1.1.1'); return rescue.rescueImport(id);
     }catch(fallbackError){
-      const rescue=await import('./rescue-ocr.js?v=1.1.0'); return rescue.rescueImport(id);
+      const rescue=await import('./rescue-ocr.js?v=1.1.1'); return rescue.rescueImport(id);
     }
   }
 }
@@ -260,7 +260,7 @@ async function extract(id,show=true){if(show){dialog.querySelector('#detailConte
     const checks=recipes.map(r=>checkRecipeQuality(r,{mode:'multiple'}));
     if(!recipes.length||!checks.every(q=>q.good)){
       await sb.from('cc_import_items').update({extracted_text:JSON.stringify({version:7,multiple:true,reader:'vision-text',raw_text:visionText,recipes}),extraction_status:'ready',review_status:'pending'}).eq('id',id);
-      const rescue=await import('./rescue-ocr.js?v=1.1.0'); return rescue.rescueImport(id);
+      const rescue=await import('./rescue-ocr.js?v=1.1.1'); return rescue.rescueImport(id);
     }
   }catch(e){
     console.warn('Vision multi-image reader failed; falling back to existing OCR:',e);
