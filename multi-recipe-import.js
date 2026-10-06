@@ -116,7 +116,7 @@ async function parseDocxRawMulti(arrayBuffer,file){
   const recipes=[];
   for(let k=0;k<ti.length;k++){
     const si=ti[k],ei=k+1<ti.length?ti[k+1]:paras.length,body=paras.slice(si+1,ei).map(p=>p.text),r=makeRecipe(paras[si].text);
-    const ih=body.findIndex(x=>/^ingredients?(?:\s+list)?$/i.test(x)),mh=body.findIndex(x=>/^(method|directions?|instructions?|preparation|steps?)$/i.test(x)),nh=body.findIndex(x=>/^notes?$/i.test(x));
+    const ih=body.findIndex(x=>/^ingredients?(?:\s+list)?$/i.test(x)),mh=body.findIndex(x=>/^(method|directions?|instructions?|preparation|preparations|steps?|cooking steps|recipe steps|cooking instructions|preparation steps|recipe method|cooking method|procedure)$/i.test(x)),nh=body.findIndex(x=>/^notes?$/i.test(x));
     if(ih>=0){const e=[mh,nh].filter(n=>n>ih).sort((a,b)=>a-b)[0]??body.length;r.ingredients=cleanIngredientLines(body.slice(ih+1,e));}
     else{const e=mh>=0?mh:(nh>=0?nh:body.length);r.ingredients=cleanIngredientLines(body.slice(0,e));}
     if(mh>=0){const e=nh>mh?nh:body.length;r.method=body.slice(mh+1,e).filter(x=>!isOcrGarbage(x));}
@@ -139,7 +139,7 @@ function parseDocxMulti(html,file){
       const r=makeRecipe(b[0].text);
       const body=b.slice(1).map(x=>x.text);
       const ih=body.findIndex(x=>/^ingredients?(?:\s+list)?$/i.test(x));
-      const mh=body.findIndex(x=>/^(method|directions?|instructions?|preparation|steps?)$/i.test(x));
+      const mh=body.findIndex(x=>/^(method|directions?|instructions?|preparation|preparations|steps?|cooking steps|recipe steps|cooking instructions|preparation steps|recipe method|cooking method|procedure)$/i.test(x));
       const nh=body.findIndex(x=>/^notes?$/i.test(x));
       if(ih>=0){
         const end=[mh,nh].filter(n=>n>ih).sort((a,b)=>a-b)[0]??body.length;
@@ -166,7 +166,7 @@ function parseDocxMulti(html,file){
   }
   const out=[];
   for(let i=0;i<heads.length;i++){
-    const name=heads[i],start=blocks.indexOf(name),end=i+1<heads.length?blocks.indexOf(heads[i+1]):blocks.length,section=blocks.slice(start+1,end),r=makeRecipe(name),ih=section.findIndex(x=>/^ingredients?$/i.test(x)),mh=section.findIndex(x=>/^(method|directions?|instructions?|preparation|steps?)$/i.test(x));
+    const name=heads[i],start=blocks.indexOf(name),end=i+1<heads.length?blocks.indexOf(heads[i+1]):blocks.length,section=blocks.slice(start+1,end),r=makeRecipe(name),ih=section.findIndex(x=>/^ingredients?$/i.test(x)),mh=section.findIndex(x=>/^(method|directions?|instructions?|preparation|preparations|steps?|cooking steps|recipe steps|cooking instructions|preparation steps|recipe method|cooking method|procedure)$/i.test(x));
     if(ih>=0)r.ingredients=cleanIngredientLines(section.slice(ih+1,mh>ih?mh:section.length));
     if(mh>=0)r.method=section.slice(mh+1).filter(x=>!/^notes?|storage|serving suggestions?/i.test(x)).filter(x=>!isOcrGarbage(x));
     out.push(r);
@@ -183,7 +183,7 @@ function parseTextMulti(text,file){
   for(const raw of ls){
     const s=clean(raw);
     if(/^ingredients?$/i.test(s)){if(current)mode='ingredients';continue}
-    if(/^(method|directions?|instructions?|preparation|steps?)$/i.test(s)){if(current)mode='method';continue}
+    if(/^(method|directions?|instructions?|preparation|preparations|steps?|cooking steps|recipe steps|cooking instructions|preparation steps|recipe method|cooking method|procedure)$/i.test(s)){if(current)mode='method';continue}
     if(/^notes?$/i.test(s)){if(current)mode='notes';continue}
     const looksTitle=titleCaseScore(s) && !/^[-•]/.test(s) && !/^d/.test(s) && s.length<=80;
     if(looksTitle){
@@ -203,7 +203,7 @@ function parseTextMulti(text,file){
 }
 function dedupeRecipes(recipes){const seen=new Set();return recipes.filter(r=>{const k=clean(r.name).toLowerCase().replace(/[^a-z0-9]+/g,' ');if(!k||seen.has(k))return false;seen.add(k);return true;});}
 async function recognizeTile(worker,bitmap,x,y,w,h){const insetX=w*.035,insetY=h*.035;const sx=x+insetX,sy=y+insetY,sw=w-insetX*2,sh=h-insetY*2;const scale=4;const canvas=document.createElement('canvas');canvas.width=Math.round(sw*scale);canvas.height=Math.round(sh*scale);const ctx=canvas.getContext('2d');ctx.drawImage(bitmap,sx,sy,sw,sh,0,0,canvas.width,canvas.height);const image=ctx.getImageData(0,0,canvas.width,canvas.height),d=image.data;for(let i=0;i<d.length;i+=4){const yv=.299*d[i]+.587*d[i+1]+.114*d[i+2];const v=Math.max(0,Math.min(255,(yv-128)*1.45+128));d[i]=d[i+1]=d[i+2]=v}ctx.putImageData(image,0,0);return worker.recognize(canvas);}
-function bookHeading(s,kind){const x=clean(s).toLowerCase().replace(/[^a-z ]/g,' ').replace(/\s+/g,' ').trim();if(kind==='ingredients')return /\bingredients?\b/.test(x)||/\bingredient\s+list\b/.test(x);if(kind==='method')return /\b(method|directions?|instructions?|preparation|steps?)\b/.test(x);return false;}
+function bookHeading(s,kind){const x=clean(s).toLowerCase().replace(/[^a-z ]/g,' ').replace(/\s+/g,' ').trim();if(kind==='ingredients')return /\bingredients?\b/.test(x)||/\bingredient\s+list\b/.test(x);if(kind==='method')return /\b(method|directions?|instructions?|preparation|preparations|steps?|cooking steps|recipe steps|cooking instructions|preparation steps|recipe method|cooking method|procedure)\b/.test(x);return false;}
 function bookTitle(lines){const ing=lines.findIndex(l=>bookHeading(l.text,'ingredients'));const pre=ing>0?lines.slice(0,ing):lines.slice(0,8);const useful=pre.filter(l=>{const s=clean(l.text);return s.length>=4&&!/traditional|delicacies|vegetables|vegetable stew/i.test(s)&&!GENERIC.test(s);});if(!useful.length)return'Imported recipe';const upper=useful.filter(l=>/[A-Z]{4,}/.test(l.text));const main=(upper.length?upper:useful).slice(-1)[0].text;return clean(main);}
 async function ocrBookPage(worker,bitmap){const W=bitmap.width,H=bitmap.height;const top=await recognizeTile(worker,bitmap,W*.035,H*.02,W*.93,H*.60);const lower=await recognizeTile(worker,bitmap,W*.035,H*.40,W*.93,H*.56);const topLines=ocrLines(top.data.words||[]),lowLines=ocrLines(lower.data.words||[]);const all=[...topLines,...lowLines].sort((a,b)=>a.y0-b.y0);const ing=all.findIndex(l=>bookHeading(l.text,'ingredients'));const meth=all.findIndex(l=>bookHeading(l.text,'method'));if(ing<0||meth<0||meth<=ing)return null;const r=makeRecipe(bookTitle(all));const subtitle=all.slice(0,ing).map(l=>clean(l.text)).find(s=>/^vegetable stew$/i.test(s));if(subtitle)r.description=subtitle;r.ingredients=cleanIngredientLines(all.slice(ing+1,meth).map(l=>l.text).filter(x=>!/^\d+$/.test(clean(x))));r.method=all.slice(meth+1).map(l=>clean(l.text)).filter(x=>/^(?:\d+\.?\s*)/.test(x)||x.length>25).filter(x=>!isOcrGarbage(x));return r.ingredients.length>=5&&r.method.length>=2?r:null;}function bookFromLines(lines){const ing=lines.findIndex(l=>bookHeading(l.text,'ingredients'));const meth=lines.findIndex(l=>bookHeading(l.text,'method'));if(ing<0||meth<0||meth<=ing)return null;const r=makeRecipe(bookTitle(lines));const subtitle=lines.slice(0,ing).map(l=>clean(l.text)).find(s=>/^vegetable stew$/i.test(s));if(subtitle)r.description=subtitle;r.ingredients=cleanIngredientLines(lines.slice(ing+1,meth).map(l=>l.text).filter(x=>!/^\d+$/.test(clean(x))));r.method=lines.slice(meth+1).map(l=>clean(l.text)).filter(x=>/^(?:\d+\.?\s*)/.test(x)||x.length>25).filter(x=>!isOcrGarbage(x));return r.ingredients.length>=5&&r.method.length>=2?r:null;}
 
@@ -230,7 +230,7 @@ async function reviewImageImport(id){
       return mod.reviewImportFixed(id);
     }
     await sb.from('cc_import_items').update({extracted_text:JSON.stringify({...parsed0,raw_text:text,quality:q}),extraction_status:'ready',review_status:'pending'}).eq('id',id);
-    const rescue=await import('./rescue-ocr.js?v=1.0.2'); return rescue.rescueImport(id);
+    const rescue=await import('./rescue-ocr.js?v=1.1.0'); return rescue.rescueImport(id);
   }catch(e){
     console.warn('Vision image review failed; using existing OCR as fallback:',e);
     try{
@@ -239,15 +239,15 @@ async function reviewImageImport(id){
       const r=recipes[0];
       const q=checkRecipeQuality(r,{mode:'single'});
       if(q.good){
-        const rescue=await import('./rescue-ocr.js?v=1.0.2');
+        const rescue=await import('./rescue-ocr.js?v=1.1.0');
         // Keep existing image OCR as a fallback only; normal review remains available.
         const item=await getItem(id);
         await sb.from('cc_import_items').update({extracted_text:JSON.stringify({recipe:r,raw_text:(r.ingredients||[]).join('\n')+'\n'+(r.method||[]).join('\n')}),extraction_status:'ready',review_status:'pending'}).eq('id',id);
         const mod=await import('./import-review-fix.js?v=1.4.35'); return mod.reviewImportFixed(id);
       }
-      const rescue=await import('./rescue-ocr.js?v=1.0.2'); return rescue.rescueImport(id);
+      const rescue=await import('./rescue-ocr.js?v=1.1.0'); return rescue.rescueImport(id);
     }catch(fallbackError){
-      const rescue=await import('./rescue-ocr.js?v=1.0.2'); return rescue.rescueImport(id);
+      const rescue=await import('./rescue-ocr.js?v=1.1.0'); return rescue.rescueImport(id);
     }
   }
 }
@@ -260,7 +260,7 @@ async function extract(id,show=true){if(show){dialog.querySelector('#detailConte
     const checks=recipes.map(r=>checkRecipeQuality(r,{mode:'multiple'}));
     if(!recipes.length||!checks.every(q=>q.good)){
       await sb.from('cc_import_items').update({extracted_text:JSON.stringify({version:7,multiple:true,reader:'vision-text',raw_text:visionText,recipes}),extraction_status:'ready',review_status:'pending'}).eq('id',id);
-      const rescue=await import('./rescue-ocr.js?v=1.0.2'); return rescue.rescueImport(id);
+      const rescue=await import('./rescue-ocr.js?v=1.1.0'); return rescue.rescueImport(id);
     }
   }catch(e){
     console.warn('Vision multi-image reader failed; falling back to existing OCR:',e);
