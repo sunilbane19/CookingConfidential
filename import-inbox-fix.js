@@ -39,13 +39,13 @@ async function review(id,isImage,isMulti=false){try{
   // Multi-recipe must take precedence over the legacy Rubs-specific image reviewer.
   // The Rubs reviewer is only for the dedicated Rubs workflow, not arbitrary PNG/JPG uploads.
   if(isMulti){
-    await import('./multi-recipe-import.js?v=1.3.15');
+    await import('./multi-recipe-import.js?v=1.3.16');
     if(typeof window.ccMultiReview!=='function')throw Error('Multi-recipe reviewer could not be loaded.');
     return window.ccMultiReview(id,true);
   }
   if(isImage){
     try{
-      const mod=await import('./multi-recipe-import.js?v=1.3.15');
+      const mod=await import('./multi-recipe-import.js?v=1.3.16');
       if(typeof mod.reviewImageImport==='function')return mod.reviewImageImport(id);
       if(typeof window.ccMultiReview==='function')return window.ccMultiReview(id,true);
     }catch(imageError){
