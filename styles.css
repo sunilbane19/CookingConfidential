@@ -201,3 +201,6 @@ dialog .dialog-card{box-sizing:border-box;max-width:100%;min-width:0;overflow-x:
 .cc-rescue-section-head{display:flex;justify-content:space-between;gap:12px;align-items:baseline;font:12px Arial;color:var(--muted);margin-bottom:8px}.cc-rescue-section-head strong{color:var(--ink)}
 .cc-rescue-line{display:flex;align-items:flex-start;gap:9px;margin:0!important;padding:8px 0;border-top:1px solid var(--line);font:13px Arial;color:var(--ink)}.cc-rescue-line input{width:17px!important;margin:1px 0 0!important;flex:0 0 auto}.cc-rescue-move{display:flex;gap:7px;align-items:center;margin-top:12px}.cc-rescue-move select{min-width:0;flex:1;border:1px solid var(--line);border-radius:8px;padding:8px;background:#fff;font:12px Arial}.cc-rescue-move button{white-space:nowrap;padding:9px 12px}
 @media(max-width:700px){.cc-rescue-move{flex-wrap:wrap}.cc-rescue-move select{flex:1 1 45%}.cc-rescue-move button{flex:1 1 100%}}
+
+/* Rescue editor: show the emergency unassigned-lines panel only when it contains lines. */
+.cc-rescue-unassigned:has(#ccRescueLines:empty){display:none!important}
