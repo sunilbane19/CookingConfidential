@@ -39,13 +39,13 @@ async function review(id,isImage,isMulti=false){try{
   // Multi-recipe must take precedence over the legacy Rubs-specific image reviewer.
   // The Rubs reviewer is only for the dedicated Rubs workflow, not arbitrary PNG/JPG uploads.
   if(isMulti){
-    await import('./multi-recipe-import.js?v=1.3.14');
+    await import('./multi-recipe-import.js?v=1.3.15');
     if(typeof window.ccMultiReview!=='function')throw Error('Multi-recipe reviewer could not be loaded.');
     return window.ccMultiReview(id,true);
   }
   if(isImage){
     try{
-      const mod=await import('./multi-recipe-import.js?v=1.3.14');
+      const mod=await import('./multi-recipe-import.js?v=1.3.15');
       if(typeof mod.reviewImageImport==='function')return mod.reviewImageImport(id);
       if(typeof window.ccMultiReview==='function')return window.ccMultiReview(id,true);
     }catch(imageError){
@@ -55,7 +55,7 @@ async function review(id,isImage,isMulti=false){try{
     }
     throw Error('Image reviewer could not be loaded.');
   }
-  const mod=await import('./import-review-fix.js?v=1.4.34');
+  const mod=await import('./import-review-fix.js?v=1.4.35');
   if(typeof mod.reviewImportFixed!=='function')throw Error('Review module could not be loaded.');
   return mod.reviewImportFixed(id);
 }catch(e){console.error('Cooking Confidential review:',e);try{const rescue=await import('./rescue-ocr.js?v=1.0.1');return rescue.rescueImport(id)}catch(_){alert(e.message||'Could not open review.')}}}
