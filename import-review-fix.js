@@ -177,7 +177,7 @@ if(!quality.good && pdf){
 }
 if(!quality.good){
   console.warn('Cooking Confidential quality gate sent import to rescue:',quality);
-  try{const rescue=await import('./rescue-ocr.js?v=1.0.2');return rescue.rescueImport(id)}catch(e){console.warn('Cooking Confidential universal rescue:',e)}
+  try{const rescue=await import('./rescue-ocr.js?v=1.1.0');return rescue.rescueImport(id)}catch(e){console.warn('Cooking Confidential universal rescue:',e)}
 }
 window.ccImportReviewActive=false;showReview(x,id)}
 document.addEventListener('click',async event=>{const button=event.target.closest('.review-btn');if(!button)return;event.preventDefault();event.stopImmediatePropagation();const id=Number(button.dataset.id);if(button.dataset.multi==='1'){try{const mod=await import('./multi-recipe-import.js?v=1.3.6');if(typeof mod.ccMultiReview==='function')return mod.ccMultiReview(id);if(typeof window.ccMultiReview==='function')return window.ccMultiReview(id);throw Error('Multi-recipe reviewer could not be loaded.')}catch(e){return window.ccShowError(e?.message||'Could not open multi-recipe review.','Multi-recipe review failed')}}reviewImportFixed(id)},true);
