@@ -50,7 +50,7 @@ async function review(id,isImage,isMulti=false){try{
       if(typeof window.ccMultiReview==='function')return window.ccMultiReview(id,true);
     }catch(imageError){
       console.warn('Generic image review failed; using universal rescue:',imageError);
-      const rescue=await import('./rescue-ocr.js?v=1.2.1');
+      const rescue=await import('./rescue-ocr.js?v=1.2.2');
       return rescue.rescueImport(id);
     }
     throw Error('Image reviewer could not be loaded.');
