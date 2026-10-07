@@ -50,12 +50,12 @@ async function review(id,isImage,isMulti=false){try{
       if(typeof window.ccMultiReview==='function')return window.ccMultiReview(id,true);
     }catch(imageError){
       console.warn('Generic image review failed; using universal rescue:',imageError);
-      const rescue=await import('./rescue-ocr.js?v=1.2.0');
+      const rescue=await import('./rescue-ocr.js?v=1.2.1');
       return rescue.rescueImport(id);
     }
     throw Error('Image reviewer could not be loaded.');
   }
-  const mod=await import('./import-review-fix.js?v=1.4.38');
+  const mod=await import('./import-review-fix.js?v=1.4.39');
   if(typeof mod.reviewImportFixed!=='function')throw Error('Review module could not be loaded.');
   return mod.reviewImportFixed(id);
 }catch(e){console.error('Cooking Confidential review:',e);return window.ccShowError?.(e?.message||'Could not open review.','Review could not be opened')||alert(e?.message||'Could not open review.')}}
