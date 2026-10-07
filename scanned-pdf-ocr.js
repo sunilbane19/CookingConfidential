@@ -14,7 +14,16 @@ function setProgress(text){const d=document.querySelector('#detailContent');if(d
 function normaliseOcr(text){let a=lines(text);a=a.map(x=>x.replace(/\s*\|\s*/g,' ').replace(/\bIbs\b/gi,'lbs').replace(/\bIb\b/gi,'lb').replace(/\b1\s*\/\s*2\b/g,'½').replace(/\b1\s*\/\s*4\b/g,'¼').replace(/\b3\s*\/\s*4\b/g,'¾').replace(/\s{2,}/g,' ').trim()).filter(Boolean);const out=[];for(const x of a){if(out.some(y=>y.toLowerCase()===x.toLowerCase()))continue;out.push(x)}return out}
 function deriveRecipe(text,fileName){
   const raw=String(text??'').replace(/\r/g,'');
-  const a=raw.split('\n').map(x=>clean(x)).filter(Boolean);
+  // OCR can occasionally return an otherwise excellent page as one long line.
+  // Restore the structural boundaries before looking for Ingredients/Method.
+  const repaired=raw
+    .replace(/\s+(?=Ingredients\\b)/gi,'\n')
+    .replace(/\s+(?=Step[- ]by[- ]step(?: [a-z0-9&/ -]+)? instructions\\b)/gi,'\n')
+    .replace(/\s+[•·]\s*/g,'\n+ ')
+    .replace(/\s+\+\s+(?=[A-Za-z])/g,'\n+ ')
+    .replace(/\s+(?=\\d+\\.\\s+[A-Z])/g,'\n')
+    .replace(/\s+(?=---\\s*Page\\s+\\d+\\s*---)/gi,'\n');
+  const a=repaired.split('\n').map(x=>clean(x)).filter(Boolean);
   const stripped=a.filter(x=>!/^[-=]{2,}\s*Page\s+\d+/i.test(x)&&!/^Page\s+\d+$/i.test(x));
   const heading=x=>String(x||'').replace(/^#{1,6}\s*/,'').replace(/\s*[:\-–—]\s*$/,'').trim();
   const isIng=x=>/^(?:ingredients?|what you need|ingredients required|shopping list)\s*:?\s*$/i.test(heading(x));
