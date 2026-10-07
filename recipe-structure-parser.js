@@ -1,8 +1,8 @@
 // Shared recipe structure rules for client-side extraction and rescue.
 export const INGREDIENT_HEADING=/^(?:ingredients?|general ingredients?|what you need|ingredient list)\s*:?[ \t]*$/i;
-export const METHOD_HEADING=/^(?:method|directions?|instructions?|preparation|preparations|steps?|cooking steps|recipe steps|cooking instructions|preparation steps|recipe method|cooking method|procedure)\s*:?[ \t]*$/i;
+export const METHOD_HEADING=/^(?:method|directions?|instructions?|preparation|preparations|steps?|cooking steps|recipe steps|cooking instructions|step[- ]by[- ]step(?: [a-z0-9&/ -]+)? instructions?|preparation steps|recipe method|cooking method|procedure)\s*:?[ \t]*$/i;
 export const NOTES_HEADING=/^(?:notes?|nutrition|special equipment|make[- ]?ahead(?: and storage)?|video|comments|related articles|more ideas|reviews)\b/i;
-export const GENERIC_HEADING=/^(?:ingredients?|general ingredients?|what you need|ingredient list|method|directions?|instructions?|preparation|preparations|steps?|cooking steps|recipe steps|cooking instructions|preparation steps|recipe method|cooking method|procedure|notes?|nutrition|special equipment|make[- ]?ahead(?: and storage)?|video|comments|related articles|more ideas|reviews|description|servings?|recipe)\s*:?[ \t]*$/i;
+export const GENERIC_HEADING=/^(?:ingredients?|general ingredients?|what you need|ingredient list|method|directions?|instructions?|preparation|preparations|steps?|cooking steps|recipe steps|cooking instructions|step[- ]by[- ]step(?: [a-z0-9&/ -]+)? instructions?|preparation steps|recipe method|cooking method|procedure|notes?|nutrition|special equipment|make[- ]?ahead(?: and storage)?|video|comments|related articles|more ideas|reviews|description|servings?|recipe)\s*:?[ \t]*$/i;
 export function parseLabeledRecipeText(raw){
   const a=String(raw??'').replace(/\r/g,'').split('\n').map(v=>String(v).replace(/[\u0000-\u001F\u007F\uFFFD]/g,' ').replace(/\s+/g,' ').trim()).filter(Boolean);
   const ii=a.findIndex(x=>INGREDIENT_HEADING.test(x)); if(ii<0)return null;
