@@ -50,15 +50,15 @@ async function review(id,isImage,isMulti=false){try{
       if(typeof window.ccMultiReview==='function')return window.ccMultiReview(id,true);
     }catch(imageError){
       console.warn('Generic image review failed; using universal rescue:',imageError);
-      const rescue=await import('./rescue-ocr.js?v=1.1.2');
+      const rescue=await import('./rescue-ocr.js?v=1.2.0');
       return rescue.rescueImport(id);
     }
     throw Error('Image reviewer could not be loaded.');
   }
-  const mod=await import('./import-review-fix.js?v=1.4.37');
+  const mod=await import('./import-review-fix.js?v=1.4.38');
   if(typeof mod.reviewImportFixed!=='function')throw Error('Review module could not be loaded.');
   return mod.reviewImportFixed(id);
-}catch(e){console.error('Cooking Confidential review:',e);try{const rescue=await import('./rescue-ocr.js?v=1.1.2');return rescue.rescueImport(id)}catch(_){alert(e.message||'Could not open review.')}}}
+}catch(e){console.error('Cooking Confidential review:',e);return window.ccShowError?.(e?.message||'Could not open review.','Review could not be opened')||alert(e?.message||'Could not open review.')}}
 function ensureDeleteDialog(){let d=document.querySelector('#ccDeleteDialog');if(d)return d;d=document.createElement('dialog');d.id='ccDeleteDialog';d.innerHTML='<form method="dialog" class="dialog-card cc-delete-dialog"><p class="eyebrow">REMOVE IMPORT</p><h2>Delete this upload?</h2><p class="small-note">This removes the uploaded file from the Import Inbox. It does not delete any recipe already saved from it.</p><div class="dialog-actions"><button class="secondary" value="cancel">Cancel</button><button class="secondary danger" value="delete">Delete</button></div></form>';document.body.appendChild(d);return d}
 function confirmDeleteImport(){return new Promise(resolve=>{const d=ensureDeleteDialog();let settled=false;const finish=value=>{if(settled)return;settled=true;d.removeEventListener('close',onClose);resolve(value)},onClose=()=>finish(d.returnValue==='delete');d.addEventListener('close',onClose);d.showModal()})}
 async function deleteImport(id){const d=ensureDeleteDialog();d.querySelector('.eyebrow').textContent='REMOVE IMPORT';d.querySelector('h2').textContent='Delete this upload?';d.querySelector('.small-note').textContent='This removes the uploaded file from the Import Inbox. It does not delete any recipe already saved from it.';if(!(await confirmDeleteImport()))return;try{const{data:item,error}=await sb.from('cc_import_items').select('*').eq('id',id).single();if(error||!item)throw Error(error?.message||'Import item not found.');const path=item.file_path||item.original_file_path;if(path){const{error:storageError}=await sb.storage.from('cooking-confidential').remove([path]);if(storageError)throw Error(storageError.message)}const{error:deleteError}=await sb.from('cc_import_items').delete().eq('id',id);if(deleteError)throw Error(deleteError.message);if(item.import_id){const{data:remaining,error:remainingError}=await sb.from('cc_import_items').select('id').eq('import_id',item.import_id).limit(1);if(remainingError)throw Error(remainingError.message);if(!remaining?.length)await sb.from('cc_imports').delete().eq('id',item.import_id)}if(Array.isArray(window.ccImportItems)){window.ccImportItems=window.ccImportItems.filter(x=>Number(x?.dbId)!==Number(id));window.dispatchEvent(new CustomEvent('cc:import-queue-changed'));}await loadInbox()}catch(e){alert('Could not delete upload: '+(e.message||'Please try again.'))}}
