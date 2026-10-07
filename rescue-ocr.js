@@ -59,11 +59,51 @@ async function sourceText(x,status){
 function field(r,k){return k==='name'||k==='description'?clean(r[k]):r[k].join('\n')}
 function render(id,x,s){const multi=s.recipes.length>1;const heading=multi?'Review and build your recipe(s)':'Review and build your recipe';const recipeLabel=multi?'Recipe '+1:'Recipe';const unassigned=s.unassigned||[];const other=unassigned.length?'<section class="cc-rescue-unassigned"><div class="cc-rescue-section-head"><strong>Other extracted lines</strong><span>Select lines and move them</span></div><div id="ccRescueLines">'+unassigned.map((v,i)=>'<label class="cc-rescue-line"><input type="checkbox" data-line="'+i+'"><span>'+esc(v)+'</span></label>').join('')+'</div><div class="cc-rescue-move"><select id="ccRescueTarget">'+s.recipes.map((r,i)=>'<option value="'+i+'">Recipe '+(i+1)+': '+esc(r.name)+'</option>').join('')+'</select><select id="ccRescueField"><option value="name">Title</option><option value="description">Description</option><option value="ingredients" selected>Ingredients</option><option value="method">Method</option><option value="notes">Notes</option></select><button class="secondary" id="ccRescueMoveBtn">Move selected</button></div></section>':'';dialog.querySelector('#detailContent').innerHTML='<button class="close" id="ccRescueClose">×</button><p class="eyebrow">RESCUE EXTRACTION</p><h2>'+heading+'</h2><p class="small-note">Last-resort OCR. Edit freely and move any genuinely unassigned lines into the correct field before saving.</p>'+(multi?'<div class="cc-rescue-toolbar"><span>'+s.recipes.length+' recipes</span></div>':'')+'<div id="ccRescueRecipes">'+s.recipes.map((r,i)=>'<article class="cc-rescue-recipe" data-r="'+i+'"><div class="cc-rescue-recipe-head"><strong>'+(multi?'Recipe '+(i+1):'Recipe')+'</strong>'+(multi?'<button class="secondary cc-rescue-remove" data-r="'+i+'">Remove</button>':'')+'</div><label>Recipe name<input data-f="name" value="'+esc(r.name)+'"></label><label>Description<textarea data-f="description" rows="3">'+esc(r.description)+'</textarea></label><label>Ingredients<textarea data-f="ingredients" rows="7">'+esc(field(r,'ingredients'))+'</textarea></label><label>Method<textarea data-f="method" rows="7">'+esc(field(r,'method'))+'</textarea></label><label>My notes<textarea data-f="notes" rows="4">'+esc(field(r,'notes'))+'</textarea></label></article>').join('')+'</div>'+other+'<div class="detail-actions"><button class="secondary" id="ccRescueCancel">Cancel</button><button class="primary" id="ccRescueSave">Save '+(multi?'recipe(s)':'recipe')+'</button></div>';dialog.showModal();
  const sync=()=>dialog.querySelectorAll('.cc-rescue-recipe').forEach(c=>{const r=s.recipes[+c.dataset.r];r.name=clean(c.querySelector('[data-f=name]').value);r.description=clean(c.querySelector('[data-f=description]').value);['ingredients','method','notes'].forEach(k=>r[k]=c.querySelector('[data-f='+k+']').value.split(/\n+/).map(clean).filter(Boolean))});
- dialog.querySelectorAll('[data-f]').forEach(e=>e.oninput=sync);
+ dialog.querySelectorAll('[data-f]').forEach(e=>e.addEventListener('input',sync));
  
- dialog.querySelectorAll('.cc-rescue-remove').forEach(b=>b.onclick=()=>{sync();s.recipes.splice(+b.dataset.r,1);if(!s.recipes.length)s.recipes.push({name:'New recipe',description:'',ingredients:[],method:[],notes:[],unassigned:[]});render(id,x,s)});
- dialog.querySelector('#ccRescueMoveBtn').onclick=()=>{sync();const ri=+dialog.querySelector('#ccRescueTarget').value,f=dialog.querySelector('#ccRescueField').value,ids=[...dialog.querySelectorAll('[data-line]:checked')].map(e=>+e.dataset.line).sort((a,b)=>b-a),vals=ids.map(i=>s.unassigned[i]).reverse();if(!ids.length)return;if(f==='name')s.recipes[ri].name=vals.join(' ');else if(f==='description')s.recipes[ri].description=vals.join(' ');else s.recipes[ri][f].push(...vals);ids.forEach(i=>s.unassigned.splice(i,1));render(id,x,s)};
- dialog.querySelector('#ccRescueClose').onclick=dialog.querySelector('#ccRescueCancel').onclick=()=>dialog.close();
- dialog.querySelector('#ccRescueSave').onclick=async()=>{sync();const valid=s.recipes.filter(r=>r.name&&(r.ingredients.length||r.method.length));if(!valid.length)return window.ccShowError?.('Create at least one recipe with a title and recipe content.','Nothing to save')||alert('Nothing to save');const{data:{user}}=await sb.auth.getUser();if(!user)return window.ccShowError?.('Please sign in again.','Sign-in required')||alert('Please sign in again.');const rows=valid.map(r=>({name:r.name,description:r.description||null,ingredients:{html:r.ingredients.map(v=>'<div>'+esc(v)+'</div>').join('')},method:r.method.join('\n'),personal_notes:r.notes.join('\n')||null,source_type:'file',source_title:x.file_name||'OCR rescue',created_by:user.id,visibility:'private',original_file_path:x.file_path||null,original_file_name:x.file_name||null,original_mime_type:x.mime_type||null}));const q=await sb.from('cc_recipes').insert(rows);if(q.error)return window.ccShowError?.(q.error.message,'Could not save recipes')||alert(q.error.message);await sb.from('cc_import_items').delete().eq('id',id);dialog.close();await window.ccReloadRecipes?.();await window.ccReloadImportInbox?.()};
+ // iOS/Gmail in-app browsers can fail to synthesize a click for dynamically
+ // inserted dialog buttons. Bind both click and touchend, with a guard so the
+ // same action is never executed twice.
+ const bindRescueAction=(button,handler)=>{
+   if(!button)return;
+   button.type='button';
+   let handled=false;
+   const run=e=>{
+     if(e){e.preventDefault();e.stopPropagation();}
+     if(handled)return;
+     handled=true;
+     Promise.resolve(handler(e)).finally(()=>setTimeout(()=>{handled=false},700));
+   };
+   button.addEventListener('click',run);
+   button.addEventListener('touchend',e=>{
+     e.preventDefault();
+     e.stopPropagation();
+     run(e);
+   },{passive:false});
+ };
+ 
+ dialog.querySelectorAll('.cc-rescue-remove').forEach(b=>bindRescueAction(b,()=>{sync();s.recipes.splice(+b.dataset.r,1);if(!s.recipes.length)s.recipes.push({name:'New recipe',description:'',ingredients:[],method:[],notes:[],unassigned:[]});render(id,x,s)}));
+ bindRescueAction(dialog.querySelector('#ccRescueMoveBtn'),()=>{sync();const ri=+dialog.querySelector('#ccRescueTarget').value,f=dialog.querySelector('#ccRescueField').value,ids=[...dialog.querySelectorAll('[data-line]:checked')].map(e=>+e.dataset.line).sort((a,b)=>b-a),vals=ids.map(i=>s.unassigned[i]).reverse();if(!ids.length)return;if(f==='name')s.recipes[ri].name=vals.join(' ');else if(f==='description')s.recipes[ri].description=vals.join(' ');else s.recipes[ri][f].push(...vals);ids.forEach(i=>s.unassigned.splice(i,1));render(id,x,s)});
+ bindRescueAction(dialog.querySelector('#ccRescueClose'),()=>dialog.close());
+ bindRescueAction(dialog.querySelector('#ccRescueCancel'),()=>dialog.close());
+ bindRescueAction(dialog.querySelector('#ccRescueSave'),async()=>{
+   sync();
+   const valid=s.recipes.filter(r=>r.name&&(r.ingredients.length||r.method.length));
+   if(!valid.length)return window.ccShowError?.('Create at least one recipe with a title and recipe content.','Nothing to save')||alert('Nothing to save');
+   const{data:{user}}=await sb.auth.getUser();
+   if(!user)return window.ccShowError?.('Please sign in again.','Sign-in required')||alert('Please sign in again.');
+   const rows=valid.map(r=>({name:r.name,description:r.description||null,ingredients:{html:r.ingredients.map(v=>'<div>'+esc(v)+'</div>').join('')},method:r.method.join('\n'),personal_notes:r.notes.join('\n')||null,source_type:'file',source_title:x.file_name||'OCR rescue',created_by:user.id,visibility:'private',original_file_path:x.file_path||null,original_file_name:x.file_name||null,original_mime_type:x.mime_type||null}));
+   const saveButton=dialog.querySelector('#ccRescueSave');
+   if(saveButton){saveButton.disabled=true;saveButton.textContent='Saving…';}
+   const q=await sb.from('cc_recipes').insert(rows);
+   if(q.error){
+     if(saveButton){saveButton.disabled=false;saveButton.textContent='Save recipe';}
+     return window.ccShowError?.(q.error.message,'Could not save recipes')||alert(q.error.message);
+   }
+   await sb.from('cc_import_items').delete().eq('id',id);
+   dialog.close();
+   await window.ccReloadRecipes?.();
+   await window.ccReloadImportInbox?.();
+ });
 }
 export async function rescueImport(id){const x=await item(id);dialog.querySelector('#detailContent').innerHTML='<div class="dialog-card"><p class="eyebrow">RESCUE EXTRACTION</p><h2>Making a best-effort recovery…</h2><p class="small-note" id="ccRescueStatus">Trying the original extracted text first.</p></div>';dialog.showModal();const st=t=>{const e=document.querySelector('#ccRescueStatus');if(e)e.textContent=t};let raw='';try{raw=await sourceText(x,st)}catch(e){console.warn('Cooking Confidential universal rescue source read:',e)}if(!raw.trim())raw=String(x.file_name||'Imported recipe').replace(/\.[^.]+$/,'').replace(/[_-]+/g,' ');const rs=parse(raw).map(norm);const recipes=rs.length?rs:[norm({name:String(x.file_name||'Imported recipe').replace(/\.[^.]+$/,'').replace(/[_-]+/g,' '),description:'',ingredients:[],method:[],notes:[],unassigned:[]})];const un=recipes.flatMap(r=>r.unassigned||[]);render(id,x,{recipes,unassigned:un})}
