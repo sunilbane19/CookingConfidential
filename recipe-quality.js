@@ -4,11 +4,20 @@
 const words = s => String(s ?? '').trim().split(/\s+/).filter(Boolean);
 const letters = s => (String(s ?? '').match(/[A-Za-zÀ-ÖØ-öø-ÿ]/g) || []).length;
 const junkChars = s => (String(s ?? '').match(/[\uFFFD©®™|¦]{1,}/g) || []).length;
-const repeatedFragments = s => {
-  const ls = String(s ?? '').split(/\n+/).map(x=>x.trim().toLowerCase()).filter(Boolean);
-  const seen = new Set();
+
+// Check repeated lines within each recipe section, not across sections.
+// A title repeated as the first line of a method is common source material
+// and must not make an otherwise good recipe fail the quality gate.
+const repeatedFragments = (...sections) => {
   let repeats = 0;
-  for (const x of ls) { if (seen.has(x)) repeats++; seen.add(x); }
+  for (const section of sections) {
+    const ls = String(section ?? '').split(/\n+/).map(x=>x.trim().toLowerCase()).filter(Boolean);
+    const seen = new Set();
+    for (const x of ls) {
+      if (seen.has(x)) repeats++;
+      seen.add(x);
+    }
+  }
   return repeats;
 };
 const looksLikeIngredient = s => {
@@ -38,14 +47,12 @@ export function checkRecipeQuality(recipe, {mode='single'}={}) {
   const letterRatio=letters(all)/Math.max(1,all.length);
   if(letterRatio>=0.45) score+=10; else reasons.push('low_readable_text_ratio');
   if(junkChars(all)===0) score+=5; else reasons.push('ocr_garbage_characters');
-  if(repeatedFragments(all)===0) score+=5; else reasons.push('repeated_lines');
+  if(repeatedFragments(description,ingredients.join('\n'),method,notes)===0) score+=5; else reasons.push('repeated_lines');
   const titleLooksContaminated = name.length>70 || /\b(?:ingredients?|method|directions?|instructions?)\b/i.test(name);
   if(titleLooksContaminated) reasons.push('title_contains_recipe_content');
   const ingredientInMethod = ingredients.some(i => method.toLowerCase().includes(String(i).trim().toLowerCase()) && String(i).trim().length>12);
   if(ingredientInMethod) reasons.push('possible_section_contamination');
   const good = reasons.length===0 && score>=85;
-  // A structurally plausible result may still be uncertain. In either case,
-  // the caller decides whether to show Review or Rescue; this function never edits.
   return {good, score, reasons, metrics:{ingredientCount:ingredients.length,plausibleIngredientCount:plausibleIngredients,methodWords,letterRatio,instructionLines}};
 }
 export default checkRecipeQuality;
