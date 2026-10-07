@@ -127,7 +127,7 @@ async function showReview(x,id){
     : '';
   const dietaryOptions=['Vegetarian','Vegan','Pescatarian','Non-Veg','Gluten-Free','Dairy-Free','Egg-Free','Nut-Free','Low-Carb','Keto'];
   const editor=createGenericEditor({
-    dialog,
+    dialog:detailDialog,
     eyebrow:'REVIEW IMPORT',
     title:'Check the recipe before saving',
     sourceHtml,
