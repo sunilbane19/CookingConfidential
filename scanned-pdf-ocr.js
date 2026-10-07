@@ -16,13 +16,16 @@ function deriveRecipe(text,fileName){
   const raw=String(text??'').replace(/\r/g,'');
   // OCR can occasionally return an otherwise excellent page as one long line.
   // Restore the structural boundaries before looking for Ingredients/Method.
+  // Keep this vocabulary aligned with the parser's accepted section headings;
+  // do not split on arbitrary capitalised words because recipe descriptions
+  // and ingredient names can contain them.
+  const structuralHeading=/(?:ingredients?|ingredient list|what you need|ingredients required|shopping list|directions?|instructions?|method|preparation|preparations|steps?|cooking steps|recipe steps|cooking instructions|step[- ]by[- ]step(?: [a-z0-9&/ -]+)? instructions?|preparation steps|recipe method|cooking method|procedure|special equipment|notes?|make-ahead and storage|nutrition(?: facts)?|serving suggestions?|recipe tips?)\\b/i;
   const repaired=raw
-    .replace(/\s+(?=Ingredients\\b)/gi,'\n')
-    .replace(/\s+(?=Step[- ]by[- ]step(?: [a-z0-9&/ -]+)? instructions\\b)/gi,'\n')
-    .replace(/\s+[•·]\s*/g,'\n+ ')
-    .replace(/\s+\+\s+(?=[A-Za-z])/g,'\n+ ')
-    .replace(/\s+(?=\\d+\\.\\s+[A-Z])/g,'\n')
-    .replace(/\s+(?=---\\s*Page\\s+\\d+\\s*---)/gi,'\n');
+    .replace(new RegExp('\\\\s+(?='+structuralHeading.source+')','gi'),'\\n')
+    .replace(/\\s+[•·]\\s*/g,'\\n+ ')
+    .replace(/\\s+\\+\\s+(?=[A-Za-z])/g,'\\n+ ')
+    .replace(/\\s+(?=\\d+\\.\\s+[A-Z])/g,'\\n')
+    .replace(/\\s+(?=---\\s*Page\\s+\\d+\\s*---)/gi,'\\n');
   const a=repaired.split('\n').map(x=>clean(x)).filter(Boolean);
   const stripped=a.filter(x=>!/^[-=]{2,}\s*Page\s+\d+/i.test(x)&&!/^Page\s+\d+$/i.test(x));
   const heading=x=>String(x||'').replace(/^#{1,6}\s*/,'').replace(/\s*[:\-–—]\s*$/,'').trim();
