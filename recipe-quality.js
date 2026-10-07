@@ -50,7 +50,17 @@ export function checkRecipeQuality(recipe, {mode='single'}={}) {
   if(repeatedFragments(description,ingredients.join('\n'),method,notes)===0) score+=5; else reasons.push('repeated_lines');
   const titleLooksContaminated = name.length>70 || /\b(?:ingredients?|method|directions?|instructions?)\b/i.test(name);
   if(titleLooksContaminated) reasons.push('title_contains_recipe_content');
-  const ingredientInMethod = ingredients.some(i => method.toLowerCase().includes(String(i).trim().toLowerCase()) && String(i).trim().length>12);
+  // Only flag a duplicated ingredient when it looks like a complete ingredient
+  // entry. Short ingredient names such as "Ginger-Garlic", "salt" or "onion"
+  // naturally appear in cooking instructions and are not section contamination.
+  const meaningfulIngredient = ingredients.filter(i => {
+    const s=String(i).trim();
+    return s.length>=20
+      || /[:\\d½¼¾⅓⅔⅛⅜⅝⅞]/.test(s)
+      || /\\b(?:cup|cups|tbsp|tsp|tablespoons?|teaspoons?|oz|ounces?|lb|lbs|grams?|kg|ml|cloves?|slices?|pieces?)\\b/i.test(s);
+  });
+  const methodLower=method.toLowerCase();
+  const ingredientInMethod = meaningfulIngredient.some(i => methodLower.includes(String(i).trim().toLowerCase()));
   if(ingredientInMethod) reasons.push('possible_section_contamination');
   const good = reasons.length===0 && score>=85;
   return {good, score, reasons, metrics:{ingredientCount:ingredients.length,plausibleIngredientCount:plausibleIngredients,methodWords,letterRatio,instructionLines}};
