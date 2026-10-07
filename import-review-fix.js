@@ -77,36 +77,42 @@ function recipeNeedsUniversalRescue(x){
 async function invokeExtract(itemId,textOverride=null){
   const {data:{session}}=await supabase.auth.getSession();
   if(!session?.access_token)return {data:null,error:new Error('Your sign-in session has expired. Please sign in again.')};
-  const controller=new AbortController();
-  const timer=setTimeout(()=>controller.abort(),90000);
-  try{
-    const res=await fetch(SUPABASE_URL+'/functions/v1/cc-import-extract-staging-v2',{
-      method:'POST',
-      headers:{
-        'Content-Type':'application/json',
-        'Authorization':'Bearer '+session.access_token,
-        'apikey':session.access_token
-      },
-      body:JSON.stringify({import_item_id:Number(itemId),...(textOverride?{text_override:String(textOverride)}:{})}),
-      signal:controller.signal
-    });
-    const raw=await res.text();
-    let body=null;
-    try{body=raw?JSON.parse(raw):null}catch{}
-    if(!res.ok){
-      const message=res.status===546||body?.error?.includes?.('compute resources')
-        ? 'Supabase ran out of compute resources while extracting this recipe. No changes were made to your recipe.'
-        : (body?.error||body?.message||raw||('Extraction failed (HTTP '+res.status+')'));
-      const e=new Error(message); e.status=res.status; e.body=body;
-      return {data:null,error:e};
-    }
-    return {data:body,error:null};
-  }catch(e){
-    const message=e?.name==='AbortError'
-      ? 'Recipe extraction took too long and was stopped. Please try again.'
-      : (e?.message||'Could not start recipe extraction.');
-    return {data:null,error:new Error(message)};
-  }finally{clearTimeout(timer)}
+  let lastError=null;
+  for(let attempt=1;attempt<=2;attempt++){
+    const controller=new AbortController();
+    const timer=setTimeout(()=>controller.abort(),90000);
+    try{
+      const res=await fetch(SUPABASE_URL+'/functions/v1/cc-import-extract-staging-v2',{
+        method:'POST',
+        headers:{
+          'Content-Type':'application/json',
+          'Authorization':'Bearer '+session.access_token,
+          'apikey':session.access_token
+        },
+        body:JSON.stringify({import_item_id:Number(itemId),...(textOverride?{text_override:String(textOverride)}:{})}),
+        signal:controller.signal
+      });
+      const raw=await res.text();
+      let body=null;
+      try{body=raw?JSON.parse(raw):null}catch{}
+      if(!res.ok){
+        const message=res.status===546||body?.error?.includes?.('compute resources')
+          ? 'Supabase ran out of compute resources while extracting this recipe. No changes were made to your recipe.'
+          : (body?.error||body?.message||raw||('Extraction failed (HTTP '+res.status+')'));
+        lastError=new Error(message); lastError.status=res.status; lastError.body=body;
+        if(res.status>=500&&attempt<2){await new Promise(r=>setTimeout(r,1500));continue}
+        return {data:null,error:lastError};
+      }
+      return {data:body,error:null};
+    }catch(e){
+      lastError=e?.name==='AbortError'
+        ? new Error('Recipe extraction took too long and was stopped. Please try again.')
+        : new Error(e?.message||'Could not start recipe extraction.');
+      if(attempt<2){await new Promise(r=>setTimeout(r,1500));continue}
+      return {data:null,error:lastError};
+    }finally{clearTimeout(timer)}
+  }
+  return {data:null,error:lastError||new Error('Could not start recipe extraction.')};
 }
 async function showOriginal(x,back=()=>showReview(x,x.id)){if(!x?.file_path)return window.ccShowError('Original file is not available.','Original file unavailable');let signedUrl;try{signedUrl=await getCachedSignedUrl(supabase,'cooking-confidential',x.file_path)}catch(error){return window.ccShowError(error?.message||'Could not open the original file.','Could not open original file')}const res=await fetch(signedUrl);if(!res.ok)return window.ccShowError('Could not load the original file.','Could not load original file');const blob=await res.blob(),name=x.file_name||'Original recipe',lower=name.toLowerCase();let body='';if(lower.endsWith('.docx')){const out=await mammoth.convertToHtml({arrayBuffer:await blob.arrayBuffer()});body=`<div class="original-viewer">${out.value||'<p>No readable content found.</p>'}</div>`}else if(lower.endsWith('.pdf')||blob.type==='application/pdf'){body=`<iframe class="original-pdf" title="Original recipe PDF" src="${URL.createObjectURL(blob)}"></iframe>`}else if(blob.type.startsWith('image/')){body=`<div class="original-viewer"><img class="original-image" alt="Original recipe" src="${URL.createObjectURL(blob)}"></div>`}else body=`<pre class="original-viewer">${esc(await blob.text())}</pre>`;detailDialog.querySelector('#detailContent').innerHTML=`<button class="close" type="button" id="ccBackOriginal">×</button><p class="eyebrow">ORIGINAL RECIPE</p><h2>${esc(name)}</h2><p class="small-note">Original uploaded file — retained privately in Cooking Confidential.</p>${body}`;document.querySelector('#ccBackOriginal').onclick=back}
 async function showReview(x,id){if(!x)return window.ccShowError('Import item could not be loaded.','Could not load import');const r=parseRecipe(x);const ingredients=Array.isArray(r.ingredients)?r.ingredients.map(v=>typeof v==='string'?v:[v?.amount,v?.quantity,v?.unit,v?.name].filter(Boolean).join(' ')).map(v=>clean(v)).join('\n'):clean(r.ingredients);let duplicateRecipeId=null;let duplicateNameMatch=false;if(x.source_url){const dq=await supabase.from('cc_recipes').select('id,name').eq('created_by',x.created_by).eq('source_url',x.source_url).limit(20);if(!dq.error&&dq.data?.length){const hit=dq.data.find(z=>String(z.name||'').trim().toLowerCase()===String(r.name||'').trim().toLowerCase());if(hit){duplicateRecipeId=hit.id;duplicateNameMatch=true;}}}else if(x.file_name){const dq=await supabase.from('cc_recipes').select('id,name').eq('created_by',x.created_by).eq('source_type','file').eq('source_title',x.file_name).limit(20);if(!dq.error&&dq.data?.length){const hit=dq.data.find(z=>String(z.name||'').trim().toLowerCase()===String(r.name||'').trim().toLowerCase());if(hit){duplicateRecipeId=hit.id;duplicateNameMatch=true;}}}const original=x.file_path?`<button class="secondary" type="button" id="ccViewOriginal">View original file</button>`:'';detailDialog.querySelector('#detailContent').innerHTML=`<button class="close" type="button" id="ccCloseReview">×</button><p class="eyebrow">REVIEW IMPORT</p><h2>Check the recipe before saving</h2><p class="small-note">The cleaned recipe below is the version that will be saved. The original uploaded file is retained separately.${duplicateNameMatch?'<span style="display:block;color:#b33b2e;font-weight:700;margin-top:6px">An existing recipe with the same name and source was found; saving will overwrite that recipe.</span>':''}</p><form id="ccImportReviewForm"><label>Recipe name<input name="name" required value="${esc(r.name)}"></label><label>Description<textarea name="description" rows="4">${esc(r.description)}</textarea></label><label>Recipe image<input name="image_url" type="url" class="cc-image-field" value="${esc(x.image_url||'')}" placeholder="Paste image URL (optional)"></label><div class="two-col"><label>Cuisine<input name="cuisine" value="${esc(r.cuisine)}"></label>${selectField('Category','course',courses,r.course)}</div>${selectField('Recipe type','recipe_type',types,r.recipe_type)}<label>Servings<input name="servings" value="${esc(r.servings)}"></label><label>Ingredients<textarea name="ingredients" rows="8">${esc(ingredients)}</textarea></label><label>Method<textarea name="method" rows="9">${esc(cleanMethod(r.method))}</textarea></label><label>My notes<textarea name="notes" rows="5">${esc(r.personal_notes||'')}</textarea></label><div class="detail-actions">${original}<button class="secondary" type="button" id="ccCancelReview">Cancel</button><button class="primary" type="submit">${duplicateNameMatch?'Overwrite existing recipe':'Save recipe'}</button></div></form>`;detailDialog.showModal();const form=document.querySelector('#ccImportReviewForm');window.ccCurrentRecipe=r;['description','ingredients','method','notes'].forEach(n=>{const labels={description:'Description',ingredients:'Ingredients',method:'Method',notes:'My notes'};mountReviewRichText(form,n,labels[n])});try{const mod=await import('./recipe-edit-fix.js?v=1.4.12');if(typeof mod.mountImagePicker==='function')mod.mountImagePicker({form},r.name||'');else if(window.ccMountImagePicker)window.ccMountImagePicker({form},r.name||'')}catch(e){if(window.ccMountImagePicker)window.ccMountImagePicker({form},r.name||'')}['course','recipe_type'].forEach(n=>{const s=form.querySelector(`[name="${n}"]`),c=form.querySelector(`[name="${n}_custom"]`);s.onchange=()=>{c.style.display=s.value==='__custom__'?'block':'none';if(s.value!=='__custom__')c.value=''}});document.querySelector('#ccCloseReview').onclick=()=>detailDialog.close();document.querySelector('#ccCancelReview').onclick=()=>detailDialog.close();document.querySelector('#ccViewOriginal')?.addEventListener('click',()=>showOriginal(x));form.onsubmit=async e=>{e.preventDefault();const btn=form.querySelector('button[type="submit"]');if(btn){btn.disabled=true;btn.textContent='Saving…'}try{const{data:{user},error:authError}=await supabase.auth.getUser();if(authError||!user)throw new Error('Please sign in again before saving the recipe.');const f=new FormData(form),val=n=>{const v=String(f.get(n)||'');return v==='__custom__'?String(f.get(`${n}_custom`)||'').trim():v.trim()},payload={name:clean(f.get('name')),description:clean(f.get('description'))||null,image_url:clean(f.get('image_url'))||null,cuisine:clean(f.get('cuisine'))||null,course:val('course')||null,recipe_type:val('recipe_type')||null,servings:clean(f.get('servings'))||null,ingredients:{html:sanitizeRichHtml(f.get('ingredients')||'')},method:sanitizeRichHtml(f.get('method')||''),personal_notes:sanitizeRichHtml(f.get('notes')||'')||null,source_type:x.source_url?'social':'file',source_url:x.source_url||null,source_title:x.source_url?x.source_title:x.file_name||null,created_by:user.id,visibility:'private',original_file_path:x.file_path||null,original_file_name:x.file_path?(x.file_name||null):null,original_mime_type:x.file_path?(x.mime_type||null):null};let recipeId=x.recipe_id||duplicateRecipeId||null;const q=recipeId?await supabase.from('cc_recipes').update(payload).eq('id',recipeId):await supabase.from('cc_recipes').insert(payload).select('id').single();if(q.error)throw new Error(q.error.message||'Could not save recipe');const savedId=recipeId||q.data?.id;if(!savedId)throw new Error('Recipe was not saved: no recipe ID was returned.');const u=await supabase.from('cc_import_items').update({recipe_id:savedId,review_status:'approved',extraction_status:'ready'}).eq('id',id);if(u.error)throw new Error(u.error.message||'Could not update import status');
