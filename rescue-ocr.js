@@ -2,7 +2,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
 import * as mammoth from 'https://esm.sh/mammoth@1.6.0';
-import { parseLabeledRecipeText } from './recipe-structure-parser.js?v=1.0.0';
+import { parseLabeledRecipeText } from './recipe-structure-parser.js?v=1.1.0';
 const URL='https://yiwmtfbqbynimqvwxosu.supabase.co',KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
 const sb=createClient(URL,KEY),dialog=document.querySelector('#detailDialog');
 const esc=s=>String(s??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));
