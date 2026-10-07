@@ -136,7 +136,7 @@ async function showReview(x,id){
       {label:'Description',name:'description',value:r.description||'',type:'richtext'},
       {label:'Recipe image',name:'image_url',value:r.image_url||'',type:'url',className:'cc-image-field'},
       {group:[
-        {label:'Cuisine',name:'cuisine',value:r.cuisine||'',type:'select',options:['',...(window.ccRecipes||[]).map(v=>String(v?.cuisine||'').trim()).filter(Boolean).filter((v,i,a)=>a.indexOf(v)===i).sort()],allowCustom:true},
+        {label:'Cuisine',name:'cuisine',value:r.cuisine||'',type:'select',options:['',...(window.ccRecipes||[]).map(v=>String(v?.cuisine||'').trim()).filter(Boolean).filter((v,i,a)=>a.indexOf(v)===i).sort()],allowCustom:true,customAlways:true},
         {label:'Course',name:'course',value:r.course||'',type:'select',options:courses,allowCustom:true}
       ]},
       {group:[
