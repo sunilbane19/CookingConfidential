@@ -51,6 +51,12 @@ function normaliseOcr(text){let a=lines(text);a=a.map(x=>{x=x.replace(/\s*\|\s*/
   const titleish=x=>{
     const v=String(x||'').replace(/\s+/g,' ').trim(), w=v.split(/\s+/).filter(Boolean);
     if(!v||v.length<3||v.length>100||w.length>14||titleBlocked.test(v)||isPageMarker(v))return false;
+    // Reject OCR/UI garbage before considering a line as the recipe title.
+    if(/[@©®™<>«»+={}\[\]\\]/.test(v))return false;
+    if(/^[^A-Za-zÀ-ÖØ-öø-ÿ]*[0-9][^A-Za-zÀ-ÖØ-öø-ÿ]*\b/.test(v))return false;
+    const letters=(v.match(/[A-Za-zÀ-ÖØ-öø-ÿ]/g)||[]).length;
+    const nonLetters=(v.match(/[^A-Za-zÀ-ÖØ-öø-ÿ\s'’&-]/g)||[]).length;
+    if(letters<Math.max(4,Math.floor(v.length*.55))||nonLetters>3)return false;
     if(/[.!?]$/.test(v)||/^(?:ingredients?|directions?|instructions?|method|preparation|steps?)\b/i.test(v))return false;
     if(/^(?:by\s+|prep(?:aration)?\s*time|cook(?:ing)?\s*time|total\s*time|serves?\b|servings?\b|yield\b)/i.test(v))return false;
     return true;
@@ -131,7 +137,9 @@ function normaliseOcr(text){let a=lines(text);a=a.map(x=>{x=x.replace(/\s*\|\s*/
   const ingIndex=stripped.findIndex(isIng);
   const desc=stripped.slice(Math.max(0,ingIndex>=0?ingIndex-18:0),ingIndex>=0?ingIndex:20)
     .filter(x=>x.length>=30&&x.length<500&&!noise.test(x)&&!isPageMarker(x)&&!/^by\s+/i.test(x)&&!/(?:published|prep time|cook time|resting time|total time|jump to nutrition)/i.test(x))
-    .filter(x=>clean(x)!==best.name);
+    .filter(x=>clean(x)!==best.name)
+    .filter(x=>!/(?:\bfollow\b|\bshare\b|\bsubscribe\b|\blog\s*in\b|\bsign\s*up\b|\bclick\b|\bread\s+more\b|\bnewsletter\b|\bprivacy\b|\bcontact\b)/i.test(x))
+    .filter(x=>!/[«»@+]/.test(x));
   best.description=desc[0]||'';
   best.raw_text=raw;
   return best;
