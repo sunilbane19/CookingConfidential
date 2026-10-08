@@ -234,7 +234,7 @@ async function reviewImageImport(id){
     const q=checkRecipeQuality(recipe,{mode:'single'});
     await imageReviewDiag(id,'quality_result',{good:q.good,score:q.score,reasons:q.reasons,metrics:q.metrics});
     if(q.good){
-      const mod=await import('./import-review-fix.js?v=1.4.35');
+      const mod=await import('./import-review-fix.js?v=1.4.55');
       await imageReviewDiag(id,'normal_review');
       return mod.reviewImportFixed(id);
     }
@@ -256,7 +256,7 @@ async function reviewImageImport(id){
         // Keep existing image OCR as a fallback only; normal review remains available.
         const item=await getItem(id);
         await sb.from('cc_import_items').update({extracted_text:JSON.stringify({recipe:r,raw_text:(r.ingredients||[]).join('\n')+'\n'+(r.method||[]).join('\n')}),extraction_status:'ready',review_status:'pending'}).eq('id',id);
-        const mod=await import('./import-review-fix.js?v=1.4.35'); return mod.reviewImportFixed(id);
+        const mod=await import('./import-review-fix.js?v=1.4.55'); return mod.reviewImportFixed(id);
       }
       await imageReviewDiag(id,'ocr_fallback_rescue',{reason:'quality_gate_failed'});
       const rescue=await import('./rescue-ocr.js?v=1.1.1'); return rescue.rescueImport(id);
