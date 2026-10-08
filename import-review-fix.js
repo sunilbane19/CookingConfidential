@@ -1,7 +1,7 @@
 import { supabase } from './supabase-client-legacy.js?v=1.0.0';
 import * as mammoth from 'https://esm.sh/mammoth@1.6.0';
 import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
-import { checkRecipeQuality } from './recipe-quality.js?v=1.0.3';
+import { checkRecipeQuality } from './recipe-quality.js?v=1.0.4';
 import { readSourceTextWithVision } from './vision-text-reader.js?v=1.0.0';
 import { createGenericEditor, editorValue, sanitizeRichHtml as sanitizeGenericRichHtml } from './generic-editor.js?v=1.3.10';
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
@@ -235,8 +235,7 @@ export async function reviewImportFixed(id){window.ccImportReviewActive=true;win
   }
   if(x.extraction_status==='failed'){if(pdf){try{const mod=await import('./scanned-pdf-ocr.js?v=1.0.19');const out=await mod.ocrScannedPdf(id,x);const rr=out.recipe||{};if(!Array.isArray(rr.ingredients)||rr.ingredients.length<3){const rescue=await import('./rescue-ocr.js?v=1.1.1');return rescue.rescueImport(id)}return showReview(out.item,id)}catch(e){try{const rescue=await import('./rescue-ocr.js?v=1.1.1');return rescue.rescueImport(id)}catch(_){return window.ccShowError(e.message||'The scanned PDF could not be read.','Last-resort extraction failed')}}}const{error:fx}=await invokeExtract(id);let detail=fx?.message||'The recipe could not be extracted.';try{const ctx=fx?.context;const body=ctx?.json?await ctx.json():ctx?.text?await ctx.text():null;if(body)detail=typeof body==='string'?body:(body.error||body.message||JSON.stringify(body))}catch{}if(fx)return window.ccShowError(detail,'Recipe extraction failed');const q=await supabase.from('cc_import_items').select('*').eq('id',id).single();if(q.error)return window.ccShowError(q.error.message,'Could not refresh import');x=q.data;if(x.extraction_status==='failed')return window.ccShowError(x.error_message||'The recipe could not be extracted.','Recipe extraction failed')}await extractionDiag(id,'before_quality_gate',{extraction_status:x.extraction_status});
 const parsedForQuality=(()=>{try{const j=typeof x.extracted_text==='string'?JSON.parse(x.extracted_text||'{}'):x.extracted_text;return j?.recipe&&typeof j.recipe==='object'?j.recipe:j}catch{return null}})();
-let quality=checkRecipeQuality(parsedForQuality,{mode:'single'});
-await extractionDiag(id,'quality_gate_result',{good:quality.good,score:quality.score,reasons:quality.reasons,metrics:quality.metrics});
+let quality;try{quality=checkRecipeQuality(parsedForQuality,{mode:'single'});await extractionDiag(id,'quality_gate_result',{good:quality.good,score:quality.score,reasons:quality.reasons,metrics:quality.metrics})}catch(e){await extractionDiag(id,'quality_gate_error',{name:e?.name||null,message:e?.message||String(e),stack:String(e?.stack||'').slice(0,1500)});throw e}
 if(!quality.good && pdf){
   console.warn('Cooking Confidential PDF quality gate failed; trying Vision text reader:',quality);
   try{
