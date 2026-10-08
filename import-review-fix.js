@@ -3,7 +3,7 @@ import * as mammoth from 'https://esm.sh/mammoth@1.6.0';
 import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
 import { checkRecipeQuality } from './recipe-quality.js?v=1.0.3';
 import { readSourceTextWithVision } from './vision-text-reader.js?v=1.0.0';
-import { createGenericEditor, editorValue, sanitizeRichHtml as sanitizeGenericRichHtml } from './generic-editor.js?v=1.3.9';
+import { createGenericEditor, editorValue, sanitizeRichHtml as sanitizeGenericRichHtml } from './generic-editor.js?v=1.3.10';
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 async function extractionDiag(itemId,stage,details={}){try{const p=supabase.from('cc_extraction_diagnostics').insert({import_item_id:Number(itemId),stage,details});await Promise.race([p,new Promise((_,reject)=>setTimeout(()=>reject(new Error('diagnostic timeout')),5000))])}catch(e){console.warn('CC extraction diagnostic write failed',e)}}
 
@@ -137,7 +137,7 @@ async function showReview(x,id){
       {label:'Description',name:'description',value:r.description||'',type:'richtext'},
       {label:'Recipe image',name:'image_url',value:r.image_url||'',type:'url',className:'cc-image-field'},
       {group:[
-        {label:'Cuisine',name:'cuisine',value:r.cuisine||'',type:'select',options:['',...(window.ccRecipes||[]).map(v=>String(v?.cuisine||'').trim()).filter(Boolean).filter((v,i,a)=>a.indexOf(v)===i).sort()],allowCustom:true},
+        {label:'Cuisine',name:'cuisine',value:r.cuisine||'',type:'suggest',options:(window.ccRecipes||[]).map(v=>String(v?.cuisine||'').trim()).filter(Boolean).filter((v,i,a)=>a.indexOf(v)===i).sort(),placeholder:'Enter or choose a cuisine'},
         {label:'Course',name:'course',value:r.course||'',type:'select',options:courses,allowCustom:true}
       ]},
       {group:[
