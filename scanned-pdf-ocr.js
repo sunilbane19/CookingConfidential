@@ -41,8 +41,26 @@ function deriveRecipe(text,fileName){
       ||/\b(?:cup|cups|tbsp|tsp|tablespoons?|teaspoons?|oz|ounces?|lb|lbs|pounds?|g|grams?|kg|ml|lit(?:re|er)s?|cloves?|slices?|sticks?|pieces?|eggs?)\b/i.test(v)
       ||/^(?:salt|pepper|freshly ground)\b/i.test(v);
   };
+  const filenameTitle=String(fileName||'Scanned recipe').replace(/\.[^.]+$/,'').replace(/[_-]+/g,' ').replace(/\s+/g,' ').replace(/\brecipe\b$/i,'').trim();
+  const titleQuality=x=>{
+    const v=String(x||'').trim();
+    if(!v||v.length<3||v.length>90)return 0;
+    const w=v.split(/\s+/).filter(Boolean);
+    let score=1;
+    if(w.length>12)score-=.45;
+    if(w.length>16)score-=.35;
+    if(/[.!?]$/.test(v))score-=.35;
+    if(/\b(?:adapted|inspired|perfectly|quick|flavorful|delicious|easy|quickly|authentic|dish with|serve|serves|add|mix|cook|cooking)\b/i.test(v))score-=.25;
+    if(/[:,;]/.test(v))score-=.08;
+    if(w.length<=8)score+=.15;
+    return score;
+  };
   const titleCandidates=stripped.slice(0,20).filter(x=>x.length>3&&!noise.test(x)&&!/^by\s+/i.test(x)&&!isIng(x)&&!isMethod(x)&&!/^serves?\b/i.test(x));
-  const name=(titleCandidates[0]||fileName.replace(/\.[^.]+$/,'').replace(/[_-]+/g,' ').trim());
+  const bestTitle=titleCandidates.map((x,i)=>({x,score:titleQuality(x)-i*.03})).sort((a,b)=>b.score-a.score)[0];
+  // OCR can drop a graphical title and leave the descriptive subtitle first.
+  // Do not promote a sentence-like subtitle to the recipe title; fall back to
+  // the uploaded filename-derived title instead.
+  const name=bestTitle&&bestTitle.score>=.62?bestTitle.x:filenameTitle;
 
   let best=null;
   for(let i=0;i<stripped.length;i++){
