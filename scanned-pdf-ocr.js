@@ -42,9 +42,17 @@ function deriveRecipe(text,fileName){
       ||/^(?:salt|pepper|freshly ground)\b/i.test(v);
   };
   const filenameTitle=String(fileName||'Scanned recipe').replace(/\.[^.]+$/,'').replace(/[_-]+/g,' ').replace(/\s+/g,' ').replace(/\brecipe\b$/i,'').trim();
-  const explicitTitlePatterns=[
-    /^old delhi style keema matar(?: recipe)?$/i
-  ];
+  const explicitTitlePatterns=[];
+  const looksLikeRecipeTitle=x=>{
+    const v=String(x||'').trim();
+    const w=v.split(/\s+/).filter(Boolean);
+    if(!v||v.length<3||v.length>80||w.length>10)return false;
+    if(/[.!?]$/.test(v))return false;
+    if(/\b(?:prep|cook|servings?|serves?|yield|method|ingredients?)\b\s*:/i.test(v))return false;
+    if(/\b(?:adapted|inspired|authentic|perfectly|quick|flavorful|delicious|dish with|pressure cooking)\b/i.test(v))return false;
+    const titleWords=w.filter(x=>/^[A-Z][A-Za-z'’&-]*$/.test(x)).length;
+    return titleWords>=Math.max(2,Math.ceil(w.length*.45));
+  };
   const titleQuality=x=>{
     const v=String(x||'').trim();
     if(!v||v.length<3||v.length>90)return 0;
@@ -60,10 +68,11 @@ function deriveRecipe(text,fileName){
   };
   const titleCandidates=stripped.slice(0,20).filter(x=>x.length>3&&!noise.test(x)&&!/^by\s+/i.test(x)&&!isIng(x)&&!isMethod(x)&&!/^serves?\b/i.test(x));
   const explicitTitle=titleCandidates.find(x=>explicitTitlePatterns.some(p=>p.test(x.trim())));
+  const titleLike=titleCandidates.find(x=>looksLikeRecipeTitle(x));
   const bestTitle=titleCandidates.map((x,i)=>({x,score:titleQuality(x)-i*.03})).sort((a,b)=>b.score-a.score)[0];
   // Prefer an explicit short title when OCR captured it. If OCR omits a
   // graphical title and leaves only a descriptive subtitle, use the filename.
-  const name=explicitTitle||((bestTitle&&bestTitle.score>=.62)?bestTitle.x:filenameTitle);
+  const name=explicitTitle||titleLike||((bestTitle&&bestTitle.score>=.62)?bestTitle.x:filenameTitle);
 
   let best=null;
   for(let i=0;i<stripped.length;i++){
