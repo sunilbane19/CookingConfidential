@@ -23,28 +23,118 @@ function deriveRecipe(text,fileName){
     .replace(/\s+(?=\d+\.\s+[A-Z])/g,'\n')
     .replace(/\s+(?=---\s*Page\s+\d+\s*---)/gi,'\n');
   const a=repaired.split('\n').map(x=>clean(x)).filter(Boolean);
-  const stripped=a.filter(x=>!/^[-=]{2,}\s*Page\s+\d+/i.test(x)&&!/^Page\s+\d+$/i.test(x));
+  const stripped=a;
   const heading=x=>String(x||'').replace(/^#{1,6}\s*/,'').replace(/\s*[:\-–—]\s*$/,'').trim();
+  const isPageMarker=x=>/^[-=]{2,}\s*Page\s+\d+\s*[-=]{2,}$/i.test(String(x||'').trim())||/^Page\s+\d+$/i.test(String(x||'').trim());
   const isIng=x=>/^(?:ingredients?|what you need|ingredients required|shopping list)\s*:?\s*$/i.test(heading(x));
   const isMethod=x=>/^(?:directions?|instructions?|method|preparation|preparations|steps?)\s*:?\s*$/i.test(heading(x));
-  const isStop=x=>/^(?:special equipment|notes?|make-ahead and storage|nutrition(?: facts)?|reviews?|related articles|related recipes?|comments?|video)\b/i.test(heading(x));
+  const isStop=x=>isPageMarker(x)||/^(?:special equipment|notes?|make-ahead and storage|nutrition(?: facts)?|reviews?|related articles|related recipes?|comments?|video|recipe tips?|top tips?)\b/i.test(heading(x));
   const noise=/^(?:get|the app|app|save|rate|print|share|jump to|keep (?:the )?screen awake|credit:|advertisement|advert|reviews?\s*\(|featured tweaks|most helpful|related articles|editorial guidelines|privacy|contact|peopleinc\.|follow us|newsletters?)\b/i;
   const stripItem=x=>String(x||'').replace(/^\s*[|¦\]\[=_-]+\s*/,'').replace(/^step\s+\d+\s*[:.)-]?\s*/i,'').replace(/\s+/g,' ').trim();
-  const ingredientLike=x=>{const v=stripItem(x);if(!v||noise.test(v)||isStop(v))return false;return /\d/.test(v)||/[½¼¾⅓⅔⅛⅜⅝⅞]/.test(v)||/\b(?:cup|cups|tbsp|tsp|tablespoons?|teaspoons?|oz|ounces?|lb|lbs|pounds?|g|grams?|kg|ml|lit(?:re|er)s?|cloves?|slices?|sticks?|pieces?|eggs?)\b/i.test(v)||/^(?:salt|pepper|freshly ground)\b/i.test(v)};
-  const filenameTitle=String(fileName||'Scanned recipe').replace(/\.[^.]+$/,'').replace(/[_-]+/g,' ').replace(/\s+/g,' ').replace(/\brecipe\b$/i,'').trim();
-  const explicitTitlePatterns=[];
-  const looksLikeRecipeTitle=x=>{const v=String(x||'').trim();const w=v.split(/\s+/).filter(Boolean);if(!v||v.length<3||v.length>80||w.length>10)return false;if(/[.!?]$/.test(v))return false;if(/\b(?:prep|cook|servings?|serves?|yield|method|ingredients?)\b\s*:/i.test(v))return false;if(/\b(?:adapted|inspired|authentic|perfectly|quick|flavorful|delicious|dish with|pressure cooking)\b/i.test(v))return false;const titleWords=w.filter(x=>/^[A-Z][A-Za-z'’&-]*$/.test(x)).length;return titleWords>=Math.max(2,Math.ceil(w.length*.45))};
-  const titleQuality=x=>{const v=String(x||'').trim();if(!v||v.length<3||v.length>90)return 0;const w=v.split(/\s+/).filter(Boolean);let score=1;if(w.length>12)score-=.45;if(w.length>16)score-=.35;if(/[.!?]$/.test(v))score-=.35;if(/\b(?:adapted|inspired|perfectly|quick|flavorful|delicious|easy|quickly|authentic|dish with|serve|serves|add|mix|cook|cooking)\b/i.test(v))score-=.25;if(/[:,;]/.test(v))score-=.08;if(w.length<=8)score+=.15;return score};
-  const titleCandidates=stripped.slice(0,20).filter(x=>x.length>3&&!noise.test(x)&&!/^by\s+/i.test(x)&&!isIng(x)&&!isMethod(x)&&!/^serves?\b/i.test(x));
-  const explicitTitle=titleCandidates.find(x=>explicitTitlePatterns.some(p=>p.test(x.trim())));
-  const titleLike=titleCandidates.find(x=>looksLikeRecipeTitle(x));
-  const bestTitle=titleCandidates.map((x,i)=>({x,score:titleQuality(x)-i*.03})).sort((a,b)=>b.score-a.score)[0];
-  const name=explicitTitle||titleLike||((bestTitle&&bestTitle.score>=.62)?bestTitle.x:filenameTitle);
+  const ingredientLike=x=>{
+    const v=stripItem(x);
+    if(!v||noise.test(v)||isStop(v))return false;
+    if(/^(?:for\s+.+:|shell|filling|ingredients?)$/i.test(v))return false;
+    return /\d/.test(v)||/[½¼¾⅓⅔⅛⅜⅝⅞]/.test(v)
+      || /\b(?:cup|cups|tbsp|tsp|tablespoons?|teaspoons?|oz|ounces?|lb|lbs|pounds?|g|grams?|kg|ml|lit(?:re|er)s?|cloves?|slices?|sticks?|pieces?|eggs?)\b/i.test(v)
+      || /^(?:salt|pepper|freshly ground)\b/i.test(v);
+  };
+  const filenameTitle=String(fileName||'Scanned recipe')
+    .replace(/\.[^.]+$/,'')
+    .replace(/[_-]+/g,' ')
+    .replace(/\s*\(\d+\)\s*$/,'')
+    .replace(/\s*\[\d+\]\s*$/,'')
+    .replace(/\s+/g,' ')
+    .replace(/\brecipe\b$/i,'')
+    .trim()||'Scanned recipe';
+  const titleBlocked=/^(?:skip to (?:main )?content|home|recipes?|save recipe|print|share|ad|advertisement|good food team|easy|alternatives?|complete the dish|nutrition|loading|rate(?: now)?|comments?|questions?|tips?|image(?:\s+\d+)?(?::.*)?|subscribe(?: now)?|updated:?|published:?|follow|like|---?\s*page\s+\d+\s*---?)$/i;
+  const titleish=x=>{
+    const v=String(x||'').replace(/\s+/g,' ').trim(), w=v.split(/\s+/).filter(Boolean);
+    if(!v||v.length<3||v.length>100||w.length>14||titleBlocked.test(v)||isPageMarker(v))return false;
+    if(/[.!?]$/.test(v)||/^(?:ingredients?|directions?|instructions?|method|preparation|steps?)\b/i.test(v))return false;
+    if(/^(?:by\s+|prep(?:aration)?\s*time|cook(?:ing)?\s*time|total\s*time|serves?\b|servings?\b|yield\b)/i.test(v))return false;
+    return true;
+  };
+  const titleScore=(x,distance)=>{
+    const v=String(x||'').trim(),w=v.split(/\s+/).filter(Boolean);
+    if(!titleish(v))return -999;
+    const caps=w.filter(q=>/^[A-ZÀ-ÖØ-Þ][A-Za-z'’&-]*$/.test(q)).length;
+    let sc=10-Math.min(distance,14)*.35;
+    if(w.length>=2&&w.length<=9)sc+=3;
+    if(caps>=Math.max(2,Math.ceil(w.length*.5)))sc+=5;
+    if(/[,:;]/.test(v))sc-=1;
+    if(/\b(?:recipe|sauce|cake|curry|salad|chutney|kibbeh|tzatziki|keema|matar|fritters?|dip|bread|chicken|fish|mutton|beef|pasta|rice|dal|soup|stew|cookies?|biscuits?)\b/i.test(v))sc+=1;
+    if(/\b(?:need|try|learn|made|comes|perfect|authentic|fresh|taste)\b/i.test(v))sc-=2;
+    return sc;
+  };
+  const findTitle=sectionIndex=>{
+    const local=stripped.slice(Math.max(0,sectionIndex-28),sectionIndex)
+      .map(x=>String(x||'').trim()).filter(Boolean);
+    const candidates=[];
+    for(let k=0;k<local.length;k++){
+      const d=local.length-1-k;
+      const v=clean(local[k]);
+      const sc=titleScore(v,d);
+      if(sc>-100)candidates.push({x:v,score:sc});
+      if(k+1<local.length){
+        const pair=clean(v+' '+local[k+1]);
+        const psc=titleScore(pair,d)+1.5;
+        if(psc>-100)candidates.push({x:pair,score:psc});
+      }
+    }
+    candidates.sort((a,b)=>b.score-a.score);
+    return candidates[0]?.x||filenameTitle;
+  };
+
   let best=null;
-  for(let i=0;i<stripped.length;i++){if(!isIng(stripped[i]))continue;let mi=-1;for(let j=i+1;j<stripped.length;j++){if(isMethod(stripped[j])){mi=j;break}if(isStop(stripped[j]))break}if(mi<0)continue;let end=stripped.length;for(let j=mi+1;j<stripped.length;j++){if(isStop(stripped[j])){end=j;break}}const ingredients=stripped.slice(i+1,mi).map(stripItem).filter(x=>x.length>1&&!noise.test(x)&&!isStop(x)).filter(x=>!/^for\s+[^:]+:\s*$/i.test(x)).filter(ingredientLike);const methodParts=[];let current='';const flush=()=>{if(current.trim()){methodParts.push(current.trim());current=''}};for(const line of stripped.slice(mi+1,end)){const v=stripItem(line);if(!v||noise.test(v))continue;if(/^step\s*\d+/i.test(line)){flush();continue}current=current?v?current+' '+v:v:v}flush();const method=methodParts.join('\n').trim();if(ingredients.length<4||method.length<40)continue;const quantityCount=ingredients.reduce((n,x)=>n+(ingredientLike(x)?1:0),0);const score=ingredients.length*5+quantityCount*3+Math.min(methodParts.length,8)*2;if(!best||score>best.score)best={score,name,description:null,ingredients:ingredients.slice(0,200),method,cuisine:'',course:'',servings:''}}
-  if(!best)return {name,description:'',ingredients:[],method:'',cuisine:'',course:'',servings:'',raw_text:raw};
-  const serveLine=stripped.find(x=>/^(?:serves?|servings?|yield)\b/i.test(x));best.servings=serveLine?serveLine.replace(/\s+(?:prep|cook)\s+time\b.*$/i,'').trim():'';
-  const ingIndex=stripped.findIndex(isIng);const desc=stripped.slice(0,ingIndex>=0?ingIndex:20).filter(x=>x.length>=30&&x.length<500&&!noise.test(x)&&!/^by\s+/i.test(x)&&!/(?:published|prep time|cook time|resting time|total time|jump to nutrition)/i.test(x));best.description=desc[0]||'';best.raw_text=raw;return best;
+  for(let i=0;i<stripped.length;i++){
+    if(!isIng(stripped[i]))continue;
+    let mi=-1;
+    let end=stripped.length;
+    for(let j=i+1;j<stripped.length;j++){
+      if(isMethod(stripped[j])){mi=j;break}
+      if(isStop(stripped[j])){end=j;break}
+    }
+    if(mi>=0){
+      for(let j=mi+1;j<stripped.length;j++){if(isStop(stripped[j])){end=j;break}}
+    }
+    const ingredientEnd=mi>=0?mi:end;
+    const ingredients=stripped.slice(i+1,ingredientEnd)
+      .map(stripItem)
+      .filter(x=>x.length>1&&!noise.test(x)&&!isStop(x))
+      .filter(x=>!/^for\s+[^:]+:\s*$/i.test(x))
+      .filter(ingredientLike);
+    const methodParts=[];
+    if(mi>=0){
+      let current='';
+      const flush=()=>{if(current.trim()){methodParts.push(current.trim());current=''}};
+      for(const line of stripped.slice(mi+1,end)){
+        const v=stripItem(line);
+        if(!v||noise.test(v)||isPageMarker(v))continue;
+        if(/^step\s*\d+/i.test(line)){flush();continue}
+        if(/^(?:shell|filling|for\s+[^:]+:)\s*$/i.test(v)){flush();continue}
+        current=current?current+' '+v:v;
+      }
+      flush();
+    }
+    const method=methodParts.join('\n').trim();
+    if(ingredients.length<3)continue;
+    if(mi>=0&&method.length<40)continue;
+    const quantityCount=ingredients.reduce((n,x)=>n+(ingredientLike(x)?1:0),0);
+    const score=ingredients.length*5+quantityCount*3+Math.min(methodParts.length,8)*2+(mi<0?2:0);
+    const name=findTitle(i);
+    if(!best||score>best.score)best={score,name,description:'',ingredients:ingredients.slice(0,200),method,cuisine:'',course:'',servings:''};
+  }
+  if(!best)return {name:filenameTitle,description:'',ingredients:[],method:'',cuisine:'',course:'',servings:'',raw_text:raw};
+  const serveLine=stripped.find(x=>/^(?:serves?|servings?|yield)\b/i.test(x));
+  best.servings=serveLine?serveLine.replace(/\s+(?:prep|cook)\s+time\b.*$/i,'').trim():'';
+  const ingIndex=stripped.findIndex(isIng);
+  const desc=stripped.slice(Math.max(0,ingIndex>=0?ingIndex-18:0),ingIndex>=0?ingIndex:20)
+    .filter(x=>x.length>=30&&x.length<500&&!noise.test(x)&&!isPageMarker(x)&&!/^by\s+/i.test(x)&&!/(?:published|prep time|cook time|resting time|total time|jump to nutrition)/i.test(x))
+    .filter(x=>clean(x)!==best.name);
+  best.description=desc[0]||'';
+  best.raw_text=raw;
+  return best;
 }
 export async function ocrScannedPdf(id){const{data:item,error}=await sb.from('cc_import_items').select('*').eq('id',id).single();if(error||!item)throw Error(error?.message||'Import item not found.');
   try{const existing=typeof item.extracted_text==='string'?JSON.parse(item.extracted_text||'{}'):item.extracted_text;if(existing?.scanned_pdf&&existing?.ocr_profile===OCR_PROFILE&&typeof existing.raw_text==='string'&&existing.raw_text.trim()){const recipe=deriveRecipe(existing.raw_text,item.file_name||'Scanned recipe');const payload={version:1,scanned_pdf:true,ocr_profile:OCR_PROFILE,recipe,raw_text:existing.raw_text};const{error:ue}=await sb.from('cc_import_items').update({extracted_text:JSON.stringify(payload),source_title:item.file_name||'Scanned recipe',extraction_status:'ready',review_status:'pending',error_message:null}).eq('id',id);if(ue)throw Error(ue.message);return{item:{...item,extracted_text:JSON.stringify(payload),extraction_status:'ready',review_status:'pending'},recipe}}}catch(e){console.warn('Cooking Confidential stored OCR parser refresh:',e)}
