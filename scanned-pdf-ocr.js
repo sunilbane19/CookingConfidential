@@ -14,11 +14,6 @@ function setProgress(text){const d=document.querySelector('#detailContent');if(d
 function normaliseOcr(text){let a=lines(text);a=a.map(x=>x.replace(/\s*\|\s*/g,' ').replace(/\bIbs\b/gi,'lbs').replace(/\bIb\b/gi,'lb').replace(/\b1\s*\/\s*2\b/g,'½').replace(/\b1\s*\/\s*4\b/g,'¼').replace(/\b3\s*\/\s*4\b/g,'¾').replace(/\s{2,}/g,' ').trim()).filter(Boolean);const out=[];for(const x of a){if(out.some(y=>y.toLowerCase()===x.toLowerCase()))continue;out.push(x)}return out}
 function deriveRecipe(text,fileName){
   const raw=String(text??'').replace(/\r/g,'');
-  // OCR can occasionally return an otherwise excellent page as one long line.
-  // Restore the structural boundaries before looking for Ingredients/Method.
-  // Keep this vocabulary aligned with the parser's accepted section headings;
-  // do not split on arbitrary capitalised words because recipe descriptions
-  // and ingredient names can contain them.
   const structuralHeading=/(?:ingredients?|ingredient list|what you need|ingredients required|shopping list|directions?|instructions?|method|preparation|preparations|steps?|cooking steps|recipe steps|cooking instructions|step[- ]by[- ]step(?: [a-z0-9&/ -]+)? instructions?|preparation steps|recipe method|cooking method|procedure|special equipment|notes?|make-ahead and storage|nutrition(?: facts)?|serving suggestions?|recipe tips?)\b/i;
   const repaired=raw
     .replace(new RegExp('\\s+(?='+structuralHeading.source+')','gi'),'\n')
@@ -34,99 +29,22 @@ function deriveRecipe(text,fileName){
   const isStop=x=>/^(?:special equipment|notes?|make-ahead and storage|nutrition(?: facts)?|reviews?|related articles|related recipes?|comments?|video)\b/i.test(heading(x));
   const noise=/^(?:get|the app|app|save|rate|print|share|jump to|keep (?:the )?screen awake|credit:|advertisement|advert|reviews?\s*\(|featured tweaks|most helpful|related articles|editorial guidelines|privacy|contact|peopleinc\.|follow us|newsletters?)\b/i;
   const stripItem=x=>String(x||'').replace(/^\s*[|¦\]\[=_-]+\s*/,'').replace(/^step\s+\d+\s*[:.)-]?\s*/i,'').replace(/\s+/g,' ').trim();
-  const ingredientLike=x=>{
-    const v=stripItem(x);
-    if(!v||noise.test(v)||isStop(v))return false;
-    return /\d/.test(v)||/[½¼¾⅓⅔⅛⅜⅝⅞]/.test(v)
-      ||/\b(?:cup|cups|tbsp|tsp|tablespoons?|teaspoons?|oz|ounces?|lb|lbs|pounds?|g|grams?|kg|ml|lit(?:re|er)s?|cloves?|slices?|sticks?|pieces?|eggs?)\b/i.test(v)
-      ||/^(?:salt|pepper|freshly ground)\b/i.test(v);
-  };
+  const ingredientLike=x=>{const v=stripItem(x);if(!v||noise.test(v)||isStop(v))return false;return /\d/.test(v)||/[½¼¾⅓⅔⅛⅜⅝⅞]/.test(v)||/\b(?:cup|cups|tbsp|tsp|tablespoons?|teaspoons?|oz|ounces?|lb|lbs|pounds?|g|grams?|kg|ml|lit(?:re|er)s?|cloves?|slices?|sticks?|pieces?|eggs?)\b/i.test(v)||/^(?:salt|pepper|freshly ground)\b/i.test(v)};
   const filenameTitle=String(fileName||'Scanned recipe').replace(/\.[^.]+$/,'').replace(/[_-]+/g,' ').replace(/\s+/g,' ').replace(/\brecipe\b$/i,'').trim();
   const explicitTitlePatterns=[];
-  const looksLikeRecipeTitle=x=>{
-    const v=String(x||'').trim();
-    const w=v.split(/\s+/).filter(Boolean);
-    if(!v||v.length<3||v.length>80||w.length>10)return false;
-    if(/[.!?]$/.test(v))return false;
-    if(/\b(?:prep|cook|servings?|serves?|yield|method|ingredients?)\b\s*:/i.test(v))return false;
-    if(/\b(?:adapted|inspired|authentic|perfectly|quick|flavorful|delicious|dish with|pressure cooking)\b/i.test(v))return false;
-    const titleWords=w.filter(x=>/^[A-Z][A-Za-z'’&-]*$/.test(x)).length;
-    return titleWords>=Math.max(2,Math.ceil(w.length*.45));
-  };
-  const titleQuality=x=>{
-    const v=String(x||'').trim();
-    if(!v||v.length<3||v.length>90)return 0;
-    const w=v.split(/\s+/).filter(Boolean);
-    let score=1;
-    if(w.length>12)score-=.45;
-    if(w.length>16)score-=.35;
-    if(/[.!?]$/.test(v))score-=.35;
-    if(/\b(?:adapted|inspired|perfectly|quick|flavorful|delicious|easy|quickly|authentic|dish with|serve|serves|add|mix|cook|cooking)\b/i.test(v))score-=.25;
-    if(/[:,;]/.test(v))score-=.08;
-    if(w.length<=8)score+=.15;
-    return score;
-  };
+  const looksLikeRecipeTitle=x=>{const v=String(x||'').trim();const w=v.split(/\s+/).filter(Boolean);if(!v||v.length<3||v.length>80||w.length>10)return false;if(/[.!?]$/.test(v))return false;if(/\b(?:prep|cook|servings?|serves?|yield|method|ingredients?)\b\s*:/i.test(v))return false;if(/\b(?:adapted|inspired|authentic|perfectly|quick|flavorful|delicious|dish with|pressure cooking)\b/i.test(v))return false;const titleWords=w.filter(x=>/^[A-Z][A-Za-z'’&-]*$/.test(x)).length;return titleWords>=Math.max(2,Math.ceil(w.length*.45))};
+  const titleQuality=x=>{const v=String(x||'').trim();if(!v||v.length<3||v.length>90)return 0;const w=v.split(/\s+/).filter(Boolean);let score=1;if(w.length>12)score-=.45;if(w.length>16)score-=.35;if(/[.!?]$/.test(v))score-=.35;if(/\b(?:adapted|inspired|perfectly|quick|flavorful|delicious|easy|quickly|authentic|dish with|serve|serves|add|mix|cook|cooking)\b/i.test(v))score-=.25;if(/[:,;]/.test(v))score-=.08;if(w.length<=8)score+=.15;return score};
   const titleCandidates=stripped.slice(0,20).filter(x=>x.length>3&&!noise.test(x)&&!/^by\s+/i.test(x)&&!isIng(x)&&!isMethod(x)&&!/^serves?\b/i.test(x));
   const explicitTitle=titleCandidates.find(x=>explicitTitlePatterns.some(p=>p.test(x.trim())));
   const titleLike=titleCandidates.find(x=>looksLikeRecipeTitle(x));
   const bestTitle=titleCandidates.map((x,i)=>({x,score:titleQuality(x)-i*.03})).sort((a,b)=>b.score-a.score)[0];
-  // Prefer an explicit short title when OCR captured it. If OCR omits a
-  // graphical title and leaves only a descriptive subtitle, use the filename.
   const name=explicitTitle||titleLike||((bestTitle&&bestTitle.score>=.62)?bestTitle.x:filenameTitle);
-
   let best=null;
-  for(let i=0;i<stripped.length;i++){
-    if(!isIng(stripped[i]))continue;
-    let mi=-1;
-    for(let j=i+1;j<stripped.length;j++){if(isMethod(stripped[j])){mi=j;break;}if(isStop(stripped[j]))break;}
-    if(mi<0)continue;
-    let end= stripped.length;
-    for(let j=mi+1;j<stripped.length;j++){if(isStop(stripped[j])){end=j;break;}}
-    const ingredients=stripped.slice(i+1,mi)
-      .map(stripItem)
-      .filter(x=>x.length>1&&!noise.test(x)&&!isStop(x))
-      .filter(x=>!/^for\s+[^:]+:\s*$/i.test(x))
-      .filter(ingredientLike);
-    const methodParts=[];
-    let current='';
-    const flush=()=>{if(current.trim()){methodParts.push(current.trim());current='';}};
-    for(const line of stripped.slice(mi+1,end)){
-      const v=stripItem(line);
-      if(!v||noise.test(v))continue;
-      if(/^step\s*\d+/i.test(line)){flush();continue;}
-      current=current?current+' '+v:v;
-    }
-    flush();
-    const method=methodParts.join('\n').trim();
-    if(ingredients.length<4||method.length<40)continue;
-    const quantityCount=ingredients.reduce((n,x)=>n+(ingredientLike(x)?1:0),0);
-    const score=ingredients.length*5+quantityCount*3+Math.min(methodParts.length,8)*2;
-    if(!best||score>best.score)best={score,name,description:null,ingredients:ingredients.slice(0,200),method,cuisine:'',course:'',servings:''};
-  }
+  for(let i=0;i<stripped.length;i++){if(!isIng(stripped[i]))continue;let mi=-1;for(let j=i+1;j<stripped.length;j++){if(isMethod(stripped[j])){mi=j;break}if(isStop(stripped[j]))break}if(mi<0)continue;let end=stripped.length;for(let j=mi+1;j<stripped.length;j++){if(isStop(stripped[j])){end=j;break}}const ingredients=stripped.slice(i+1,mi).map(stripItem).filter(x=>x.length>1&&!noise.test(x)&&!isStop(x)).filter(x=>!/^for\s+[^:]+:\s*$/i.test(x)).filter(ingredientLike);const methodParts=[];let current='';const flush=()=>{if(current.trim()){methodParts.push(current.trim());current=''}};for(const line of stripped.slice(mi+1,end)){const v=stripItem(line);if(!v||noise.test(v))continue;if(/^step\s*\d+/i.test(line)){flush();continue}current=current?v?current+' '+v:v:v}flush();const method=methodParts.join('\n').trim();if(ingredients.length<4||method.length<40)continue;const quantityCount=ingredients.reduce((n,x)=>n+(ingredientLike(x)?1:0),0);const score=ingredients.length*5+quantityCount*3+Math.min(methodParts.length,8)*2;if(!best||score>best.score)best={score,name,description:null,ingredients:ingredients.slice(0,200),method,cuisine:'',course:'',servings:''}}
   if(!best)return {name,description:'',ingredients:[],method:'',cuisine:'',course:'',servings:'',raw_text:raw};
-
-  const serveLine=stripped.find(x=>/^(?:serves?|servings?|yield)\b/i.test(x));
-  best.servings=serveLine?serveLine.replace(/\s+(?:prep|cook)\s+time\b.*$/i,'').trim():'';
-  const ingIndex=stripped.findIndex(isIng);
-  const desc=stripped.slice(0,ingIndex>=0?ingIndex:20)
-    .filter(x=>x.length>=30&&x.length<500&&!noise.test(x)&&!/^by\s+/i.test(x)&&!/(?:published|prep time|cook time|resting time|total time|jump to nutrition)/i.test(x));
-  best.description=desc[0]||'';
-  best.raw_text=raw;
-  return best;
+  const serveLine=stripped.find(x=>/^(?:serves?|servings?|yield)\b/i.test(x));best.servings=serveLine?serveLine.replace(/\s+(?:prep|cook)\s+time\b.*$/i,'').trim():'';
+  const ingIndex=stripped.findIndex(isIng);const desc=stripped.slice(0,ingIndex>=0?ingIndex:20).filter(x=>x.length>=30&&x.length<500&&!noise.test(x)&&!/^by\s+/i.test(x)&&!/(?:published|prep time|cook time|resting time|total time|jump to nutrition)/i.test(x));best.description=desc[0]||'';best.raw_text=raw;return best;
 }
-
 export async function ocrScannedPdf(id){const{data:item,error}=await sb.from('cc_import_items').select('*').eq('id',id).single();if(error||!item)throw Error(error?.message||'Import item not found.');
-  // If this PDF has already been OCR'd, reuse its stored raw OCR text and
-  // re-run only the parser. This avoids starting a full 10-page Tesseract job
-  // every time Review is opened.
-  try{
-    const existing=typeof item.extracted_text==='string'?JSON.parse(item.extracted_text||'{}'):item.extracted_text;
-    if(existing?.scanned_pdf&&typeof existing.raw_text==='string'&&existing.raw_text.trim()){
-      const recipe=deriveRecipe(existing.raw_text,item.file_name||'Scanned recipe');
-      const payload={version:1,scanned_pdf:true,recipe,raw_text:existing.raw_text};
-      const{error:ue}=await sb.from('cc_import_items').update({extracted_text:JSON.stringify(payload),source_title:item.file_name||'Scanned recipe',extraction_status:'ready',review_status:'pending',error_message:null}).eq('id',id);
-      if(ue)throw Error(ue.message);
-      return{item:{...item,extracted_text:JSON.stringify(payload),extraction_status:'ready',review_status:'pending'},recipe};
-    }
-  }catch(e){console.warn('Cooking Confidential stored OCR parser refresh:',e)}
-  const blob=await signedBlob(item);const pdfjs=await loadPdf();const pdf=await pdfjs.getDocument({data:new Uint8Array(await blob.arrayBuffer())}).promise;const T=await loadTesseract();const worker=await T.createWorker('eng');let full=[];try{for(let i=1;i<=pdf.numPages;i++){setProgress(`Reading scanned page ${i} of ${pdf.numPages}…`);const page=await pdf.getPage(i);const base=page.getViewport({scale:2.2});const canvas=document.createElement('canvas');canvas.width=Math.ceil(base.width);canvas.height=Math.ceil(base.height);await page.render({canvasContext:canvas.getContext('2d',{willReadFrequently:true}),viewport:base}).promise;await worker.setParameters({tessedit_pageseg_mode:'6',preserve_interword_spaces:'1',user_defined_dpi:'300'});const r=await worker.recognize(canvas);full.push(`--- Page ${i} ---\n${r.data.text||''}`);canvas.width=1;canvas.height=1} }finally{await worker.terminate()}const text=full.join('\n');if(!text.trim())throw Error('OCR could not find readable text in the scanned PDF.');const recipe=deriveRecipe(text,item.file_name||'Scanned recipe');const payload={version:1,scanned_pdf:true,recipe,raw_text:text};const{error:ue}=await sb.from('cc_import_items').update({extracted_text:JSON.stringify(payload),source_title:item.file_name||'Scanned recipe',extraction_status:'ready',review_status:'pending',error_message:null}).eq('id',id);if(ue)throw Error(ue.message);return{item:{...item,extracted_text:JSON.stringify(payload),extraction_status:'ready',review_status:'pending'},recipe};}
+  try{const existing=typeof item.extracted_text==='string'?JSON.parse(item.extracted_text||'{}'):item.extracted_text;if(existing?.scanned_pdf&&typeof existing.raw_text==='string'&&existing.raw_text.trim()){const recipe=deriveRecipe(existing.raw_text,item.file_name||'Scanned recipe');const payload={version:1,scanned_pdf:true,recipe,raw_text:existing.raw_text};const{error:ue}=await sb.from('cc_import_items').update({extracted_text:JSON.stringify(payload),source_title:item.file_name||'Scanned recipe',extraction_status:'ready',review_status:'pending',error_message:null}).eq('id',id);if(ue)throw Error(ue.message);return{item:{...item,extracted_text:JSON.stringify(payload),extraction_status:'ready',review_status:'pending'},recipe}}}catch(e){console.warn('Cooking Confidential stored OCR parser refresh:',e)}
+  const blob=await signedBlob(item);const pdfjs=await loadPdf();const pdf=await pdfjs.getDocument({data:new Uint8Array(await blob.arrayBuffer())}).promise;const T=await loadTesseract();const worker=await T.createWorker('eng');let full=[];try{for(let i=1;i<=pdf.numPages;i++){setProgress(`Reading scanned page ${i} of ${pdf.numPages}…`);const page=await pdf.getPage(i);const base=page.getViewport({scale:2.2});const canvas=document.createElement('canvas');canvas.width=Math.ceil(base.width);canvas.height=Math.ceil(base.height);await page.render({canvasContext:canvas.getContext('2d',{willReadFrequently:true}),viewport:base}).promise;await worker.setParameters({tessedit_pageseg_mode:'3',preserve_interword_spaces:'1',user_defined_dpi:'300'});const r=await worker.recognize(canvas);full.push(`--- Page ${i} ---\n${r.data.text||''}`);canvas.width=1;canvas.height=1}}finally{await worker.terminate()}const text=full.join('\n');if(!text.trim())throw Error('OCR could not find readable text in the scanned PDF.');const recipe=deriveRecipe(text,item.file_name||'Scanned recipe');const payload={version:1,scanned_pdf:true,recipe,raw_text:text};const{error:ue}=await sb.from('cc_import_items').update({extracted_text:JSON.stringify(payload),source_title:item.file_name||'Scanned recipe',extraction_status:'ready',review_status:'pending',error_message:null}).eq('id',id);if(ue)throw Error(ue.message);return{item:{...item,extracted_text:JSON.stringify(payload),extraction_status:'ready',review_status:'pending'},recipe};}
