@@ -4,12 +4,13 @@ import * as mammoth from 'https://esm.sh/mammoth@1.6.0';
 import JSZip from 'https://esm.sh/jszip@3.10.1';
 import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
 import { createGenericEditor, editorValue, sanitizeRichHtml } from './generic-editor.js?v=1.3.5';
-import { checkRecipeQuality } from './recipe-quality.js?v=1.0.0';
+import { checkRecipeQuality } from './recipe-quality.js?v=1.0.4';
 import { readSourceTextWithVision } from './vision-text-reader.js?v=1.0.0';
 
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
 const sb=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
+async function imageReviewDiag(id,stage,details={}){try{const p=sb.from('cc_extraction_diagnostics').insert({import_item_id:Number(id),stage:`image_${stage}`,details});await Promise.race([p,new Promise((_,reject)=>setTimeout(()=>reject(new Error('diagnostic timeout')),3000))])}catch(e){console.warn('CC image diagnostic write failed',e)}}
 const dialog=document.querySelector('#detailDialog');
 const esc=s=>String(s??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));
 
@@ -210,34 +211,46 @@ async function ocrBookPage(worker,bitmap){const W=bitmap.width,H=bitmap.height;c
 async function ocrImage(blob,status){status('Reading image…');const worker=await createWorker('eng',1,{logger:m=>{if(m.status==='recognizing text')status(`Reading image… ${Math.round((m.progress||0)*100)}%`);}});try{const full=await worker.recognize(blob);const fullLines=ocrLines(full.data.words||[]);let recipes=[];status('Finding recipe sections…');const book=bookFromLines(fullLines);if(book)recipes=[book];if(!recipes.length)recipes=buildFromLines(fullLines);const bitmap=await createImageBitmap(blob),W=bitmap.width,H=bitmap.height,ratio=W/H;if(!recipes.length){status('Reading recipe sections…');const book=await ocrBookPage(worker,bitmap);if(book)recipes=[book];}if(!recipes.length&&ratio>=.98){status('Looking for multiple recipes…');const grids=ratio<1.1?[[3,3],[2,2]]:[[3,2],[2,2]];for(const[cols,rows]of grids){const found=[],tw=W/cols,th=H/rows;for(let ry=0;ry<rows;ry++)for(let cx=0;cx<cols;cx++){const res=await recognizeTile(worker,bitmap,cx*tw,ry*th,tw,th),tileRecipes=buildFromLines(ocrLines(res.data.words||[]));if(tileRecipes.length)found.push(...tileRecipes);}const unique=dedupeRecipes(found);if(unique.length>recipes.length)recipes=unique;if(recipes.length>=6)break;}}bitmap.close();if(!recipes.length){const r=makeRecipe('Imported image');r.ingredients=cleanIngredientLines(fullLines.map(x=>x.text));recipes=[r];}return recipes;}finally{await worker.terminate();}}
 async function loadOriginal(x){const signedUrl=await getCachedSignedUrl(sb,'cooking-confidential',x.file_path);const r=await fetch(signedUrl);if(!r.ok)throw Error('Could not load the original file.');return r.blob();}
 async function reviewImageImport(id){
+  await imageReviewDiag(id,'review_start');
   try{
+    await imageReviewDiag(id,'vision_start');
     const text=await readSourceTextWithVision(id);
+    await imageReviewDiag(id,'vision_done',{text_length:String(text||'').length,preview:String(text||'').slice(0,500)});
     const {data:{session}}=await sb.auth.getSession();
     if(!session?.access_token)throw Error('Your sign-in session has expired. Please sign in again.');
+    await imageReviewDiag(id,'parser_start');
     const rr=await fetch(SUPABASE_URL+'/functions/v1/cc-import-extract-staging-v2',{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.access_token,'apikey':session.access_token},
       body:JSON.stringify({import_item_id:Number(id),text_override:text})
     });
     const body=await rr.json().catch(()=>({}));
+    await imageReviewDiag(id,'parser_response',{ok:rr.ok,status:rr.status,error:body?.error||null});
     if(!rr.ok)throw Error(body?.error||'Structure parser failed after Vision reading.');
     const item=await getItem(id);
     const parsed0=typeof item.extracted_text==='string'?JSON.parse(item.extracted_text||'{}'):item.extracted_text;
     const recipe=parsed0?.recipe&&typeof parsed0.recipe==='object'?parsed0.recipe:parsed0;
+    await imageReviewDiag(id,'parsed_recipe',{name:recipe?.name||null,ingredient_count:Array.isArray(recipe?.ingredients)?recipe.ingredients.length:0,method_length:String(recipe?.method||'').length});
     const q=checkRecipeQuality(recipe,{mode:'single'});
+    await imageReviewDiag(id,'quality_result',{good:q.good,score:q.score,reasons:q.reasons,metrics:q.metrics});
     if(q.good){
       const mod=await import('./import-review-fix.js?v=1.4.35');
+      await imageReviewDiag(id,'normal_review');
       return mod.reviewImportFixed(id);
     }
+    await imageReviewDiag(id,'rescue_reason',{reason:'quality_gate_failed'});
     await sb.from('cc_import_items').update({extracted_text:JSON.stringify({...parsed0,raw_text:text,quality:q}),extraction_status:'ready',review_status:'pending'}).eq('id',id);
     const rescue=await import('./rescue-ocr.js?v=1.1.1'); return rescue.rescueImport(id);
   }catch(e){
+    await imageReviewDiag(id,'vision_path_error',{name:e?.name||null,message:e?.message||String(e),stack:String(e?.stack||'').slice(0,1200)});
     console.warn('Vision image review failed; using existing OCR as fallback:',e);
     try{
       const blob=await original(await getItem(id));
       const recipes=await ocrImage(blob,()=>{});
       const r=recipes[0];
+      await imageReviewDiag(id,'ocr_fallback_result',{name:r?.name||null,ingredient_count:Array.isArray(r?.ingredients)?r.ingredients.length:0,method_length:String(r?.method||'').length});
       const q=checkRecipeQuality(r,{mode:'single'});
+      await imageReviewDiag(id,'ocr_fallback_quality',{good:q.good,score:q.score,reasons:q.reasons,metrics:q.metrics});
       if(q.good){
         const rescue=await import('./rescue-ocr.js?v=1.1.1');
         // Keep existing image OCR as a fallback only; normal review remains available.
@@ -245,8 +258,10 @@ async function reviewImageImport(id){
         await sb.from('cc_import_items').update({extracted_text:JSON.stringify({recipe:r,raw_text:(r.ingredients||[]).join('\n')+'\n'+(r.method||[]).join('\n')}),extraction_status:'ready',review_status:'pending'}).eq('id',id);
         const mod=await import('./import-review-fix.js?v=1.4.35'); return mod.reviewImportFixed(id);
       }
+      await imageReviewDiag(id,'ocr_fallback_rescue',{reason:'quality_gate_failed'});
       const rescue=await import('./rescue-ocr.js?v=1.1.1'); return rescue.rescueImport(id);
     }catch(fallbackError){
+      await imageReviewDiag(id,'ocr_fallback_error',{name:fallbackError?.name||null,message:fallbackError?.message||String(fallbackError)});
       const rescue=await import('./rescue-ocr.js?v=1.1.1'); return rescue.rescueImport(id);
     }
   }
