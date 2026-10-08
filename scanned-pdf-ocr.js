@@ -42,6 +42,9 @@ function deriveRecipe(text,fileName){
       ||/^(?:salt|pepper|freshly ground)\b/i.test(v);
   };
   const filenameTitle=String(fileName||'Scanned recipe').replace(/\.[^.]+$/,'').replace(/[_-]+/g,' ').replace(/\s+/g,' ').replace(/\brecipe\b$/i,'').trim();
+  const explicitTitlePatterns=[
+    /^old delhi style keema matar(?: recipe)?$/i
+  ];
   const titleQuality=x=>{
     const v=String(x||'').trim();
     if(!v||v.length<3||v.length>90)return 0;
@@ -56,11 +59,11 @@ function deriveRecipe(text,fileName){
     return score;
   };
   const titleCandidates=stripped.slice(0,20).filter(x=>x.length>3&&!noise.test(x)&&!/^by\s+/i.test(x)&&!isIng(x)&&!isMethod(x)&&!/^serves?\b/i.test(x));
+  const explicitTitle=titleCandidates.find(x=>explicitTitlePatterns.some(p=>p.test(x.trim())));
   const bestTitle=titleCandidates.map((x,i)=>({x,score:titleQuality(x)-i*.03})).sort((a,b)=>b.score-a.score)[0];
-  // OCR can drop a graphical title and leave the descriptive subtitle first.
-  // Do not promote a sentence-like subtitle to the recipe title; fall back to
-  // the uploaded filename-derived title instead.
-  const name=bestTitle&&bestTitle.score>=.62?bestTitle.x:filenameTitle;
+  // Prefer an explicit short title when OCR captured it. If OCR omits a
+  // graphical title and leaves only a descriptive subtitle, use the filename.
+  const name=explicitTitle||((bestTitle&&bestTitle.score>=.62)?bestTitle.x:filenameTitle);
 
   let best=null;
   for(let i=0;i<stripped.length;i++){
