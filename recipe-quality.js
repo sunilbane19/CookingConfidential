@@ -41,9 +41,17 @@ export function checkRecipeQuality(recipe, {mode='single'}={}) {
   if(ingredients.length>=3) score+=20; else reasons.push('too_few_ingredients');
   if(plausibleIngredients>=Math.min(3,ingredients.length)) score+=15; else reasons.push('ingredients_do_not_look_like_recipe_ingredients');
   const methodWords=words(method).length;
-  if(methodWords>=8 || method.length>=60) score+=15; else reasons.push('method_too_short');
-  const instructionLines=String(method).split(/\n+/).filter(Boolean).filter(looksLikeInstruction).length;
-  if(instructionLines>=1) score+=10; else reasons.push('method_does_not_look_like_instructions');
+  const hasMethod=methodWords>0 || method.trim().length>0;
+  if(hasMethod){
+    if(methodWords>=8 || method.length>=60) score+=15; else reasons.push('method_too_short');
+    const instructionLines=String(method).split(/\n+/).filter(Boolean).filter(looksLikeInstruction).length;
+    if(instructionLines>=1) score+=10; else reasons.push('method_does_not_look_like_instructions');
+  }else{
+    // A recipe can legitimately be ingredients-only (for example a chutney,
+    // sauce base, spice mix, or a photographed recipe page with no method).
+    // Keep a positive contribution without making Method mandatory.
+    score+=15;
+  }
   const letterRatio=letters(all)/Math.max(1,all.length);
   if(letterRatio>=0.45) score+=10; else reasons.push('low_readable_text_ratio');
   if(junkChars(all)===0) score+=5; else reasons.push('ocr_garbage_characters');
