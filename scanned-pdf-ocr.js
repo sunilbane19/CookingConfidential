@@ -4,7 +4,7 @@ import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
 const sb=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
-const OCR_PARSER_VERSION='1.0.28';
+const OCR_PARSER_VERSION='1.0.29';
 const OCR_PROFILE='tesseract-eng-psm3-v1';
 async function ocrDiag(id,stage,details={}){try{const p=sb.from('cc_extraction_diagnostics').insert({import_item_id:Number(id),stage:`ocr_${stage}`,details});await Promise.race([p,new Promise((_,reject)=>setTimeout(()=>reject(new Error('diagnostic timeout')),3000))])}catch(e){console.warn('CC OCR diagnostic write failed',e)}}
 let pdfPromise,tessPromise;
@@ -52,7 +52,7 @@ function deriveRecipe(text,fileName){
   const cleanTitleCandidate=x=>String(x||'').replace(/^(?:\d+[A-Za-z]?\s*[-=]\s*[A-Za-z]{1,3}\s+)+/i,'').replace(/\s*[@©®™<>«»+={}\[\]\\].*$/,'').replace(/\s+/g,' ').trim();
   const titleBlocked=/^(?:skip to (?:main )?content|home|recipes?|save recipe|print|share|ad|advertisement|good food team|easy|alternatives?|complete the dish|nutrition|loading|rate(?: now)?|comments?|questions?|tips?|image(?:\s+\d+)?(?::.*)?|subscribe(?: now)?|updated:?|published:?|follow|like|---?\s*page\s+\d+\s*---?)$/i;
   const titleish=x=>{
-    const v=String(x||'').replace(/\s*[@©®™<>«»+={}[\]\\].*$/,'').replace(/\s+/g,' ').trim(), w=v.split(/\s+/).filter(Boolean);
+    const v=cleanTitleCandidate(x), w=v.split(/\s+/).filter(Boolean);
     if(!v||v.length<3||v.length>100||w.length>14||titleBlocked.test(v)||isPageMarker(v))return false;
     // Reject OCR/UI garbage before considering a line as the recipe title.
     if(/[@©®™<>«»+={}\[\]\\]/.test(v))return false;
@@ -65,7 +65,7 @@ function deriveRecipe(text,fileName){
     return true;
   };
   const titleScore=(x,distance)=>{
-    const v=String(x||'').replace(/\s*[@©®™<>«»+={}[\]\\].*$/,'').trim(),w=v.split(/\s+/).filter(Boolean);
+    const v=cleanTitleCandidate(x), w=v.split(/\s+/).filter(Boolean);
     if(!titleish(v))return -999;
     const caps=w.filter(q=>/^[A-ZÀ-ÖØ-Þ][A-Za-z'’&-]*$/.test(q)).length;
     let sc=10-Math.min(distance,14)*.35;
@@ -82,11 +82,11 @@ function deriveRecipe(text,fileName){
     const candidates=[];
     for(let k=0;k<local.length;k++){
       const d=local.length-1-k;
-      const v=clean(local[k]).replace(/\s*[@©®™<>«»+={}[\]\\].*$/,'').trim();
+      const v=cleanTitleCandidate(clean(local[k]));
       const sc=titleScore(v,d);
       if(sc>-100)candidates.push({x:v,score:sc});
       if(k+1<local.length){
-        const pair=clean(v+' '+local[k+1]).replace(/\s*[@©®™<>«»+={}[\]\\].*$/,'').trim();
+        const pair=cleanTitleCandidate(v+' '+local[k+1]);
         const psc=titleScore(pair,d)+1.5;
         if(psc>-100)candidates.push({x:pair,score:psc});
       }
