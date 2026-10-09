@@ -4,7 +4,7 @@ import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
 const sb=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
-const OCR_PARSER_VERSION='1.0.37';
+const OCR_PARSER_VERSION='1.0.38';
 const OCR_PROFILE='tesseract-eng-psm3-v1';
 async function ocrDiag(id,stage,details={}){try{const p=sb.from('cc_extraction_diagnostics').insert({import_item_id:Number(id),stage:`ocr_${stage}`,details});await Promise.race([p,new Promise((_,reject)=>setTimeout(()=>reject(new Error('diagnostic timeout')),3000))])}catch(e){console.warn('CC OCR diagnostic write failed',e)}}
 let pdfPromise,tessPromise;
@@ -14,7 +14,7 @@ function loadPdf(){if(pdfPromise)return pdfPromise;pdfPromise=import('https://cd
 function loadTesseract(){if(tessPromise)return tessPromise;tessPromise=new Promise((resolve,reject)=>{if(window.Tesseract?.createWorker)return resolve(window.Tesseract);const s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';s.async=true;s.onload=()=>window.Tesseract?.createWorker?resolve(window.Tesseract):reject(new Error('Image reader loaded without OCR support.'));s.onerror=()=>reject(new Error('Could not load the image reader on this browser.'));document.head.appendChild(s)});return tessPromise}
 async function signedBlob(item){const path=item.file_path||item.original_file_path;if(!path)throw Error('Uploaded PDF path is missing.');const signedUrl=await getCachedSignedUrl(sb,'cooking-confidential',path);const r=await fetch(signedUrl);if(!r.ok)throw Error('Could not load the uploaded PDF.');return r.blob()}
 function setProgress(text){const d=document.querySelector('#detailContent');if(d){const p=d.querySelector('.cc-pdf-progress');if(p)p.textContent=text}}
-function normaliseOcr(text){let a=lines(text);a=a.map(x=>{x=x.replace(/\s*\|\s*/g,' ').replace(/\bIbs\b/gi,'lbs').replace(/\bIb\b/g,'lb');x=x.replace(/\b1\s*\/\s*2\b/g,'½').replace(/\b1\s*\/\s*4\b/g,'¼').replace(/\b3\s*\/\s*4\b/g,'¾');/* Tesseract commonly reads the ½ glyph as %, 1½ as 1%, and ½ as ¥2/Y2. Only repair these when immediately followed by a recipe unit, so ordinary percentages are untouched. */const unit='(?:tsp|tbsp|cup|cups|oz|lb|lbs|g|kg|ml|l|cloves?|slices?|pieces?)\\b';x=x.replace(new RegExp('\\b(\\d+)\\s*%\\s*(?='+unit+')','gi'),'$1½ ').replace(new RegExp('\\b%\\s*(?='+unit+')','gi'),'½ ').replace(new RegExp('(?:¥2|Y2|V2|y2)\\s*(?='+unit+')','g'),'½ ');x=x.replace(/\((\d{1,3})9\)/g,'($1g)');return x.replace(/\s{2,}/g,' ').trim()}).filter(Boolean);const out=[];for(const x of a){if(out.some(y=>y.toLowerCase()===x.toLowerCase()))continue;out.push(x)}return out}
+function normaliseOcr(text){let a=lines(text);a=a.map(x=>{x=x.replace(/\s*\|\s*/g,' ').replace(/\bIbs\b/gi,'lbs').replace(/\bIb\b/g,'lb');x=x.replace(/\b1\s*\/\s*2\b/g,'½').replace(/\b1\s*\/\s*4\b/g,'¼').replace(/\b3\s*\/\s*4\b/g,'¾');/* Tesseract commonly reads the ½ glyph as %, 1½ as 1%, and ½ as ¥2/Y2. Only repair these when immediately followed by a recipe unit, so ordinary percentages are untouched. */const unit='(?:tsp|tbsp|cup|cups|oz|lb|lbs|g|kg|ml|l|cloves?|slices?|pieces?)\\b';x=x.replace(new RegExp('\\b(\\d+)\\s*%\\s*(?='+unit+')','gi'),'$1½ ').replace(new RegExp('\\b%\\s*(?='+unit+')','gi'),'½ ').replace(new RegExp('(?:¥2|Y2|V2|y2|¥s|Ys|Y5|V5|y5)\\s*(?='+unit+')','g'),'½ ');x=x.replace(/^e[o0]\s*[Y¥Vv]\s*ared\s+chilli\b/i,'½ red chilli');x=x.replace(/\((\d{1,3})9\)/g,'($1g)');return x.replace(/\s{2,}/g,' ').trim()}).filter(Boolean);const out=[];for(const x of a){if(out.some(y=>y.toLowerCase()===x.toLowerCase()))continue;out.push(x)}return out}
 function deriveRecipe(text,fileName){
   const raw=normaliseOcr(text).join('\n');
   const structuralHeading=/(?:ingredients?|ingredient list|what you need|ingredients required|shopping list|directions?|instructions?|method|preparation|preparations|steps?|cooking steps|recipe steps|cooking instructions|step[- ]by[- ]step(?: [a-z0-9&\/ -]+)? instructions?|preparation steps|recipe method|cooking method|procedure|special equipment|notes?|make-ahead and storage|nutrition(?: facts)?|serving suggestions?|recipe tips?)\b/i;
@@ -81,11 +81,22 @@ function deriveRecipe(text,fileName){
     return sc;
   };
   const findTitle=sectionIndex=>{
-    let local=stripped.slice(Math.max(0,sectionIndex-28),sectionIndex)
+    let local=stripped.slice(0,sectionIndex)
       .map(x=>String(x||'').trim()).filter(Boolean);
-    // Titles belong to the recipe introduction, not later page sections such as Equipment.
+    // Search the complete pre-recipe-section text, not only the last 28 lines:
+    // long introductions and ingredient notes can otherwise push the real title out.
     const sectionBoundary=local.findIndex(x=>/^(?:ingredient notes?|equipment|recipe notes?|chef tips?|ingredients?|directions?|instructions?|method|preparation|storage|faqs?)\s*:?$/i.test(heading(x)));
     if(sectionBoundary>=0)local=local.slice(0,sectionBoundary);
+    else if(local.length>40)local=local.slice(-40);
+    // Recipe websites often place the real title immediately after “Jump to recipe”.
+    // Prefer that clear title position over category/servings metadata lower on page 1.
+    const jumpIndex=local.findIndex(x=>/\bjump to recipe\b/i.test(x));
+    if(jumpIndex>=0){
+      for(let j=jumpIndex+1;j<Math.min(local.length,jumpIndex+6);j++){
+        const candidate=cleanTitleCandidate(local[j]);
+        if(titleish(candidate)&&!/\b(?:category|servings?|prep(?:aration)?\s*time|cook(?:ing)?\s*time|total\s*time)\b/i.test(candidate))return candidate;
+      }
+    }
     const candidates=[];
     // Promotional recipe introductions often contain the title inside a sentence,
     // rather than on a standalone line (e.g. "Try our aromatic Moroccan Chermoula Sauce!").
@@ -206,7 +217,7 @@ function deriveRecipe(text,fileName){
     for(let nj=ni+1;nj<stripped.length;nj++){
       const v=stripItem(stripped[nj]);
       if(isPageMarker(v)||noteStop.test(heading(v)))break;
-      if(noteHead.test(heading(v))&&parts.length)break;
+      if(noteHead.test(heading(v)))break;
       if(!v||noise.test(v)||/^(?:print|share|pin it|back to recipes|see all recipes)$/i.test(v))continue;
       if(/^(?:english|india \(inr\)|and y cooks|shop|recipes|youtube|cookbook)$/i.test(v))continue;
       parts.push(v);
