@@ -597,7 +597,27 @@ function repairSectionContamination(recipe:any){
   return {...recipe,ingredients:[...new Set(ingredients)],method,description:description||null};
 }
 
-function finalizeParsedRecipe(recipe:any,sourceText:string){
+function extractDocxIntro(sourceText:string,recipeName:string){
+  const raw=String(sourceText||"").replace(/\r/g,"").replace(/\u00a0/g," ");
+  const lines=raw.split("\n").map(x=>cleanRecipeLine(x)).filter(Boolean);
+  const ingredientHeading=/^(?:ingredients?(?:\s+profile)?|ingredient list|what you need|ingredients required|shopping list|the ingredients)$/i;
+  const stop=lines.findIndex(x=>ingredientHeading.test(x));
+  const before=lines.slice(0,stop>=0?stop:lines.length);
+  const title=cleanRecipeLine(recipeName).toLowerCase();
+  const heading=/^(?:culinary concept(?:\s*&\s*chef masterclass insights)?|chef masterclass insights|recipe specifications|ingredients profile|the eggplant base|the aromatic tomato sauce|the cheese\s*&\s*textural finish|step-by-step execution guide|introduction|overview|description|recipe)$/i;
+  const metadata=/^(?:prep(?:aration)? time|cook(?:ing)? time|total time|yield|serves?|servings?|difficulty|cuisine|course)\s*:/i;
+  const candidates=before.filter(x=>{
+    const v=clean(x),low=v.toLowerCase();
+    if(!v||low===title||heading.test(v)||metadata.test(v))return false;
+    if(/^(?:chef\s+[A-Z]|•|[-*]\s|step\s*\d+)/i.test(v))return false;
+    if(/^(?:chef thomas keller|chef akis petretzikis|chef cal peternell|chef jon ashton)\b/i.test(v))return false;
+    if(v.length<80||v.length>500)return false;
+    if(/\b(?:prep time|cook time|yield:|difficulty:)\b/i.test(v))return false;
+    return true;
+  });
+  return candidates.length?cleanDescription(candidates[0]):null;
+}
+function finalizeParsedRecipe(recipe:any,sourceText:string,fileName=''){
   if(!recipe)return recipe;
   recipe=repairSectionContamination(recipe);
   const meta=extractDescriptionAndNotes(sourceText);
@@ -606,11 +626,11 @@ function finalizeParsedRecipe(recipe:any,sourceText:string){
   const personalNotes=noteParts.length?noteParts.join("\n"):String(recipe.personal_notes||"").trim();
   const noteSet=new Set(personalNotes.split(/\n+/).map(x=>cleanRecipeLine(x).toLowerCase()).filter(Boolean));
   const method=cleanExtractedMethod(String(recipe.method||"").split(/\n+/).filter(x=>!noteSet.has(cleanRecipeLine(x).toLowerCase())).join("\n"));
-  return {...recipe,description:recipe.description||meta.description||null,method,personal_notes:recipe.personal_notes||personalNotes||null};
+  const docxIntro=/\\.docx$/i.test(fileName)&&!recipe.description&&!meta.description?extractDocxIntro(sourceText,recipe.name||''):null;\n  return {...recipe,description:recipe.description||meta.description||docxIntro||null,method,personal_notes:recipe.personal_notes||personalNotes||null};
 }
 function parse(text:string,file:string,isUrl=false){
   const recipe=parseRaw(text,file,isUrl);
-  return finalizeParsedRecipe(recipe,text);
+  return finalizeParsedRecipe(recipe,text,file);
 }
 function titleFor(recipe:any,file:string,text:string){const lang=language(text);if(lang==="English")return recipe.name||file.replace(/\.[^.]+$/i,"");const base=file.replace(/\.[^.]+$/i,"").replace(/[_-]+/g," ").trim();return `${base} (${lang})`;}
 async function fetchWithTimeout(input:string|URL,init:RequestInit={},ms=20000){
