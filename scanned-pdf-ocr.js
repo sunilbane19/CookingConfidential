@@ -4,7 +4,7 @@ import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
 const sb=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
-const OCR_PARSER_VERSION='1.0.25';
+const OCR_PARSER_VERSION='1.0.27';
 const OCR_PROFILE='tesseract-eng-psm3-v1';
 async function ocrDiag(id,stage,details={}){try{const p=sb.from('cc_extraction_diagnostics').insert({import_item_id:Number(id),stage:`ocr_${stage}`,details});await Promise.race([p,new Promise((_,reject)=>setTimeout(()=>reject(new Error('diagnostic timeout')),3000))])}catch(e){console.warn('CC OCR diagnostic write failed',e)}}
 let pdfPromise,tessPromise;
@@ -14,7 +14,7 @@ function loadPdf(){if(pdfPromise)return pdfPromise;pdfPromise=import('https://cd
 function loadTesseract(){if(tessPromise)return tessPromise;tessPromise=new Promise((resolve,reject)=>{if(window.Tesseract?.createWorker)return resolve(window.Tesseract);const s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';s.async=true;s.onload=()=>window.Tesseract?.createWorker?resolve(window.Tesseract):reject(new Error('Image reader loaded without OCR support.'));s.onerror=()=>reject(new Error('Could not load the image reader on this browser.'));document.head.appendChild(s)});return tessPromise}
 async function signedBlob(item){const path=item.file_path||item.original_file_path;if(!path)throw Error('Uploaded PDF path is missing.');const signedUrl=await getCachedSignedUrl(sb,'cooking-confidential',path);const r=await fetch(signedUrl);if(!r.ok)throw Error('Could not load the uploaded PDF.');return r.blob()}
 function setProgress(text){const d=document.querySelector('#detailContent');if(d){const p=d.querySelector('.cc-pdf-progress');if(p)p.textContent=text}}
-function normaliseOcr(text){let a=lines(text);a=a.map(x=>{x=x.replace(/\s*\|\s*/g,' ').replace(/\bIbs\b/gi,'lbs').replace(/\bIb\b/g,'lb');x=x.replace(/\b1\s*\/\s*2\b/g,'½').replace(/\b1\s*\/\s*4\b/g,'¼').replace(/\b3\s*\/\s*4\b/g,'¾');/* Tesseract commonly reads the ½ glyph as %, 1½ as 1%, and ½ as ¥2/Y2. Only repair these when immediately followed by a recipe unit, so ordinary percentages are untouched. */const unit='(?:tsp|tbsp|cup|cups|oz|lb|lbs|g|kg|ml|l|cloves?|slices?|pieces?)\\b';x=x.replace(new RegExp('\\b(\\d+)\\s*%\\s*(?='+unit+')','gi'),'$1½ ').replace(new RegExp('\\b%\\s*(?='+unit+')','gi'),'½ ').replace(new RegExp('(?:¥2|Y2|V2|y2)\\s*(?='+unit+')','g'),'½ ');return x.replace(/\s{2,}/g,' ').trim()}).filter(Boolean);const out=[];for(const x of a){if(out.some(y=>y.toLowerCase()===x.toLowerCase()))continue;out.push(x)}return out}
+function normaliseOcr(text){let a=lines(text);a=a.map(x=>{x=x.replace(/\s*\|\s*/g,' ').replace(/\bIbs\b/gi,'lbs').replace(/\bIb\b/g,'lb');x=x.replace(/\b1\s*\/\s*2\b/g,'½').replace(/\b1\s*\/\s*4\b/g,'¼').replace(/\b3\s*\/\s*4\b/g,'¾');/* Tesseract commonly reads the ½ glyph as %, 1½ as 1%, and ½ as ¥2/Y2. Only repair these when immediately followed by a recipe unit, so ordinary percentages are untouched. */const unit='(?:tsp|tbsp|cup|cups|oz|lb|lbs|g|kg|ml|l|cloves?|slices?|pieces?)\\b';x=x.replace(new RegExp('\\b(\\d+)\\s*%\\s*(?='+unit+')','gi'),'$1½ ').replace(new RegExp('\\b%\\s*(?='+unit+')','gi'),'½ ').replace(new RegExp('(?:¥2|Y2|V2|y2)\\s*(?='+unit+')','g'),'½ ');x=x.replace(/\((\d{1,3})9\)/g,'($1g)');return x.replace(/\s{2,}/g,' ').trim()}).filter(Boolean);const out=[];for(const x of a){if(out.some(y=>y.toLowerCase()===x.toLowerCase()))continue;out.push(x)}return out}
 function deriveRecipe(text,fileName){
   const raw=normaliseOcr(text).join('\n');
   const structuralHeading=/(?:ingredients?|ingredient list|what you need|ingredients required|shopping list|directions?|instructions?|method|preparation|preparations|steps?|cooking steps|recipe steps|cooking instructions|step[- ]by[- ]step(?: [a-z0-9&\/ -]+)? instructions?|preparation steps|recipe method|cooking method|procedure|special equipment|notes?|make-ahead and storage|nutrition(?: facts)?|serving suggestions?|recipe tips?)\b/i;
@@ -30,7 +30,7 @@ function deriveRecipe(text,fileName){
   const isPageMarker=x=>/^[-=]{2,}\s*Page\s+\d+\s*[-=]{2,}$/i.test(String(x||'').trim())||/^Page\s+\d+$/i.test(String(x||'').trim());
   const isIng=x=>/^(?:ingredients?|what you need|ingredients required|shopping list)\s*:?\s*$/i.test(heading(x));
   const isMethod=x=>/^(?:directions?|instructions?|method|preparation|preparations|steps?)\s*:?\s*$/i.test(heading(x));
-  const isStop=x=>isPageMarker(x)||/^(?:special equipment|notes?|make-ahead and storage|nutrition(?: facts)?|reviews?|related articles|related recipes?|comments?|video|recipe tips?|top tips?)\b/i.test(heading(x));
+  const isStop=x=>/^(?:special equipment|notes?|make-ahead and storage|nutrition(?: facts)?|recipe information|reviews?|related articles|related recipes?|comments?|video|recipe tips?|top tips?)\b/i.test(heading(x));
   const noise=/^(?:get|the app|app|save|rate|print|share|jump to|keep (?:the )?screen awake|credit:|advertisement|advert|reviews?\s*\(|featured tweaks|most helpful|related articles|editorial guidelines|privacy|contact|peopleinc\.|follow us|newsletters?)\b/i;
   const stripItem=x=>String(x||'').replace(/^\s*[|¦\]\[=_-]+\s*/,'').replace(/^step\s+\d+\s*[:.)-]?\s*/i,'').replace(/\s+/g,' ').trim();
   const ingredientLike=x=>{
@@ -51,7 +51,7 @@ function deriveRecipe(text,fileName){
     .trim()||'Scanned recipe';
   const titleBlocked=/^(?:skip to (?:main )?content|home|recipes?|save recipe|print|share|ad|advertisement|good food team|easy|alternatives?|complete the dish|nutrition|loading|rate(?: now)?|comments?|questions?|tips?|image(?:\s+\d+)?(?::.*)?|subscribe(?: now)?|updated:?|published:?|follow|like|---?\s*page\s+\d+\s*---?)$/i;
   const titleish=x=>{
-    const v=String(x||'').replace(/\s+/g,' ').trim(), w=v.split(/\s+/).filter(Boolean);
+    const v=String(x||'').replace(/\s*[@©®™<>«»+={}[\]\\].*$/,'').replace(/\s+/g,' ').trim(), w=v.split(/\s+/).filter(Boolean);
     if(!v||v.length<3||v.length>100||w.length>14||titleBlocked.test(v)||isPageMarker(v))return false;
     // Reject OCR/UI garbage before considering a line as the recipe title.
     if(/[@©®™<>«»+={}\[\]\\]/.test(v))return false;
@@ -59,12 +59,12 @@ function deriveRecipe(text,fileName){
     const letters=(v.match(/[A-Za-zÀ-ÖØ-öø-ÿ]/g)||[]).length;
     const nonLetters=(v.match(/[^A-Za-zÀ-ÖØ-öø-ÿ\s'’&-]/g)||[]).length;
     if(letters<Math.max(4,Math.floor(v.length*.55))||nonLetters>3)return false;
-    if(/[.!?]$/.test(v)||/^(?:ingredients?|directions?|instructions?|method|preparation|steps?)\b/i.test(v))return false;
+    if(/[.?]$/.test(v)||/^(?:ingredients?|directions?|instructions?|method|preparation|steps?)\b/i.test(v))return false;
     if(/^(?:by\s+|prep(?:aration)?\s*time|cook(?:ing)?\s*time|total\s*time|serves?\b|servings?\b|yield\b)/i.test(v))return false;
     return true;
   };
   const titleScore=(x,distance)=>{
-    const v=String(x||'').trim(),w=v.split(/\s+/).filter(Boolean);
+    const v=String(x||'').replace(/\s*[@©®™<>«»+={}[\]\\].*$/,'').trim(),w=v.split(/\s+/).filter(Boolean);
     if(!titleish(v))return -999;
     const caps=w.filter(q=>/^[A-ZÀ-ÖØ-Þ][A-Za-z'’&-]*$/.test(q)).length;
     let sc=10-Math.min(distance,14)*.35;
@@ -81,11 +81,11 @@ function deriveRecipe(text,fileName){
     const candidates=[];
     for(let k=0;k<local.length;k++){
       const d=local.length-1-k;
-      const v=clean(local[k]);
+      const v=clean(local[k]).replace(/\s*[@©®™<>«»+={}[\]\\].*$/,'').trim();
       const sc=titleScore(v,d);
       if(sc>-100)candidates.push({x:v,score:sc});
       if(k+1<local.length){
-        const pair=clean(v+' '+local[k+1]);
+        const pair=clean(v+' '+local[k+1]).replace(/\s*[@©®™<>«»+={}[\]\\].*$/,'').trim();
         const psc=titleScore(pair,d)+1.5;
         if(psc>-100)candidates.push({x:pair,score:psc});
       }
