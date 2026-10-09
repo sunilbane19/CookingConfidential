@@ -48,12 +48,13 @@ function deriveRecipe(text,fileName){
     .replace(/\s*\[\d+\]\s*$/,'')
     .replace(/\s+/g,' ')
     .replace(/\brecipe\b$/i,'')
-    .trim()||'Scanned recipe';
+    .trim().replace(/\b[a-z]/g,m=>m.toUpperCase())||'Scanned recipe';
   const cleanTitleCandidate=x=>String(x||'').replace(/^(?:\d+[A-Za-z]?\s*[-=]\s*[A-Za-z]{1,3}\s+)+/i,'').replace(/\s*[@©®™<>«»+={}\[\]\\].*$/,'').replace(/\s+/g,' ').trim();
   const titleBlocked=/^(?:skip to (?:main )?content|home|recipes?|save recipe|print|share|ad|advertisement|good food team|easy|alternatives?|complete the dish|nutrition|loading|rate(?: now)?|comments?|questions?|tips?|image(?:\s+\d+)?(?::.*)?|subscribe(?: now)?|updated:?|published:?|follow|like|---?\s*page\s+\d+\s*---?)$/i;
   const titleish=x=>{
     const v=cleanTitleCandidate(x), w=v.split(/\s+/).filter(Boolean);
     if(!v||v.length<3||v.length>100||w.length>14||titleBlocked.test(v)||isPageMarker(v))return false;
+    if(/\b(?:need a new recipe|refresh your taste|try our|perfect as|dip or marinade|write a comment|say marinade)\b/i.test(v))return false;
     // Reject OCR/UI garbage before considering a line as the recipe title.
     if(/[@©®™<>«»+={}\[\]\\]/.test(v))return false;
     if(/^[^A-Za-zÀ-ÖØ-öø-ÿ]*[0-9][^A-Za-zÀ-ÖØ-öø-ÿ]*\b/.test(v))return false;
@@ -145,10 +146,17 @@ function deriveRecipe(text,fileName){
         const v=stripItem(line);
         if(isPageMarker(v)){flush();continue}
         if(!v||noise.test(v)||/^directio\w*\s*[:=]/i.test(v))continue;
+        if(/^(?:prep(?:aration)?\s*time|cook(?:ing)?\s*time|total\s*time|serves?\b|servings?\b|yield\b|write a comment|like\s+comment)/i.test(v))continue;
         if(/^step\s*\d+/i.test(v)){flush();continue}
         if(/^(?:shell|filling|for\s+[^:]+:)\s*$/i.test(v)){flush();continue}
         if(/^\d+\.\s+/.test(v)){flush();current=v;continue}
-        current=current?current+' '+v:v;
+        const sentences=v.split(/(?<=[.!?])\s+(?=[A-Z])/).map(s=>s.trim()).filter(Boolean);
+        for(const sentence of sentences){
+          if(/^(?:prep(?:aration)?\s*time|cook(?:ing)?\s*time|total\s*time|serves?\b|servings?\b|yield\b|write a comment)/i.test(sentence))continue;
+          if(current&&/[.!?]$/.test(current)){flush()}
+          current=current?current+' '+sentence:sentence;
+          if(/[.!?]$/.test(current))flush();
+        }
       }
       flush();
       for(let k=0;k<methodParts.length-1;k++){
