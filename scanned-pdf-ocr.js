@@ -4,7 +4,7 @@ import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
 const sb=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
-const OCR_PARSER_VERSION='1.0.45';
+const OCR_PARSER_VERSION='1.0.46';
 const OCR_PROFILE='tesseract-eng-psm3-v1';
 async function ocrDiag(id,stage,details={}){try{const p=sb.from('cc_extraction_diagnostics').insert({import_item_id:Number(id),stage:`ocr_${stage}`,details});await Promise.race([p,new Promise((_,reject)=>setTimeout(()=>reject(new Error('diagnostic timeout')),3000))])}catch(e){console.warn('CC OCR diagnostic write failed',e)}}
 let pdfPromise,tessPromise;
@@ -170,7 +170,7 @@ function deriveRecipe(text,fileName){
           .replace(/\s*(?:©|®|™)?\s*(?:write\s*a\s*comment|writeacomment|like\s+comment|share)\b.*$/i,'')
           .replace(/\s*\$?\d+\s*[@©®™].*$/i,'')
           // Remove the OCR artefact appended after the Chermoula method.
-          .replace(/\s*(?:[.!?]\s*)?minutes?\s*\+\s*resting\b.*$/i,'').trim();
+          .replace(/\s*(?:dressing\s*\.\s*)?(?:[.!?]\s*)?minutes?\s*\+\s*resting\b.*$/i,'').trim();
         if(isPageMarker(v)){flush();continue}
         if(!v||noise.test(v)||/^directio\w*\s*[:=]/i.test(v))continue;
         if(/^(?:prep(?:aration)?\s*time|cook(?:ing)?\s*time|total\s*time|serves?\b|servings?\b|yield\b|write a comment|like\s+comment)/i.test(v))continue;
@@ -243,7 +243,7 @@ function deriveRecipe(text,fileName){
     const parentRecipeNotes=/^recipe notes?$/i.test(sectionName);
     for(let nj=ni+1;nj<stripped.length;nj++){
       const v=stripItem(stripped[nj]), h=heading(v);
-      if(isPageMarker(v)||noteStop.test(h)||/^(?:clippings and notes|more sheet cakes to delight a crowd|from the editors|did you love the recipe|keep screen awake|page\s+\d+)\b/i.test(v))break;
+      if(isPageMarker(v)||noteStop.test(h)||/^(?:clippings and notes|more sheet cakes to delight a crowd|from the editors|did you love the recipe|keep screen awake|page\s*\d+\b|[-=]{2,}\s*page\s*\d+|\d+\s*[-–—]{2,}\s*oo\s*keep screen awake)\b/i.test(v))break;
       if(noteHead.test(h)){
         if(parentRecipeNotes){
           consumedNoteHeadings.add(nj);
