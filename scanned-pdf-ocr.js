@@ -4,7 +4,7 @@ import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
 const sb=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
-const OCR_PARSER_VERSION='1.0.43';
+const OCR_PARSER_VERSION='1.0.44';
 const OCR_PROFILE='tesseract-eng-psm3-v1';
 async function ocrDiag(id,stage,details={}){try{const p=sb.from('cc_extraction_diagnostics').insert({import_item_id:Number(id),stage:`ocr_${stage}`,details});await Promise.race([p,new Promise((_,reject)=>setTimeout(()=>reject(new Error('diagnostic timeout')),3000))])}catch(e){console.warn('CC OCR diagnostic write failed',e)}}
 let pdfPromise,tessPromise;
@@ -83,6 +83,11 @@ function deriveRecipe(text,fileName){
   const findTitle=sectionIndex=>{
     let local=stripped.slice(0,sectionIndex)
       .map(x=>String(x||'').trim()).filter(Boolean);
+    // Recipe titles belong to the first page. If the ingredients section is on a
+    // later page, never let page-two headings (for example "Clippings and Notes")
+    // compete with the actual title from page one.
+    const firstPageBreak=local.findIndex(isPageMarker);
+    if(firstPageBreak>=0)local=local.slice(0,firstPageBreak);
     // Search the complete pre-recipe-section text, not only the last 28 lines:
     // long introductions and ingredient notes can otherwise push the real title out.
     const sectionBoundary=local.findIndex(x=>/^(?:ingredient notes?|equipment|recipe notes?|chef tips?|ingredients?|directions?|instructions?|method|preparation|storage|faqs?)\s*:?$/i.test(heading(x)));
