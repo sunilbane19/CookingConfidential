@@ -4,7 +4,7 @@ import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
 const sb=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
-const OCR_PARSER_VERSION='1.0.39';
+const OCR_PARSER_VERSION='1.0.40';
 const OCR_PROFILE='tesseract-eng-psm3-v1';
 async function ocrDiag(id,stage,details={}){try{const p=sb.from('cc_extraction_diagnostics').insert({import_item_id:Number(id),stage:`ocr_${stage}`,details});await Promise.race([p,new Promise((_,reject)=>setTimeout(()=>reject(new Error('diagnostic timeout')),3000))])}catch(e){console.warn('CC OCR diagnostic write failed',e)}}
 let pdfPromise,tessPromise;
@@ -30,7 +30,7 @@ function deriveRecipe(text,fileName){
   const isPageMarker=x=>/^[-=]{2,}\s*Page\s+\d+\s*[-=]{2,}$/i.test(String(x||'').trim())||/^Page\s+\d+$/i.test(String(x||'').trim());
   const isIng=x=>/^(?:ingredients?|what you need|ingredients required|shopping list)\s*:?\s*$/i.test(heading(x));
   const isMethod=x=>/^(?:directions?|instructions?|method|preparation|preparations|steps?)\s*:?\s*$/i.test(heading(x));
-  const isStop=x=>/^(?:special equipment|ingredient notes?|recipe notes?|chef tips?|notes?|storage|variations?|serving suggestions?|make-ahead and storage|nutrition(?: facts)?|recipe information|reviews?|related articles|related recipes?|comments?|video|recipe tips?|top tips?)\b/i.test(heading(x));
+  const isStop=x=>/^(?:special equipment|ingredient notes?|recipe notes?|recipe|chef tips?|notes?|storage|variations?|serving suggestions?|make-ahead and storage|nutrition(?: facts)?|recipe information|reviews?|related articles|related recipes?|comments?|video|recipe tips?|top tips?)\b/i.test(heading(x));
   const noise=/^(?:get|the app|app|save|rate|print|share|jump to|keep (?:the )?screen awake|credit:|advertisement|advert|reviews?\s*\(|featured tweaks|most helpful|related articles|editorial guidelines|privacy|contact|peopleinc\.|follow us|newsletters?)\b/i;
   const stripItem=x=>String(x||'').replace(/^\s*[|¦\]\[=_-]+\s*/,'').replace(/^step\s+\d+\s*[:.)-]?\s*/i,'').replace(/^e\s+(?=(?:\d|[½¼¾⅓⅔⅛⅜⅝⅞])|(?:tsp|tbsp|cup|clove|oz|g\b|ml\b))/i,'').replace(/\s+/g,' ').trim();
   const ingredientLike=x=>{
@@ -210,14 +210,26 @@ function deriveRecipe(text,fileName){
   const noteHead=/^(?:ingredient notes?|recipe notes?|notes?|tips?|chef'?s? advice|chef tips?|expert advice|technique notes?|variations?|serving suggestions?|storage|make-ahead and storage)\s*:?$/i;
   const noteStop=/^(?:ingredients?|directions?|instructions?|method|preparation|equipment|faqs?|frequently asked questions|comments?|related recipes?|related articles|nutrition(?: facts)?|video)\s*:?$/i;
   const noteBlocks=[];
+  const consumedNoteHeadings=new Set();
   for(let ni=0;ni<stripped.length;ni++){
-    if(!noteHead.test(heading(stripped[ni])))continue;
+    if(consumedNoteHeadings.has(ni)||!noteHead.test(heading(stripped[ni])))continue;
     const sectionName=heading(stripped[ni]).replace(/\s*:?$/,'');
     const parts=[];
+    // “Recipe notes” is often a parent heading containing Chef Tips and Storage.
+    // Keep those nested sections together under that parent instead of splitting
+    // them into disconnected note blocks or duplicating their content.
+    const parentRecipeNotes=/^recipe notes?$/i.test(sectionName);
     for(let nj=ni+1;nj<stripped.length;nj++){
-      const v=stripItem(stripped[nj]);
-      if(isPageMarker(v)||noteStop.test(heading(v)))break;
-      if(noteHead.test(heading(v)))break;
+      const v=stripItem(stripped[nj]), h=heading(v);
+      if(isPageMarker(v)||noteStop.test(h))break;
+      if(noteHead.test(h)){
+        if(parentRecipeNotes){
+          consumedNoteHeadings.add(nj);
+          parts.push(h.replace(/\s*:?$/,'')+':');
+          continue;
+        }
+        break;
+      }
       if(!v||noise.test(v)||/^(?:print|share|pin it|back to recipes|see all recipes)$/i.test(v))continue;
       if(/^(?:english|india \(inr\)|and y cooks|shop|recipes|youtube|cookbook)$/i.test(v))continue;
       parts.push(v);
