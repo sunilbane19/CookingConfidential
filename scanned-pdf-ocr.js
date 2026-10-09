@@ -4,7 +4,7 @@ import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
 const sb=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
-const OCR_PARSER_VERSION='1.0.36';;
+const OCR_PARSER_VERSION='1.0.37';
 const OCR_PROFILE='tesseract-eng-psm3-v1';
 async function ocrDiag(id,stage,details={}){try{const p=sb.from('cc_extraction_diagnostics').insert({import_item_id:Number(id),stage:`ocr_${stage}`,details});await Promise.race([p,new Promise((_,reject)=>setTimeout(()=>reject(new Error('diagnostic timeout')),3000))])}catch(e){console.warn('CC OCR diagnostic write failed',e)}}
 let pdfPromise,tessPromise;
@@ -32,7 +32,7 @@ function deriveRecipe(text,fileName){
   const isMethod=x=>/^(?:directions?|instructions?|method|preparation|preparations|steps?)\s*:?\s*$/i.test(heading(x));
   const isStop=x=>/^(?:special equipment|notes?|make-ahead and storage|nutrition(?: facts)?|recipe information|reviews?|related articles|related recipes?|comments?|video|recipe tips?|top tips?)\b/i.test(heading(x));
   const noise=/^(?:get|the app|app|save|rate|print|share|jump to|keep (?:the )?screen awake|credit:|advertisement|advert|reviews?\s*\(|featured tweaks|most helpful|related articles|editorial guidelines|privacy|contact|peopleinc\.|follow us|newsletters?)\b/i;
-  const stripItem=x=>String(x||'').replace(/^\s*[|¦\]\[=_-]+\s*/,'').replace(/^step\s+\d+\s*[:.)-]?\s*/i,'').replace(/\s+/g,' ').trim();
+  const stripItem=x=>String(x||'').replace(/^\s*[|¦\]\[=_-]+\s*/,'').replace(/^step\s+\d+\s*[:.)-]?\s*/i,'').replace(/^e\s+(?=(?:\d|[½¼¾⅓⅔⅛⅜⅝⅞])|(?:tsp|tbsp|cup|clove|oz|g\b|ml\b))/i,'').replace(/\s+/g,' ').trim();
   const ingredientLike=x=>{
     const v=stripItem(x);
     if(!v||noise.test(v)||isStop(v))return false;
@@ -81,8 +81,11 @@ function deriveRecipe(text,fileName){
     return sc;
   };
   const findTitle=sectionIndex=>{
-    const local=stripped.slice(Math.max(0,sectionIndex-28),sectionIndex)
+    let local=stripped.slice(Math.max(0,sectionIndex-28),sectionIndex)
       .map(x=>String(x||'').trim()).filter(Boolean);
+    // Titles belong to the recipe introduction, not later page sections such as Equipment.
+    const sectionBoundary=local.findIndex(x=>/^(?:ingredient notes?|equipment|recipe notes?|chef tips?|ingredients?|directions?|instructions?|method|preparation|storage|faqs?)\s*:?$/i.test(heading(x)));
+    if(sectionBoundary>=0)local=local.slice(0,sectionBoundary);
     const candidates=[];
     // Promotional recipe introductions often contain the title inside a sentence,
     // rather than on a standalone line (e.g. "Try our aromatic Moroccan Chermoula Sauce!").
@@ -182,12 +185,35 @@ function deriveRecipe(text,fileName){
   const serveLine=stripped.find(x=>/^(?:(?:serves?|servings?)\s*[:=-]?\s*\d+|yield\s*[:=-]?\s*\d+)/i.test(x));
   best.servings=serveLine?serveLine.replace(/\s+(?:prep|cook)\s+time\b.*$/i,'').trim():'';
   const ingIndex=stripped.findIndex(isIng);
-  const descLines=stripped.slice(Math.max(0,ingIndex>=0?ingIndex-18:0),ingIndex>=0?ingIndex:20)
-    .filter(x=>!isPageMarker(x)&&!/^by\s+/i.test(x)&&!/(?:published|prep time|cook time|resting time|total time|jump to nutrition)/i.test(x))
+  // Description is the introductory prose after the recipe title, ending at the first major section.
+  const titleIndex=stripped.findIndex(x=>cleanTitleCandidate(x).toLowerCase()===String(best.name||'').toLowerCase());
+  const introStart=titleIndex>=0?titleIndex+1:0;
+  const introEnd=stripped.findIndex((x,i)=>i>=introStart&&/^(?:ingredient notes?|equipment|ingredients?|directions?|instructions?|method|preparation|recipe notes?|chef tips?|notes?|storage|variations?|serving suggestions?)\s*:?$/i.test(heading(x)));
+  const descLines=stripped.slice(introStart,introEnd>=0?introEnd:(ingIndex>=0?ingIndex:Math.min(stripped.length,20)))
+    .filter(x=>!isPageMarker(x)&&!/^by\s+/i.test(x)&&!/(?:rated .*stars|^category\b|^dinner$|^servings?$|^prep(?:aration)? time$|^\d+\s*minutes?$|published|jump to recipe|jump to nutrition)/i.test(x))
     .filter(x=>!/(?:\bfollow\b|\bshare\b|\bsubscribe\b|\blog\s*in\b|\bsign\s*up\b|\bclick\b|\bread\s+more\b|\bnewsletter\b|\bprivacy\b|\bcontact\b|write a comment|like\s+comment)/i.test(x))
     .filter(x=>!/[«»@+]/.test(x));
   const description=descLines.join(' ').replace(/\s+/g,' ').trim();
-  best.description=description.length>=30&&description.length<500&&!noise.test(description)&&!/\b(?:need a new|new recj|try our|refresh your taste|perfect as|buds?|romantic Moroccan|aromatic Moroccan)\b/i.test(description)?description:'';
+  best.description=description.length>=30&&description.length<700&&!noise.test(description)?description:'';
+  // Preserve labelled advice/notes sections, independent of recipe or chef names.
+  const noteHead=/^(?:ingredient notes?|recipe notes?|notes?|tips?|chef'?s? advice|chef tips?|expert advice|technique notes?|variations?|serving suggestions?|storage|make-ahead and storage)\s*:?$/i;
+  const noteStop=/^(?:ingredients?|directions?|instructions?|method|preparation|equipment|faqs?|frequently asked questions|comments?|related recipes?|related articles|nutrition(?: facts)?|video)\s*:?$/i;
+  const noteBlocks=[];
+  for(let ni=0;ni<stripped.length;ni++){
+    if(!noteHead.test(heading(stripped[ni])))continue;
+    const sectionName=heading(stripped[ni]).replace(/\s*:?$/,'');
+    const parts=[];
+    for(let nj=ni+1;nj<stripped.length;nj++){
+      const v=stripItem(stripped[nj]);
+      if(isPageMarker(v)||noteStop.test(heading(v)))break;
+      if(noteHead.test(heading(v))&&parts.length)break;
+      if(!v||noise.test(v)||/^(?:print|share|pin it|back to recipes|see all recipes)$/i.test(v))continue;
+      if(/^(?:english|india \(inr\)|and y cooks|shop|recipes|youtube|cookbook)$/i.test(v))continue;
+      parts.push(v);
+    }
+    if(parts.length)noteBlocks.push(sectionName+':\n'+parts.join(' '));
+  }
+  best.notes=[...new Set(noteBlocks)].join('\n\n').slice(0,8000);
   best.raw_text=raw;
   return best;
 }
