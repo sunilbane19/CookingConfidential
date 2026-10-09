@@ -4,7 +4,7 @@ import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
 const sb=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
-const OCR_PARSER_VERSION='1.0.27';
+const OCR_PARSER_VERSION='1.0.28';
 const OCR_PROFILE='tesseract-eng-psm3-v1';
 async function ocrDiag(id,stage,details={}){try{const p=sb.from('cc_extraction_diagnostics').insert({import_item_id:Number(id),stage:`ocr_${stage}`,details});await Promise.race([p,new Promise((_,reject)=>setTimeout(()=>reject(new Error('diagnostic timeout')),3000))])}catch(e){console.warn('CC OCR diagnostic write failed',e)}}
 let pdfPromise,tessPromise;
@@ -49,6 +49,7 @@ function deriveRecipe(text,fileName){
     .replace(/\s+/g,' ')
     .replace(/\brecipe\b$/i,'')
     .trim()||'Scanned recipe';
+  const cleanTitleCandidate=x=>String(x||'').replace(/^(?:\d+[A-Za-z]?\s*[-=]\s*[A-Za-z]{1,3}\s+)+/i,'').replace(/\s*[@©®™<>«»+={}\[\]\\].*$/,'').replace(/\s+/g,' ').trim();
   const titleBlocked=/^(?:skip to (?:main )?content|home|recipes?|save recipe|print|share|ad|advertisement|good food team|easy|alternatives?|complete the dish|nutrition|loading|rate(?: now)?|comments?|questions?|tips?|image(?:\s+\d+)?(?::.*)?|subscribe(?: now)?|updated:?|published:?|follow|like|---?\s*page\s+\d+\s*---?)$/i;
   const titleish=x=>{
     const v=String(x||'').replace(/\s*[@©®™<>«»+={}[\]\\].*$/,'').replace(/\s+/g,' ').trim(), w=v.split(/\s+/).filter(Boolean);
@@ -117,6 +118,7 @@ function deriveRecipe(text,fileName){
       let current='';
       const flush=()=>{if(current.trim()){methodParts.push(current.trim());current=''}};
       for(const line of stripped.slice(mi+1,end)){
+        if(isPageMarker(line)){flush();continue}
         const v=stripItem(line);
         if(isPageMarker(v)){flush();continue}
         if(!v||noise.test(v)||/^directio\w*\s*[:=]/i.test(v))continue;
@@ -148,7 +150,7 @@ function deriveRecipe(text,fileName){
     .filter(x=>clean(x)!==best.name)
     .filter(x=>!/(?:\bfollow\b|\bshare\b|\bsubscribe\b|\blog\s*in\b|\bsign\s*up\b|\bclick\b|\bread\s+more\b|\bnewsletter\b|\bprivacy\b|\bcontact\b)/i.test(x))
     .filter(x=>!/[«»@+]/.test(x));
-  best.description=desc[0]||'';
+  best.description='';
   best.raw_text=raw;
   return best;
 }
