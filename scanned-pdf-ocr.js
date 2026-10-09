@@ -4,7 +4,7 @@ import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
 const sb=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
-const OCR_PARSER_VERSION='1.0.49';
+const OCR_PARSER_VERSION='1.0.50';
 const OCR_PROFILE='tesseract-eng-psm3-v1';
 async function ocrDiag(id,stage,details={}){try{const p=sb.from('cc_extraction_diagnostics').insert({import_item_id:Number(id),stage:`ocr_${stage}`,details});await Promise.race([p,new Promise((_,reject)=>setTimeout(()=>reject(new Error('diagnostic timeout')),3000))])}catch(e){console.warn('CC OCR diagnostic write failed',e)}}
 let pdfPromise,tessPromise;
@@ -27,7 +27,7 @@ function deriveRecipe(text,fileName){
   const a=repaired.split('\n').map(x=>clean(x)).filter(Boolean);
   const stripped=a;
   const heading=x=>String(x||'').replace(/^#{1,6}\s*/,'').replace(/\s*[:\-–—]\s*$/,'').trim();
-  const isPageMarker=x=>/^[-=]{2,}\s*Page\s+\d+\s*[-=]{2,}$/i.test(String(x||'').trim())||/^Page\s+\d+$/i.test(String(x||'').trim());
+  const isPageMarker=x=>/^(?:[-=]{2,}\s*)?Page\s*\d+\s*(?:[-=]{2,})?$/i.test(String(x||'').trim())||/^[-=]{2,}\s*Page\s+\d+\s*[-=]{2,}$/i.test(String(x||'').trim());
   const isIng=x=>/^(?:ingredients?|what you need|ingredients required|shopping list)\s*:?\s*$/i.test(heading(x));
   const isMethod=x=>/^(?:directions?|instructions?|method|preparation|preparations|steps?|step\s*\d+)\s*:?\s*$/i.test(heading(x));
   const isRecipeSubheading=x=>/^(?:shell|filling)\s*:?\s*$/i.test(heading(x));
@@ -163,7 +163,8 @@ function deriveRecipe(text,fileName){
     const ingredientEnd=mi>=0?mi:end;
     const ingredients=stripped.slice(i+1,ingredientEnd)
       .map(stripItem)
-      .filter(x=>x.length>1&&!noise.test(x)&&!isStop(x))
+      .filter(x=>x.length>1&&!isPageMarker(x)&&!noise.test(x)&&!isStop(x))
+      .filter(x=>!/^(?:\d+\s*(?:mins?|minutes?)|\d+\s+pancakes?|£?\d+)$/i.test(x))
       .filter(x=>!/^for\s+[^:]+:\s*$/i.test(x))
       .filter(ingredientLike);
     const methodParts=[];
@@ -215,12 +216,12 @@ function deriveRecipe(text,fileName){
   const titleIndex=stripped.findIndex(x=>cleanTitleCandidate(x).toLowerCase()===String(best.name||'').toLowerCase());
   const introStart=titleIndex>=0?titleIndex+1:0;
   const introEnd=stripped.findIndex((x,i)=>i>=introStart&&(
-    /^(?:ingredient notes?|equipment|ingredients?|directions?|instructions?|method|preparation|recipe notes?|chef tips?|notes?|storage|variations?|serving suggestions?)\s*:?$/i.test(heading(x))
-    || /^(?:jump to recipe|why make this|keep screen awake|credit:|save\b|rate\b|print\b|share\b|page\s+\d+)/i.test(x)
+    /^(?:ingredient notes?|equipment|ingredients?|directions?|instructions?|method|preparation|recipe notes?|chef tips?|notes?|storage|variations?|serving suggestions?|special equipment|make-ahead and storage)\s*:?$/i.test(heading(x))
+    || /^first published\b/i.test(x)
     || isRecipeSubheading(x)
   ));
   const descLines=stripped.slice(introStart,introEnd>=0?introEnd:(ingIndex>=0?ingIndex:Math.min(stripped.length,20)))
-    .filter(x=>!isPageMarker(x)&&!/^by\s+/i.test(x)&&!/^(?:serves?\b|servings?\b|prep(?:aration)?\s*time\b|cook(?:ing)?\s*time\b)/i.test(x)&&!/(?:^\d+(?:\.\d+)?\s*\([^)]*\)\s+\d+\s+reviews?\b|\b\d+(?:\.\d+)?\s*stars?\b|\b\d+\s+reviews?\b|rated .*stars|^category\b|^(?:breakfast|brunch|lunch|dinner|starter|soup|salad|main|side|snack|dessert|bread|beverage)\s+\d+$|^dinner$|^servings?$|^prep(?:aration)? time$|^\d+\s*minutes?$|published|jump to recipe|jump to nutrition)/i.test(x))
+    .filter(x=>!isPageMarker(x)&&!/^by\s+/i.test(x)&&!/^(?:serves?\b|servings?\b|yield\b|prep(?:aration)?\s*time\b|cook(?:ing)?\s*time\b|resting\s*time\b|total\s*time\b|first published\b|published\b|this recipe was developed by\b|the headnote was written by\b)/i.test(x)&&!/(?:^\d+(?:\.\d+)?\s*\([^)]*\)\s+\d+\s+reviews?\b|\b\d+(?:\.\d+)?\s*stars?\b|\b\d+\s+reviews?\b|rated .*stars|^category\b|^(?:breakfast|brunch|lunch|dinner|starter|soup|salad|main|side|snack|dessert|bread|beverage)\s+\d+$|^dinner$|^servings?$|^prep(?:aration)? time$|^\d+\s*minutes?$|^\d+\s*(?:mins?|minutes?)$|^\d+\s+pancakes?$|^£?\d+$|jump to recipe|jump to nutrition|^why it works$|^ingredients$|^directions$)/i.test(x))
     .filter(x=>!/(?:\bfollow\b|\bshare\b|\bsubscribe\b|\blog\s*in\b|\bsign\s*up\b|\bclick\b|\bread\s+more\b|\bnewsletter\b|\bprivacy\b|\bcontact\b|write a comment|like\s+comment)/i.test(x))
     .filter(x=>!/[«»@+]/.test(x));
   const description=descLines
@@ -275,7 +276,7 @@ function deriveRecipe(text,fileName){
   // (Ingredient Notes, Chef Tips, Storage, etc.) remain in the text underneath it.
   let combinedNotes=[...new Set(noteBlocks)].join('\n\n').trim();
   combinedNotes=combinedNotes.replace(/^Notes:\s*/i,'Ingredient Notes:\n');
-  if(combinedNotes&&!/^Recipe Notes:/i.test(combinedNotes))combinedNotes='Recipe Notes:\n'+combinedNotes;
+  if(combinedNotes&&!/^(?:Recipe Notes|Ingredient Notes|Notes|Tips|Storage|Variations):/i.test(combinedNotes))combinedNotes='Recipe Notes:\n'+combinedNotes;
   best.notes=combinedNotes.slice(0,8000);
   best.raw_text=raw;
   return best;
