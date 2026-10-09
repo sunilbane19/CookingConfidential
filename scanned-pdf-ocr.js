@@ -4,7 +4,7 @@ import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
 const sb=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
-const OCR_PARSER_VERSION='1.0.60';
+const OCR_PARSER_VERSION='1.0.61';
 const OCR_PROFILE='tesseract-eng-psm6-v1';
 async function ocrDiag(id,stage,details={}){try{const p=sb.from('cc_extraction_diagnostics').insert({import_item_id:Number(id),stage:`ocr_${stage}`,details});await Promise.race([p,new Promise((_,reject)=>setTimeout(()=>reject(new Error('diagnostic timeout')),3000))])}catch(e){console.warn('CC OCR diagnostic write failed',e)}}
 let pdfPromise,tessPromise;
@@ -254,6 +254,15 @@ function deriveRecipe(text,fileName){
     .filter(x=>!/^.{0,100}\b(?:fritters|tzatziki)\s*$/i.test(x)||x.split(/\s+/).length>4)
     .filter(x=>!/^\s*(?:first published|this recipe was developed by|the headnote was written by)\b/i.test(x))
     .join(' ').replace(/\s+/g,' ').trim();
+  // Strip browser/website artifacts and recipe-page navigation accidentally
+  // concatenated onto otherwise valid introductory descriptions.
+  const stripDescriptionArtifacts = value => String(value||'')
+    .replace(/\bKeep\s+Screen\s+Awake\b/ig,' ')
+    .replace(/\bFROM\s+THE\s+EDITORS\b[\s\S]*$/i,' ')
+    .replace(/\bMore\s+Sheet\s+Cakes\s+to\s+Delight\s+a\s+Crowd\b[\s\S]*$/i,' ')
+    .replace(/\bNutrition\s+Facts\b[\s\S]*$/i,' ')
+    .replace(/\b(?:aD\)|ad\s+choices|advertisement)\b[\s\S]*$/i,' ')
+    .replace(/\s+/g,' ').trim();
   // Do not present scrambled OCR fragments as a recipe description. Graphic/social
   // recipe cards can be segmented into interleaved short lines by Tesseract; when
   // most intro lines are fragments, keep Description empty rather than save noise.
@@ -266,7 +275,9 @@ function deriveRecipe(text,fileName){
   // A truncated copy of the recipe title is not a description. This commonly
   // happens when OCR reads a social-card headline as a separate intro fragment.
   const titleFragment=!!normDescription&&!!normTitle&&normTitle.startsWith(normDescription)&&normDescription.length>=12;
-  best.description=description.length>=30&&description.length<700&&!noise.test(description)&&(!fragmentHeavy||hasCoherentIntroCue)&&!obviousOcrNoise&&!titleFragment?description:'';
+  const cleanDescription=stripDescriptionArtifacts(description);
+  const descriptionIsMetadata=/^(?:this recipe was developed by\b|the headnote was written by\b|\d+\s*(?:mins?|minutes?)\b|\d+\s+servings?\b|\d+\s+pancakes?\b|nutrition facts\b|keep screen awake\b)/i.test(cleanDescription);
+  best.description=cleanDescription.length>=30&&cleanDescription.length<700&&!descriptionIsMetadata&&!noise.test(cleanDescription)&&(!fragmentHeavy||hasCoherentIntroCue)&&!obviousOcrNoise&&!titleFragment?cleanDescription:'';
   // Recover substantial introductory prose placed before Ingredient Notes or Equipment.
   if(!best.description){
     const boundary=stripped.findIndex(x=>/^(?:ingredient notes?|equipment|ingredients?|directions?|instructions?|method|preparation|storage|faqs?|frequently asked questions)\s*:?$/i.test(heading(x)));
