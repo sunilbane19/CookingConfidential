@@ -4,7 +4,7 @@ import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
 const sb=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
-const OCR_PARSER_VERSION='1.0.57';
+const OCR_PARSER_VERSION='1.0.58';
 const OCR_PROFILE='tesseract-eng-psm6-v1';
 async function ocrDiag(id,stage,details={}){try{const p=sb.from('cc_extraction_diagnostics').insert({import_item_id:Number(id),stage:`ocr_${stage}`,details});await Promise.race([p,new Promise((_,reject)=>setTimeout(()=>reject(new Error('diagnostic timeout')),3000))])}catch(e){console.warn('CC OCR diagnostic write failed',e)}}
 let pdfPromise,tessPromise;
@@ -271,8 +271,13 @@ function deriveRecipe(text,fileName){
   if(!best.description){
     const boundary=stripped.findIndex(x=>/^(?:ingredient notes?|equipment|ingredients?|directions?|instructions?|method|preparation|storage|faqs?|frequently asked questions)\s*:?$/i.test(heading(x)));
     const beforeRecipe=stripped.slice(0,boundary>=0?boundary:Math.min(stripped.length,35)).filter(x=>!isPageMarker(x)).filter(x=>!noise.test(x)).filter(x=>!/^(?:category|serves?|servings?|yield|prep(?:aration)? time|cooking time|total time|rated?|jump to|home|recipes?|dinner|breakfast|lunch)\b/i.test(x));
-    const paragraph=beforeRecipe.find(x=>x.length>=100&&/[.!?]/.test(x)&&x.split(/\s+/).length>=18);
-    if(paragraph)best.description=paragraph.replace(/\s+/g,' ').trim().slice(0,699);
+    // OCR often breaks a paragraph into several short visual lines. Join the
+    // pre-recipe lines first, then select the first coherent prose passage.
+    const joinedIntro=beforeRecipe.join(' ').replace(/\s+/g,' ').trim();
+    const introStart=joinedIntro.search(/\b(?:I think|this recipe|this sauce|it's|it is|made with|perfect for|perfect as)\b/i);
+    const prose=introStart>=0?joinedIntro.slice(introStart):joinedIntro;
+    const paragraph=prose.length>=100&&prose.split(/\s+/).length>=18?prose:'';
+    if(paragraph)best.description=paragraph.slice(0,699);
   }
   // Recover the coherent promotional intro from source text before Ingredients.
   const introMatch=raw.match(/(Need a new recipe[\s\S]*?Perfect as a dip or\s*marinade!?)(?=\s*Ingredients?\s*:)/i);
