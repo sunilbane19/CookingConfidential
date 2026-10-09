@@ -4,7 +4,7 @@ import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
 const sb=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
-const OCR_PARSER_VERSION='1.0.53';
+const OCR_PARSER_VERSION='1.0.54';
 const OCR_PROFILE='tesseract-eng-psm6-v1';
 async function ocrDiag(id,stage,details={}){try{const p=sb.from('cc_extraction_diagnostics').insert({import_item_id:Number(id),stage:`ocr_${stage}`,details});await Promise.race([p,new Promise((_,reject)=>setTimeout(()=>reject(new Error('diagnostic timeout')),3000))])}catch(e){console.warn('CC OCR diagnostic write failed',e)}}
 let pdfPromise,tessPromise;
@@ -173,6 +173,9 @@ function deriveRecipe(text,fileName){
       const flush=()=>{if(current.trim()){methodParts.push(current.trim());current=''}};
       for(const line of stripped.slice(mi+1,end)){
         if(isPageMarker(line)){flush();continue}
+        // Timing metadata can be OCR'd as a separate trailing line; discard it
+        // without removing the valid serving sentence immediately before it.
+        if(/^minutes?\s*\+\s*resting\b/i.test(stripItem(line)))continue;
         const v=stripItem(line)
           .replace(/\b(?:prep(?:aration)?\s*time|cooking\s*time|total\s*time)\s*[:|]?\s*.*$/i,'')
           .replace(/\s*(?:©|®|™)?\s*(?:write\s*a\s*comment|writeacomment|like\s+comment|share)\b.*$/i,'')
@@ -229,7 +232,16 @@ function deriveRecipe(text,fileName){
     || isPageMarker(x)
     || isRecipeSubheading(x)
   ));
-  const descLines=stripped.slice(introStart,introEnd>=0?introEnd:(ingIndex>=0?ingIndex:Math.min(stripped.length,20)))
+  const descriptionLimit=introEnd>=0?introEnd:(ingIndex>=0?ingIndex:Math.min(stripped.length,20));
+  // For promotional recipe cards the actual title may be mentioned only in the intro,
+  // not printed as a standalone heading. Start at coherent recipe-intro prose instead
+  // of including a short decorative/logo fragment that can trip the fragment guard.
+  let descriptionStart=introStart;
+  if(titleIndex<0){
+    const introCue=stripped.findIndex((x,i)=>i>=introStart&&i<descriptionLimit&&/(?:need a new recipe|try our|make this|enjoy this|discover this|perfect as a|perfect for|refresh your taste|this aromatic|this delicious)/i.test(x));
+    if(introCue>=0)descriptionStart=introCue;
+  }
+  const descLines=stripped.slice(descriptionStart,descriptionLimit)
     .filter(x=>!isPageMarker(x)&&!/^by\s+/i.test(x)&&!/^(?:serves?\b|servings?\b|yield\b|prep(?:aration)?\s*time\b|cook(?:ing)?\s*time\b|resting\s*time\b|total\s*time\b|first published\b|published\b|this recipe was developed by\b|the headnote was written by\b)/i.test(x)&&!/(?:^\d+(?:\.\d+)?\s*\([^)]*\)\s+\d+\s+reviews?\b|\b\d+(?:\.\d+)?\s*stars?\b|\b\d+\s+reviews?\b|rated .*stars|^category\b|^(?:breakfast|brunch|lunch|dinner|starter|soup|salad|main|side|snack|dessert|bread|beverage)\s+\d+$|^dinner$|^servings?$|^prep(?:aration)? time$|^\d+\s*minutes?$|^\d+\s*(?:mins?|minutes?)$|^\d+\s+pancakes?$|^£?\d+$|jump to recipe|jump to nutrition|^why it works$|^ingredients$|^directions$)/i.test(x))
     .filter(x=>!/(?:\bfollow\b|\bshare\b|\bsubscribe\b|\blog\s*in\b|\bsign\s*up\b|\bclick\b|\bread\s+more\b|\bnewsletter\b|\bprivacy\b|\bcontact\b|write a comment|like\s+comment)/i.test(x))
     .filter(x=>!/[«»@+]/.test(x));
