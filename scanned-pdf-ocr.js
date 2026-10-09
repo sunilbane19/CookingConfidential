@@ -4,7 +4,7 @@ import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
 const sb=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
-const OCR_PARSER_VERSION='1.0.46';
+const OCR_PARSER_VERSION='1.0.47';
 const OCR_PROFILE='tesseract-eng-psm3-v1';
 async function ocrDiag(id,stage,details={}){try{const p=sb.from('cc_extraction_diagnostics').insert({import_item_id:Number(id),stage:`ocr_${stage}`,details});await Promise.race([p,new Promise((_,reject)=>setTimeout(()=>reject(new Error('diagnostic timeout')),3000))])}catch(e){console.warn('CC OCR diagnostic write failed',e)}}
 let pdfPromise,tessPromise;
@@ -29,7 +29,9 @@ function deriveRecipe(text,fileName){
   const heading=x=>String(x||'').replace(/^#{1,6}\s*/,'').replace(/\s*[:\-–—]\s*$/,'').trim();
   const isPageMarker=x=>/^[-=]{2,}\s*Page\s+\d+\s*[-=]{2,}$/i.test(String(x||'').trim())||/^Page\s+\d+$/i.test(String(x||'').trim());
   const isIng=x=>/^(?:ingredients?|what you need|ingredients required|shopping list)\s*:?\s*$/i.test(heading(x));
-  const isMethod=x=>/^(?:directions?|instructions?|method|preparation|preparations|steps?)\s*:?\s*$/i.test(heading(x));
+  const isMethod=x=>/^(?:directions?|instructions?|method|preparation|preparations|steps?|step\s*\d+)\s*:?\s*$/i.test(heading(x));
+  const isRecipeSubheading=x=>/^(?:shell|filling)\s*:?\s*$/i.test(heading(x));
+  const isStepHeading=x=>/^step\s*\d+\s*:?\s*$/i.test(heading(x));
   const isStop=x=>/^(?:special equipment|ingredient notes?|recipe notes?|recipe|chef tips?|notes?|storage|variations?|serving suggestions?|make-ahead and storage|nutrition(?: facts)?|recipe information|reviews?|related articles|related recipes?|comments?|video|recipe tips?|top tips?)\b/i.test(heading(x));
   const noise=/^(?:get|the app|app|save|rate|print|share|jump to|keep (?:the )?screen awake|credit:|advertisement|advert|reviews?\s*\(|featured tweaks|most helpful|related articles|editorial guidelines|privacy|contact|peopleinc\.|follow us|newsletters?)\b/i;
   const stripItem=x=>String(x||'').replace(/^\s*[|¦\]\[=_-]+\s*/,'').replace(/^step\s+\d+\s*[:.)-]?\s*/i,'').replace(/^e\s+(?=(?:\d|[½¼¾⅓⅔⅛⅜⅝⅞])|(?:tsp|tbsp|cup|clove|oz|g\b|ml\b))/i,'').replace(/\s+/g,' ').trim();
@@ -143,15 +145,20 @@ function deriveRecipe(text,fileName){
 
   let best=null;
   for(let i=0;i<stripped.length;i++){
-    if(!isIng(stripped[i]))continue;
+    // Food52-style PDFs may label ingredient groups "Shell" and "Filling"
+    // rather than using an "Ingredients" heading. Treat the first such group as
+    // the ingredient start only when a numbered Step heading follows it.
+    const specialStart=isRecipeSubheading(stripped[i])&&stripped.slice(i+1).some(isStepHeading);
+    if(!isIng(stripped[i])&&!specialStart)continue;
     let mi=-1;
     let end=stripped.length;
     for(let j=i+1;j<stripped.length;j++){
       if(isMethod(stripped[j])){mi=j;break}
+      if(isStepHeading(stripped[j])){mi=j;break}
       if(isStop(stripped[j])){end=j;break}
     }
     if(mi>=0){
-      for(let j=mi+1;j<stripped.length;j++){if(isStop(stripped[j])){end=j;break}}
+      for(let j=mi+1;j<stripped.length;j++){if(isStop(stripped[j])||(isStepHeading(stripped[j])&&j>mi+1&&/^step\s*1\s*:?$/i.test(heading(stripped[j]))){end=j;break}}
     }
     const ingredientEnd=mi>=0?mi:end;
     const ingredients=stripped.slice(i+1,ingredientEnd)
@@ -174,6 +181,7 @@ function deriveRecipe(text,fileName){
         if(isPageMarker(v)){flush();continue}
         if(!v||noise.test(v)||/^directio\w*\s*[:=]/i.test(v))continue;
         if(/^(?:prep(?:aration)?\s*time|cook(?:ing)?\s*time|total\s*time|serves?\b|servings?\b|yield\b|write a comment|like\s+comment)/i.test(v))continue;
+        if(isStepHeading(line)||/^step\s*\d+/i.test(line)){flush();continue}
         if(/^step\s*\d+/i.test(v)){flush();continue}
         if(/^(?:shell|filling|for\s+[^:]+:)\s*$/i.test(v)){flush();continue}
         if(/^\d+\.\s+/.test(v)){flush();current=v;continue}
@@ -209,9 +217,10 @@ function deriveRecipe(text,fileName){
   const introEnd=stripped.findIndex((x,i)=>i>=introStart&&(
     /^(?:ingredient notes?|equipment|ingredients?|directions?|instructions?|method|preparation|recipe notes?|chef tips?|notes?|storage|variations?|serving suggestions?)\s*:?$/i.test(heading(x))
     || /^(?:by\s+|jump to recipe|why make this|keep screen awake|credit:|save\b|rate\b|print\b|share\b|page\s+\d+)/i.test(x)
+    || isRecipeSubheading(x)
   ));
   const descLines=stripped.slice(introStart,introEnd>=0?introEnd:(ingIndex>=0?ingIndex:Math.min(stripped.length,20)))
-    .filter(x=>!isPageMarker(x)&&!/^by\s+/i.test(x)&&!/(?:^\d+(?:\.\d+)?\s*\([^)]*\)\s+\d+\s+reviews?\b|\b\d+(?:\.\d+)?\s*stars?\b|\b\d+\s+reviews?\b|rated .*stars|^category\b|^(?:breakfast|brunch|lunch|dinner|starter|soup|salad|main|side|snack|dessert|bread|beverage)\s+\d+$|^dinner$|^servings?$|^prep(?:aration)? time$|^\d+\s*minutes?$|published|jump to recipe|jump to nutrition)/i.test(x))
+    .filter(x=>!isPageMarker(x)&&!/^by\s+/i.test(x)&&!/^(?:serves?\b|servings?\b|prep(?:aration)?\s*time\b|cook(?:ing)?\s*time\b)/i.test(x)&&!/(?:^\d+(?:\.\d+)?\s*\([^)]*\)\s+\d+\s+reviews?\b|\b\d+(?:\.\d+)?\s*stars?\b|\b\d+\s+reviews?\b|rated .*stars|^category\b|^(?:breakfast|brunch|lunch|dinner|starter|soup|salad|main|side|snack|dessert|bread|beverage)\s+\d+$|^dinner$|^servings?$|^prep(?:aration)? time$|^\d+\s*minutes?$|published|jump to recipe|jump to nutrition)/i.test(x))
     .filter(x=>!/(?:\bfollow\b|\bshare\b|\bsubscribe\b|\blog\s*in\b|\bsign\s*up\b|\bclick\b|\bread\s+more\b|\bnewsletter\b|\bprivacy\b|\bcontact\b|write a comment|like\s+comment)/i.test(x))
     .filter(x=>!/[«»@+]/.test(x));
   const description=descLines.join(' ').replace(/\s+/g,' ').trim();
