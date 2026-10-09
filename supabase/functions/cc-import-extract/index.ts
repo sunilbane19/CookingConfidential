@@ -626,7 +626,8 @@ function finalizeParsedRecipe(recipe:any,sourceText:string,fileName=''){
   const personalNotes=noteParts.length?noteParts.join("\n"):String(recipe.personal_notes||"").trim();
   const noteSet=new Set(personalNotes.split(/\n+/).map(x=>cleanRecipeLine(x).toLowerCase()).filter(Boolean));
   const method=cleanExtractedMethod(String(recipe.method||"").split(/\n+/).filter(x=>!noteSet.has(cleanRecipeLine(x).toLowerCase())).join("\n"));
-  const docxIntro=/\\.docx$/i.test(fileName)&&!recipe.description&&!meta.description?extractDocxIntro(sourceText,recipe.name||''):null;\n  return {...recipe,description:recipe.description||meta.description||docxIntro||null,method,personal_notes:recipe.personal_notes||personalNotes||null};
+  const docxIntro=/\.docx$/i.test(fileName)&&!recipe.description&&!meta.description?extractDocxIntro(sourceText,recipe.name||''):null;
+  return {...recipe,description:recipe.description||meta.description||docxIntro||null,method,personal_notes:recipe.personal_notes||personalNotes||null};
 }
 function parse(text:string,file:string,isUrl=false){
   const recipe=parseRaw(text,file,isUrl);
