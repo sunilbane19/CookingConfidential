@@ -4,7 +4,7 @@ import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
 const sb=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
-const OCR_PARSER_VERSION='1.0.29';
+const OCR_PARSER_VERSION='1.0.30';
 const OCR_PROFILE='tesseract-eng-psm3-v1';
 async function ocrDiag(id,stage,details={}){try{const p=sb.from('cc_extraction_diagnostics').insert({import_item_id:Number(id),stage:`ocr_${stage}`,details});await Promise.race([p,new Promise((_,reject)=>setTimeout(()=>reject(new Error('diagnostic timeout')),3000))])}catch(e){console.warn('CC OCR diagnostic write failed',e)}}
 let pdfPromise,tessPromise;
@@ -80,6 +80,16 @@ function deriveRecipe(text,fileName){
     const local=stripped.slice(Math.max(0,sectionIndex-28),sectionIndex)
       .map(x=>String(x||'').trim()).filter(Boolean);
     const candidates=[];
+    // Join a title that visibly continues onto the next OCR line (for example,
+    // "Crunchy Mango Peanut Power Salad with a" + "Fiery Chili Lime Kick!").
+    for(let k=0;k<local.length-1;k++){
+      const first=cleanTitleCandidate(clean(local[k]));
+      const second=cleanTitleCandidate(clean(local[k+1]));
+      if(/\b(?:with|with a|with an|and|of|for|in|on|the|a|an|to|from|by)$/i.test(first)&&titleish(first)&&titleish(second)){
+        const joined=cleanTitleCandidate(first+' '+second);
+        if(titleish(joined))return joined;
+      }
+    }
     for(let k=0;k<local.length;k++){
       const d=local.length-1-k;
       const v=cleanTitleCandidate(clean(local[k]));
