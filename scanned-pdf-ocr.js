@@ -4,7 +4,7 @@ import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
 const sb=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
-const OCR_PARSER_VERSION='1.0.48';
+const OCR_PARSER_VERSION='1.0.49';
 const OCR_PROFILE='tesseract-eng-psm3-v1';
 async function ocrDiag(id,stage,details={}){try{const p=sb.from('cc_extraction_diagnostics').insert({import_item_id:Number(id),stage:`ocr_${stage}`,details});await Promise.race([p,new Promise((_,reject)=>setTimeout(()=>reject(new Error('diagnostic timeout')),3000))])}catch(e){console.warn('CC OCR diagnostic write failed',e)}}
 let pdfPromise,tessPromise;
@@ -223,7 +223,11 @@ function deriveRecipe(text,fileName){
     .filter(x=>!isPageMarker(x)&&!/^by\s+/i.test(x)&&!/^(?:serves?\b|servings?\b|prep(?:aration)?\s*time\b|cook(?:ing)?\s*time\b)/i.test(x)&&!/(?:^\d+(?:\.\d+)?\s*\([^)]*\)\s+\d+\s+reviews?\b|\b\d+(?:\.\d+)?\s*stars?\b|\b\d+\s+reviews?\b|rated .*stars|^category\b|^(?:breakfast|brunch|lunch|dinner|starter|soup|salad|main|side|snack|dessert|bread|beverage)\s+\d+$|^dinner$|^servings?$|^prep(?:aration)? time$|^\d+\s*minutes?$|published|jump to recipe|jump to nutrition)/i.test(x))
     .filter(x=>!/(?:\bfollow\b|\bshare\b|\bsubscribe\b|\blog\s*in\b|\bsign\s*up\b|\bclick\b|\bread\s+more\b|\bnewsletter\b|\bprivacy\b|\bcontact\b|write a comment|like\s+comment)/i.test(x))
     .filter(x=>!/[«»@+]/.test(x));
-  const description=descLines.join(' ').replace(/\s+/g,' ').trim();
+  const description=descLines
+    .filter(x=>!/^\d+(?:\.\d+)?\s*\(?\d*\)?\s*(?:reviews?|stars?)?$/i.test(x))
+    .filter(x=>!/^.{0,100}\b(?:fritters|tzatziki)\s*$/i.test(x)||x.split(/\s+/).length>4)
+    .filter(x=>!/^\s*(?:first published|this recipe was developed by|the headnote was written by)\b/i.test(x))
+    .join(' ').replace(/\s+/g,' ').trim();
   // Do not present scrambled OCR fragments as a recipe description. Graphic/social
   // recipe cards can be segmented into interleaved short lines by Tesseract; when
   // most intro lines are fragments, keep Description empty rather than save noise.
@@ -239,7 +243,7 @@ function deriveRecipe(text,fileName){
   best.description=description.length>=30&&description.length<700&&!noise.test(description)&&!fragmentHeavy&&!obviousOcrNoise&&!titleFragment?description:'';
   // Preserve labelled advice/notes sections, independent of recipe or chef names.
   const noteHead=/^(?:ingredient notes?|recipe notes?|notes?|tips?|chef'?s? advice|chef tips?|expert advice|technique notes?|variations?|serving suggestions?|storage|make-ahead and storage)\s*:?$/i;
-  const noteStop=/^(?:ingredients?|directions?|instructions?|method|preparation|equipment|faqs?|frequently asked questions|comments?|related recipes?|related articles|nutrition(?: facts)?|video)\s*:?$/i;
+  const noteStop=/^(?:ingredients?|directions?|instructions?|method|preparation|equipment|special equipment|make-ahead and storage|faqs?|frequently asked questions|comments?|related recipes?|related articles|nutrition(?: facts)?|video|reviews?|featured tweaks|related articles|explore more|about us|advertise|terms of service|privacy policy)\s*:?$/i;
   const noteBlocks=[];
   const consumedNoteHeadings=new Set();
   for(let ni=0;ni<stripped.length;ni++){
