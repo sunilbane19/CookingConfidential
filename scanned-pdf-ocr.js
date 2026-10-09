@@ -118,12 +118,18 @@ function deriveRecipe(text,fileName){
       const flush=()=>{if(current.trim()){methodParts.push(current.trim());current=''}};
       for(const line of stripped.slice(mi+1,end)){
         const v=stripItem(line);
-        if(!v||noise.test(v)||isPageMarker(v))continue;
-        if(/^step\s*\d+/i.test(line)){flush();continue}
+        if(isPageMarker(v)){flush();continue}
+        if(!v||noise.test(v)||/^directio\w*\s*[:=]/i.test(v))continue;
+        if(/^step\s*\d+/i.test(v)){flush();continue}
         if(/^(?:shell|filling|for\s+[^:]+:)\s*$/i.test(v)){flush();continue}
+        if(/^\d+\.\s+/.test(v)){flush();current=v;continue}
         current=current?current+' '+v:v;
       }
       flush();
+      for(let k=0;k<methodParts.length-1;k++){
+        const first=methodParts[k].match(/^(\d+)\./),second=methodParts[k+1].match(/^(\d+)\./);
+        if(first&&second&&first[1]===second[1]&&methodParts[k].length<methodParts[k+1].length){methodParts.splice(k,1);k--;}
+      }
     }
     const method=methodParts.join('\n').trim();
     if(ingredients.length<3)continue;
