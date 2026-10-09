@@ -203,7 +203,7 @@ function deriveRecipe(text,fileName){
         if(first&&second&&first[1]===second[1]&&methodParts[k].length<methodParts[k+1].length){methodParts.splice(k,1);k--;}
       }
     }
-    const method=methodParts.join('\n').trim();
+    const method=methodParts.join('\n').replace(/\s*minutes?\s*\+\s*resting\b.*$/i,'').replace(/\s*total\s*time\s*:?\s*\d+\s*minutes?.*$/i,'').trim();
     if(ingredients.length<3)continue;
     if(mi>=0&&method.length<40)continue;
     const quantityCount=ingredients.reduce((n,x)=>n+(ingredientLike(x)?1:0),0);
@@ -237,9 +237,10 @@ function deriveRecipe(text,fileName){
   // not printed as a standalone heading. Start at coherent recipe-intro prose instead
   // of including a short decorative/logo fragment that can trip the fragment guard.
   let descriptionStart=introStart;
+  let hasCoherentIntroCue=false;
   if(titleIndex<0){
     const introCue=stripped.findIndex((x,i)=>i>=introStart&&i<descriptionLimit&&/(?:need a new recipe|try our|make this|enjoy this|discover this|perfect as a|perfect for|refresh your taste|this aromatic|this delicious)/i.test(x));
-    if(introCue>=0)descriptionStart=introCue;
+    if(introCue>=0){descriptionStart=introCue;hasCoherentIntroCue=true;}
   }
   const descLines=stripped.slice(descriptionStart,descriptionLimit)
     .filter(x=>!isPageMarker(x)&&!/^by\s+/i.test(x)&&!/^(?:serves?\b|servings?\b|yield\b|prep(?:aration)?\s*time\b|cook(?:ing)?\s*time\b|resting\s*time\b|total\s*time\b|first published\b|published\b|this recipe was developed by\b|the headnote was written by\b)/i.test(x)&&!/(?:^\d+(?:\.\d+)?\s*\([^)]*\)\s+\d+\s+reviews?\b|\b\d+(?:\.\d+)?\s*stars?\b|\b\d+\s+reviews?\b|rated .*stars|^category\b|^(?:breakfast|brunch|lunch|dinner|starter|soup|salad|main|side|snack|dessert|bread|beverage)\s+\d+$|^dinner$|^servings?$|^prep(?:aration)? time$|^\d+\s*minutes?$|^\d+\s*(?:mins?|minutes?)$|^\d+\s+pancakes?$|^£?\d+$|jump to recipe|jump to nutrition|^why it works$|^ingredients$|^directions$)/i.test(x))
@@ -262,7 +263,7 @@ function deriveRecipe(text,fileName){
   // A truncated copy of the recipe title is not a description. This commonly
   // happens when OCR reads a social-card headline as a separate intro fragment.
   const titleFragment=!!normDescription&&!!normTitle&&normTitle.startsWith(normDescription)&&normDescription.length>=12;
-  best.description=description.length>=30&&description.length<700&&!noise.test(description)&&!fragmentHeavy&&!obviousOcrNoise&&!titleFragment?description:'';
+  best.description=description.length>=30&&description.length<700&&!noise.test(description)&&(!fragmentHeavy||hasCoherentIntroCue)&&!obviousOcrNoise&&!titleFragment?description:'';
   // Preserve labelled advice/notes sections, independent of recipe or chef names.
   const noteHead=/^(?:ingredient notes?|recipe notes?|notes?|tips?|chef'?s? advice|chef tips?|expert advice|technique notes?|variations?|serving suggestions?|storage|make-ahead and storage)\s*:?$/i;
   const noteStop=/^(?:ingredients?|directions?|instructions?|method|preparation|equipment|special equipment|make-ahead and storage|faqs?|frequently asked questions|comments?|related recipes?|related articles|nutrition(?: facts)?|video|reviews?|featured tweaks|related articles|explore more|about us|advertise|terms of service|privacy policy)\s*:?$/i;
