@@ -22,7 +22,7 @@ function deriveRecipe(text,fileName){
     .replace(new RegExp('\\s+(?='+structuralHeading.source+')','gi'),'\n')
     .replace(/\s+[•·]\s*/g,'\n+ ')
     .replace(/\s+\+\s+(?=[A-Za-z])/g,'\n+ ')
-    .replace(/\s+(?=\d+\.\s+[A-Z])/g,'\n')
+    .replace(/\s+(?=\d+\.\s+)/g,'\n')
     .replace(/\s+(?=---\s*Page\s+\d+\s*---)/gi,'\n');
   const a=repaired.split('\n').map(x=>clean(x)).filter(Boolean);
   const stripped=a;
