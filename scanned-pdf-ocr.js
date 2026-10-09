@@ -4,7 +4,7 @@ import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
 const sb=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
-const OCR_PARSER_VERSION='1.0.33';;
+const OCR_PARSER_VERSION='1.0.34';;
 const OCR_PROFILE='tesseract-eng-psm3-v1';
 async function ocrDiag(id,stage,details={}){try{const p=sb.from('cc_extraction_diagnostics').insert({import_item_id:Number(id),stage:`ocr_${stage}`,details});await Promise.race([p,new Promise((_,reject)=>setTimeout(()=>reject(new Error('diagnostic timeout')),3000))])}catch(e){console.warn('CC OCR diagnostic write failed',e)}}
 let pdfPromise,tessPromise;
@@ -55,6 +55,7 @@ function deriveRecipe(text,fileName){
     const v=cleanTitleCandidate(x), w=v.split(/\s+/).filter(Boolean);
     if(!v||v.length<3||v.length>100||w.length>14||titleBlocked.test(v)||isPageMarker(v))return false;
     if(/\b(?:need a new recipe|refresh your taste|try our|perfect as|dip or marinade|write a comment|say|buds)\b/i.test(v))return false;
+    if(w.length===2&&/^[a-z]/.test(w[0])&&/^[A-Z]/.test(w[1]))return false;
     // Reject OCR/UI garbage before considering a line as the recipe title.
     if(/[@©®™<>«»+={}\[\]\\]/.test(v))return false;
     if(/^[^A-Za-zÀ-ÖØ-öø-ÿ]*[0-9][^A-Za-zÀ-ÖØ-öø-ÿ]*\b/.test(v))return false;
@@ -178,16 +179,15 @@ function deriveRecipe(text,fileName){
     if(!best||score>best.score)best={score,name,description:'',ingredients:ingredients.slice(0,200),method,cuisine:'',course:'',servings:''};
   }
   if(!best)return {name:filenameTitle,description:'',ingredients:[],method:'',cuisine:'',course:'',servings:'',raw_text:raw};
-  const serveLine=stripped.find(x=>/^(?:serves?|servings?|yield)\b/i.test(x));
+  const serveLine=stripped.find(x=>/^(?:(?:serves?|servings?)\s*[:=-]?\s*\d+|yield\s*[:=-]?\s*\d+)/i.test(x));
   best.servings=serveLine?serveLine.replace(/\s+(?:prep|cook)\s+time\b.*$/i,'').trim():'';
   const ingIndex=stripped.findIndex(isIng);
-  const desc=stripped.slice(Math.max(0,ingIndex>=0?ingIndex-18:0),ingIndex>=0?ingIndex:20)
-    .filter(x=>x.length>=30&&x.length<500&&!noise.test(x)&&!isPageMarker(x)&&!/^by\s+/i.test(x)&&!/(?:published|prep time|cook time|resting time|total time|jump to nutrition)/i.test(x))
+  const descLines=stripped.slice(Math.max(0,ingIndex>=0?ingIndex-18:0),ingIndex>=0?ingIndex:20)
+    .filter(x=>!isPageMarker(x)&&!/^by\s+/i.test(x)&&!/(?:published|prep time|cook time|resting time|total time|jump to nutrition)/i.test(x))
     .filter(x=>!/(?:\bfollow\b|\bshare\b|\bsubscribe\b|\blog\s*in\b|\bsign\s*up\b|\bclick\b|\bread\s+more\b|\bnewsletter\b|\bprivacy\b|\bcontact\b|write a comment|like\s+comment)/i.test(x))
-    .filter(x=>!/[«»@+]/.test(x))
-    .filter(x=>!/^\s*(?:need a new recipe|skip to|home|recipes?\s*)$/i.test(x));
-  const description=desc.join(' ').replace(/\s+/g,' ').trim();
-  best.description=description.length>=30?description:'';
+    .filter(x=>!/[«»@+]/.test(x));
+  const description=descLines.join(' ').replace(/\s+/g,' ').trim();
+  best.description=description.length>=30&&description.length<500&&!noise.test(description)?description:'';
   best.raw_text=raw;
   return best;
 }
