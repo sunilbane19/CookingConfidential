@@ -4,7 +4,7 @@ import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
 const sb=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
-const OCR_PARSER_VERSION='1.0.30';
+const OCR_PARSER_VERSION='1.0.31';;
 const OCR_PROFILE='tesseract-eng-psm3-v1';
 async function ocrDiag(id,stage,details={}){try{const p=sb.from('cc_extraction_diagnostics').insert({import_item_id:Number(id),stage:`ocr_${stage}`,details});await Promise.race([p,new Promise((_,reject)=>setTimeout(()=>reject(new Error('diagnostic timeout')),3000))])}catch(e){console.warn('CC OCR diagnostic write failed',e)}}
 let pdfPromise,tessPromise;
@@ -80,6 +80,19 @@ function deriveRecipe(text,fileName){
     const local=stripped.slice(Math.max(0,sectionIndex-28),sectionIndex)
       .map(x=>String(x||'').trim()).filter(Boolean);
     const candidates=[];
+    // Promotional recipe introductions often contain the title inside a sentence,
+    // rather than on a standalone line (e.g. "Try our aromatic Moroccan Chermoula Sauce!").
+    const introText=local.join(' ').replace(/\s+/g,' ').trim();
+    const titleLead=/\b(?:try|make|enjoy|discover|introducing|presenting)\s+(?:our|this|the)?\s*(?:easy|simple|aromatic|delicious|fresh|classic|homemade|authentic|flavourful|flavorful|zesty|quick)?\s*/ig;
+    for(const sentence of introText.split(/(?<=[.!?])\s+/)){
+      const s=sentence.trim();
+      const lead=s.match(titleLead);
+      if(lead){
+        const start=s.search(titleLead);
+        const candidate=cleanTitleCandidate(s.slice(start+lead[0].length).replace(/[.!?].*$/,''));
+        if(titleish(candidate)&&/\b(?:sauce|salad|dip|dressing|chutney|curry|soup|bread|cake|rice|pasta|marinade)\b/i.test(candidate))return candidate;
+      }
+    }
     // Join a title that visibly continues onto the next OCR line (for example,
     // "Crunchy Mango Peanut Power Salad with a" + "Fiery Chili Lime Kick!").
     for(let k=0;k<local.length-1;k++){
@@ -157,10 +170,11 @@ function deriveRecipe(text,fileName){
   const ingIndex=stripped.findIndex(isIng);
   const desc=stripped.slice(Math.max(0,ingIndex>=0?ingIndex-18:0),ingIndex>=0?ingIndex:20)
     .filter(x=>x.length>=30&&x.length<500&&!noise.test(x)&&!isPageMarker(x)&&!/^by\s+/i.test(x)&&!/(?:published|prep time|cook time|resting time|total time|jump to nutrition)/i.test(x))
-    .filter(x=>clean(x)!==best.name)
-    .filter(x=>!/(?:\bfollow\b|\bshare\b|\bsubscribe\b|\blog\s*in\b|\bsign\s*up\b|\bclick\b|\bread\s+more\b|\bnewsletter\b|\bprivacy\b|\bcontact\b)/i.test(x))
-    .filter(x=>!/[«»@+]/.test(x));
-  best.description='';
+    .filter(x=>!/(?:\bfollow\b|\bshare\b|\bsubscribe\b|\blog\s*in\b|\bsign\s*up\b|\bclick\b|\bread\s+more\b|\bnewsletter\b|\bprivacy\b|\bcontact\b|write a comment|like\s+comment)/i.test(x))
+    .filter(x=>!/[«»@+]/.test(x))
+    .filter(x=>!/^\s*(?:need a new recipe|skip to|home|recipes?\s*)$/i.test(x));
+  const description=desc.join(' ').replace(/\s+/g,' ').trim();
+  best.description=description.length>=30?description:'';
   best.raw_text=raw;
   return best;
 }
