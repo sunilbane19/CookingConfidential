@@ -4,7 +4,7 @@ import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
 const sb=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
-const OCR_PARSER_VERSION='1.0.35';;
+const OCR_PARSER_VERSION='1.0.36';;
 const OCR_PROFILE='tesseract-eng-psm3-v1';
 async function ocrDiag(id,stage,details={}){try{const p=sb.from('cc_extraction_diagnostics').insert({import_item_id:Number(id),stage:`ocr_${stage}`,details});await Promise.race([p,new Promise((_,reject)=>setTimeout(()=>reject(new Error('diagnostic timeout')),3000))])}catch(e){console.warn('CC OCR diagnostic write failed',e)}}
 let pdfPromise,tessPromise;
@@ -70,7 +70,7 @@ function deriveRecipe(text,fileName){
   };
   const titleScore=(x,distance)=>{
     const v=cleanTitleCandidate(x), w=v.split(/\s+/).filter(Boolean);
-    if(!titleish(v))return -999;
+    if(!titleish(v)||/\b(?:need a new|new recj|try our|refresh your taste|perfect as|buds?)\b/i.test(v))return -999;
     const caps=w.filter(q=>/^[A-ZÀ-ÖØ-Þ][A-Za-z'’&-]*$/.test(q)).length;
     let sc=10-Math.min(distance,14)*.35;
     if(w.length>=2&&w.length<=9)sc+=3;
@@ -187,7 +187,7 @@ function deriveRecipe(text,fileName){
     .filter(x=>!/(?:\bfollow\b|\bshare\b|\bsubscribe\b|\blog\s*in\b|\bsign\s*up\b|\bclick\b|\bread\s+more\b|\bnewsletter\b|\bprivacy\b|\bcontact\b|write a comment|like\s+comment)/i.test(x))
     .filter(x=>!/[«»@+]/.test(x));
   const description=descLines.join(' ').replace(/\s+/g,' ').trim();
-  best.description=description.length>=30&&description.length<500&&!noise.test(description)?description:'';
+  best.description=description.length>=30&&description.length<500&&!noise.test(description)&&!/\b(?:need a new|new recj|try our|refresh your taste|perfect as|buds?|romantic Moroccan|aromatic Moroccan)\b/i.test(description)?description:'';
   best.raw_text=raw;
   return best;
 }
