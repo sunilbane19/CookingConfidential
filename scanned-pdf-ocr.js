@@ -158,7 +158,7 @@ function deriveRecipe(text,fileName){
       if(isStop(stripped[j])){end=j;break}
     }
     if(mi>=0){
-      for(let j=mi+1;j<stripped.length;j++){if(isStop(stripped[j])||(isStepHeading(stripped[j])&&j>mi+1&&/^step\s*1\s*:?$/i.test(heading(stripped[j]))){end=j;break}}
+      for(let j=mi+1;j<stripped.length;j++){if(isStop(stripped[j])||(isStepHeading(stripped[j])&&j>mi+1&&/^step\s*1\s*:?$/i.test(heading(stripped[j])))){end=j;break}}
     }
     const ingredientEnd=mi>=0?mi:end;
     const ingredients=stripped.slice(i+1,ingredientEnd)
