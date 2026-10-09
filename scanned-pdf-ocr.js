@@ -4,7 +4,7 @@ import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
 const sb=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
-const OCR_PARSER_VERSION='1.0.32';;
+const OCR_PARSER_VERSION='1.0.33';;
 const OCR_PROFILE='tesseract-eng-psm3-v1';
 async function ocrDiag(id,stage,details={}){try{const p=sb.from('cc_extraction_diagnostics').insert({import_item_id:Number(id),stage:`ocr_${stage}`,details});await Promise.race([p,new Promise((_,reject)=>setTimeout(()=>reject(new Error('diagnostic timeout')),3000))])}catch(e){console.warn('CC OCR diagnostic write failed',e)}}
 let pdfPromise,tessPromise;
@@ -58,6 +58,8 @@ function deriveRecipe(text,fileName){
     // Reject OCR/UI garbage before considering a line as the recipe title.
     if(/[@©®™<>«»+={}\[\]\\]/.test(v))return false;
     if(/^[^A-Za-zÀ-ÖØ-öø-ÿ]*[0-9][^A-Za-zÀ-ÖØ-öø-ÿ]*\b/.test(v))return false;
+    // OCR headings with embedded digits between all-caps fragments are usually page/logo noise.
+    if(/\b[A-Z]{2,}\s+\d+\s+[A-Z]{2,}\b/.test(v))return false;
     const letters=(v.match(/[A-Za-zÀ-ÖØ-öø-ÿ]/g)||[]).length;
     const nonLetters=(v.match(/[^A-Za-zÀ-ÖØ-öø-ÿ\s'’&-]/g)||[]).length;
     if(letters<Math.max(4,Math.floor(v.length*.55))||nonLetters>3)return false;
@@ -143,7 +145,10 @@ function deriveRecipe(text,fileName){
       const flush=()=>{if(current.trim()){methodParts.push(current.trim());current=''}};
       for(const line of stripped.slice(mi+1,end)){
         if(isPageMarker(line)){flush();continue}
-        const v=stripItem(line);
+        const v=stripItem(line)
+          .replace(/\b(?:prep(?:aration)?\s*time|cooking\s*time|total\s*time)\s*[:|]?\s*.*$/i,'')
+          .replace(/\s*(?:©|®|™)?\s*(?:write\s*a\s*comment|writeacomment|like\s+comment|share)\b.*$/i,'')
+          .replace(/\s*\$?\d+\s*[@©®™].*$/i,'').trim();
         if(isPageMarker(v)){flush();continue}
         if(!v||noise.test(v)||/^directio\w*\s*[:=]/i.test(v))continue;
         if(/^(?:prep(?:aration)?\s*time|cook(?:ing)?\s*time|total\s*time|serves?\b|servings?\b|yield\b|write a comment|like\s+comment)/i.test(v))continue;
