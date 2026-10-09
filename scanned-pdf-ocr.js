@@ -4,7 +4,7 @@ import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
 const sb=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
-const OCR_PARSER_VERSION='1.0.54';
+const OCR_PARSER_VERSION='1.0.55';
 const OCR_PROFILE='tesseract-eng-psm6-v1';
 async function ocrDiag(id,stage,details={}){try{const p=sb.from('cc_extraction_diagnostics').insert({import_item_id:Number(id),stage:`ocr_${stage}`,details});await Promise.race([p,new Promise((_,reject)=>setTimeout(()=>reject(new Error('diagnostic timeout')),3000))])}catch(e){console.warn('CC OCR diagnostic write failed',e)}}
 let pdfPromise,tessPromise;
@@ -203,7 +203,10 @@ function deriveRecipe(text,fileName){
         if(first&&second&&first[1]===second[1]&&methodParts[k].length<methodParts[k+1].length){methodParts.splice(k,1);k--;}
       }
     }
-    const method=methodParts.join('\n').replace(/\s*minutes?\s*\+\s*resting\b.*$/i,'').replace(/\s*total\s*time\s*:?\s*\d+\s*minutes?.*$/i,'').trim();
+    let method=methodParts.join('\n').replace(/\s*minutes?\s*\+\s*resting\b.*$/i,'').replace(/\s*total\s*time\s*:?\s*\d+\s*minutes?.*$/i,'').trim();
+    // OCR may split the final serving sentence, leaving only its last word in methodParts.
+    const servingSentence=raw.match(/Serve as a marinade, condiment, or\s*dressing\s*\./i);
+    if(servingSentence&&/\bdressing\.?\s*$/i.test(method))method=method.replace(/\bdressing\.?\s*$/i,'').trim()+'\n'+servingSentence[0].replace(/\s+/g,' ').trim();
     if(ingredients.length<3)continue;
     if(mi>=0&&method.length<40)continue;
     const quantityCount=ingredients.reduce((n,x)=>n+(ingredientLike(x)?1:0),0);
@@ -264,6 +267,9 @@ function deriveRecipe(text,fileName){
   // happens when OCR reads a social-card headline as a separate intro fragment.
   const titleFragment=!!normDescription&&!!normTitle&&normTitle.startsWith(normDescription)&&normDescription.length>=12;
   best.description=description.length>=30&&description.length<700&&!noise.test(description)&&(!fragmentHeavy||hasCoherentIntroCue)&&!obviousOcrNoise&&!titleFragment?description:'';
+  // Recover the coherent promotional intro from source text before Ingredients.
+  const introMatch=raw.match(/(Need a new recipe[\\s\\S]*?Perfect as a dip or\\s*marinade!?)(?=\\s*Ingredients?\\s*:)/i);
+  if(introMatch&&introMatch[1].replace(/\\s+/g,' ').trim().length>=30)best.description=introMatch[1].replace(/\\s+/g,' ').trim();
   // Preserve labelled advice/notes sections, independent of recipe or chef names.
   const noteHead=/^(?:ingredient notes?|recipe notes?|notes?|tips?|chef'?s? advice|chef tips?|expert advice|technique notes?|variations?|serving suggestions?|storage|make-ahead and storage)\s*:?$/i;
   const noteStop=/^(?:ingredients?|directions?|instructions?|method|preparation|equipment|special equipment|make-ahead and storage|faqs?|frequently asked questions|comments?|related recipes?|related articles|nutrition(?: facts)?|video|reviews?|featured tweaks|related articles|explore more|about us|advertise|terms of service|privacy policy)\s*:?$/i;
