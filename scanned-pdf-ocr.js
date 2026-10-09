@@ -4,7 +4,7 @@ import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
 const sb=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
-const OCR_PARSER_VERSION='1.0.50';
+const OCR_PARSER_VERSION='1.0.51';
 const OCR_PROFILE='tesseract-eng-psm3-v1';
 async function ocrDiag(id,stage,details={}){try{const p=sb.from('cc_extraction_diagnostics').insert({import_item_id:Number(id),stage:`ocr_${stage}`,details});await Promise.race([p,new Promise((_,reject)=>setTimeout(()=>reject(new Error('diagnostic timeout')),3000))])}catch(e){console.warn('CC OCR diagnostic write failed',e)}}
 let pdfPromise,tessPromise;
@@ -213,11 +213,18 @@ function deriveRecipe(text,fileName){
   best.servings=serveLine?serveLine.replace(/\s+(?:prep|cook)\s+time\b.*$/i,'').trim():'';
   const ingIndex=stripped.findIndex(isIng);
   // Description is the introductory prose after the recipe title, ending at the first major section.
-  const titleIndex=stripped.findIndex(x=>cleanTitleCandidate(x).toLowerCase()===String(best.name||'').toLowerCase());
+  const normalizeTitle=x=>String(cleanTitleCandidate(x)||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+  const wantedTitle=normalizeTitle(best.name);
+  const titleIndex=stripped.findIndex(x=>{
+    const candidate=normalizeTitle(x);
+    return candidate===wantedTitle || (candidate.length>=12&&wantedTitle.length>=12&&(candidate.startsWith(wantedTitle)||wantedTitle.startsWith(candidate)));
+  });
   const introStart=titleIndex>=0?titleIndex+1:0;
   const introEnd=stripped.findIndex((x,i)=>i>=introStart&&(
-    /^(?:ingredient notes?|equipment|ingredients?|directions?|instructions?|method|preparation|recipe notes?|chef tips?|notes?|storage|variations?|serving suggestions?|special equipment|make-ahead and storage)\s*:?$/i.test(heading(x))
+    /^(?:ingredient notes?|equipment|ingredients?|directions?|instructions?|method|preparation|recipe notes?|chef tips?|notes?|storage|variations?|serving suggestions?|special equipment|make-ahead and storage|why make this|from the editors)\s*:?$/i.test(heading(x))
+    || /^by\s+/i.test(x)
     || /^first published\b/i.test(x)
+    || isPageMarker(x)
     || isRecipeSubheading(x)
   ));
   const descLines=stripped.slice(introStart,introEnd>=0?introEnd:(ingIndex>=0?ingIndex:Math.min(stripped.length,20)))
