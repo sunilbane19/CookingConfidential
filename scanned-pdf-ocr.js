@@ -4,7 +4,7 @@ import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
 const sb=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
-const OCR_PARSER_VERSION='1.0.47';
+const OCR_PARSER_VERSION='1.0.48';
 const OCR_PROFILE='tesseract-eng-psm3-v1';
 async function ocrDiag(id,stage,details={}){try{const p=sb.from('cc_extraction_diagnostics').insert({import_item_id:Number(id),stage:`ocr_${stage}`,details});await Promise.race([p,new Promise((_,reject)=>setTimeout(()=>reject(new Error('diagnostic timeout')),3000))])}catch(e){console.warn('CC OCR diagnostic write failed',e)}}
 let pdfPromise,tessPromise;
@@ -216,7 +216,7 @@ function deriveRecipe(text,fileName){
   const introStart=titleIndex>=0?titleIndex+1:0;
   const introEnd=stripped.findIndex((x,i)=>i>=introStart&&(
     /^(?:ingredient notes?|equipment|ingredients?|directions?|instructions?|method|preparation|recipe notes?|chef tips?|notes?|storage|variations?|serving suggestions?)\s*:?$/i.test(heading(x))
-    || /^(?:by\s+|jump to recipe|why make this|keep screen awake|credit:|save\b|rate\b|print\b|share\b|page\s+\d+)/i.test(x)
+    || /^(?:jump to recipe|why make this|keep screen awake|credit:|save\b|rate\b|print\b|share\b|page\s+\d+)/i.test(x)
     || isRecipeSubheading(x)
   ));
   const descLines=stripped.slice(introStart,introEnd>=0?introEnd:(ingIndex>=0?ingIndex:Math.min(stripped.length,20)))
