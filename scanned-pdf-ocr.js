@@ -4,7 +4,7 @@ import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
 const sb=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
-const OCR_PARSER_VERSION='1.0.51';
+const OCR_PARSER_VERSION='1.0.52';
 const OCR_PROFILE='tesseract-eng-psm3-v1';
 async function ocrDiag(id,stage,details={}){try{const p=sb.from('cc_extraction_diagnostics').insert({import_item_id:Number(id),stage:`ocr_${stage}`,details});await Promise.race([p,new Promise((_,reject)=>setTimeout(()=>reject(new Error('diagnostic timeout')),3000))])}catch(e){console.warn('CC OCR diagnostic write failed',e)}}
 let pdfPromise,tessPromise;
@@ -220,9 +220,11 @@ function deriveRecipe(text,fileName){
     return candidate===wantedTitle || (candidate.length>=12&&wantedTitle.length>=12&&(candidate.startsWith(wantedTitle)||wantedTitle.startsWith(candidate)));
   });
   const introStart=titleIndex>=0?titleIndex+1:0;
+  // A byline and recipe metadata can appear between the title and genuine
+  // introductory prose (notably Food52 PDFs). Skip them as description content,
+  // but do not treat the byline itself as the end of the introduction.
   const introEnd=stripped.findIndex((x,i)=>i>=introStart&&(
     /^(?:ingredient notes?|equipment|ingredients?|directions?|instructions?|method|preparation|recipe notes?|chef tips?|notes?|storage|variations?|serving suggestions?|special equipment|make-ahead and storage|why make this|from the editors)\s*:?$/i.test(heading(x))
-    || /^by\s+/i.test(x)
     || /^first published\b/i.test(x)
     || isPageMarker(x)
     || isRecipeSubheading(x)
