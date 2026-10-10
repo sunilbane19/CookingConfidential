@@ -4,7 +4,7 @@ import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
 const sb=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
-const OCR_PARSER_VERSION='1.0.77';
+const OCR_PARSER_VERSION='1.0.78';
 const OCR_PROFILE='tesseract-eng-psm6-v1';
 async function ocrDiag(id,stage,details={}){try{const p=sb.from('cc_extraction_diagnostics').insert({import_item_id:Number(id),stage:`ocr_${stage}`,details});await Promise.race([p,new Promise((_,reject)=>setTimeout(()=>reject(new Error('diagnostic timeout')),3000))])}catch(e){console.warn('CC OCR diagnostic write failed',e)}}
 let pdfPromise,tessPromise;
@@ -383,6 +383,63 @@ function deriveRecipe(text,fileName){
   const finalSocialChrome=/\b(?:like|comment|share|follow)\b/i.test(best.description)
     &&/(?:\b(?:patricia'?s classic|\d+\s*[a-z]?d\b|\d+\s*comments?\b)|[@+•]|\s>\s)/i.test(best.description);
   if(finalSocialChrome)best.description='';
+  // General description candidate selection: choose coherent introductory prose,
+  // rather than assuming every line between title and Ingredients is a description.
+  // Keep the 100-word limit as a guard rail, not as the candidate detector.
+  const descriptionBoundary=stripped.findIndex((x,i)=>i>(titleIndex>=0?titleIndex:0)&&
+    /^(?:ingredient notes?|equipment|ingredients?|directions?|instructions?|method|preparation|recipe notes?|chef tips?|notes?|storage|variations?|serving suggestions?|special equipment|make-ahead and storage|why make this|from the editors|recipe information|nutrition(?: facts)?)\s*:?$/i.test(heading(x)));
+  const candidateEnd=descriptionBoundary>=0?descriptionBoundary:Math.min(stripped.length, titleIndex>=0?titleIndex+24:35);
+  const candidateStart=titleIndex>=0?titleIndex+1:0;
+  const candidateLines=stripped.slice(candidateStart,candidateEnd)
+    .map(x=>String(x||'').replace(/\s+/g,' ').trim())
+    .filter(x=>x&&!isPageMarker(x))
+    .filter(x=>!/^by\s+/i.test(x))
+    .filter(x=>!/^(?:updated|published|first published|prep(?:aration)?\s*time|cook(?:ing)?\s*time|total\s*time|resting\s*time|serves?|servings?|yield|category|nutrition facts|calories|save|rate|print|share|jump to|home|recipe index|reviews?\b|\d+(?:\.\d+)?\s*(?:mins?|minutes?|hours?)\b|\d+\s+servings?\b)/i.test(x))
+    .filter(x=>!/(?:keep\s+(?:the\s+)?screen\s+awake|write\s+a\s+comment|like\s+comment|\bsubscribe\b|\blog\s*in\b|\bsign\s*up\b|\bprivacy policy\b|\bterms of service\b)/i.test(x))
+    .filter(x=>!/^[-=|¦_~•*\s]+$/.test(x))
+    .filter(x=>!/^this recipe was developed by\b/i.test(x));
+  const candidateText=candidateLines.join(' ').replace(/\s+/g,' ').trim();
+  const sentences=candidateText.match(/[^.!?]+(?:[.!?]+|$)/g)||[];
+  const candidateSentences=sentences.map(x=>x.trim()).filter(x=>{
+    const words=x.split(/\s+/).filter(Boolean);
+    if(words.length<7||words.length>100)return false;
+    if(/\b(?:like|comment|share|follow)\b/i.test(x)&&/(?:[@+•]|\s>\s|classic|\d+\s*comments?)/i.test(x))return false;
+    if(/\b(?:preparation time|cooking time|total time|calories per serving|number of servings|nutrition facts|updated:|published on)\b/i.test(x))return false;
+    const letters=(x.match(/[A-Za-zÀ-ÖØ-öø-ÿ]/g)||[]).length;
+    return letters>=Math.min(30,Math.floor(x.length*.55))&&!/\b(?:from the editors|related articles|jump to recipe|recipe index)\b/i.test(x);
+  });
+  const scoreDescriptionCandidate=x=>{
+    let score=0;
+    const words=x.split(/\s+/).filter(Boolean);
+    if(words.length>=9)score+=2;
+    if(/\b(?:this recipe|this sauce|this salad|this dish|made with|learn how to|perfect for|perfect as|great for|comes from|serve it|you can|if you|it's|it is|I think|start here|all you need)\b/i.test(x))score+=4;
+    if(/[.!?]$/.test(x))score+=1;
+    if(/\b(?:ingredients?|directions?|method|minutes?|servings?|nutrition|calories|updated|published|developed by|headnote was written by)\b/i.test(x))score-=5;
+    if(/\b(?:like|comment|share|follow|save|print)\b/i.test(x))score-=5;
+    return score;
+  };
+  const rankedDescription=candidateSentences
+    .map((text,index)=>({text,index,score:scoreDescriptionCandidate(text)}))
+    .filter(x=>x.score>=2)
+    .sort((a,b)=>b.score-a.score||a.index-b.index);
+  const selectedDescription=rankedDescription.length
+    ? candidateSentences.slice(Math.min(...rankedDescription.map(x=>x.index))).join(' ')
+    : '';
+  const existingDescription=String(best.description||'').replace(/\s+/g,' ').trim();
+  const existingLooksLikeMetadata=/^(?:(?:this recipe was developed by|the headnote was written by|nutrition facts|recipe information|\d+\s*(?:mins?|minutes?)\b|\d+\s+servings?\b)|.*\b(?:like|comment|share|follow)\b.*(?:classic|\d+\s*comments?|[@+•]|\s>\s))/i.test(existingDescription);
+  let chosenDescription=existingDescription;
+  if(!chosenDescription||existingLooksLikeMetadata||chosenDescription.length<30){
+    chosenDescription=selectedDescription;
+  }
+  chosenDescription=stripDescriptionArtifacts(chosenDescription)
+    .replace(/\s+/g,' ').trim();
+  const chosenWords=chosenDescription.split(/\s+/).filter(Boolean);
+  if(chosenWords.length>100){
+    const clipped=chosenWords.slice(0,100).join(' ');
+    const sentenceEnd=Math.max(clipped.lastIndexOf('.'),clipped.lastIndexOf('!'),clipped.lastIndexOf('?'));
+    chosenDescription=(sentenceEnd>=Math.floor(clipped.length*.65)?clipped.slice(0,sentenceEnd+1):clipped.replace(/[,:;\s]+$/,'' )+'…');
+  }
+  best.description=chosenDescription.length>=30?chosenDescription:'';
   // Preserve labelled advice/notes sections, independent of recipe or chef names.
   const noteHead=/^(?:recipe information|ingredient notes?|recipe notes?|notes?|tips?|chef'?s? advice|chef tips?|expert advice|technique notes?|variations?|serving suggestions?|storage|make-ahead and storage|faqs?|frequently asked questions)\s*:?$/i;
   const noteStop=/^(?:ingredients?|directions?|instructions?|method|preparation|equipment|special equipment|make-ahead and storage|faqs?|frequently asked questions|comments?|related recipes?|related articles|nutrition(?: facts)?|video|reviews?|featured tweaks|related articles|explore more|about us|advertise|terms of service|privacy policy)\s*:?$/i;
