@@ -4,7 +4,7 @@ import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
 const sb=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
-const OCR_PARSER_VERSION='1.0.88';
+const OCR_PARSER_VERSION='1.0.89';
 const OCR_PROFILE='tesseract-eng-psm6-v1';
 async function ocrDiag(id,stage,details={}){try{const p=sb.from('cc_extraction_diagnostics').insert({import_item_id:Number(id),stage:`ocr_${stage}`,details});await Promise.race([p,new Promise((_,reject)=>setTimeout(()=>reject(new Error('diagnostic timeout')),3000))])}catch(e){console.warn('CC OCR diagnostic write failed',e)}}
 let pdfPromise,tessPromise;
@@ -358,12 +358,20 @@ function deriveRecipe(text,fileName){
     if(candidate.length>=50&&candidateHasProse&&!candidateLooksLikeOcrNoise)best.description=candidate;
   }
   // A lower-case SEO headline such as "tzatziki sauce in 10 minutes or less"
-  // is not a reliable recipe title. For scanned PDFs, the uploaded filename is a
-  // better fallback when it contains a recognisable dish name.
+  // is not a reliable recipe title. The filename is also a safer fallback when
+  // OCR mistakes a category/serving label ("Dinner 6") for the title or selects
+  // a full introductory sentence instead of the dish name.
   const derivedName=String(best?.name||'').trim();
   const fileTitle=filenameTitle;
-  if(derivedName && /^[a-z]/.test(derivedName) && /\b(?:sauce|salad|cake|curry|chutney|tzatziki|fritters?|dip|bread|chicken|fish|pasta|rice|soup|stew)\b/i.test(fileTitle)
-    && !/^(?:scan|document|recipe|page)\\b/i.test(fileTitle)) best.name=fileTitle;
+  const filenameHasDishName=/\b(?:sauce|salad|cake|curry|chutney|tzatziki|fritters?|dip|bread|chicken|fish|pasta|rice|soup|stew|dal|kebab|roast|pie|cookies?|biscuits?)\b/i.test(fileTitle)
+    && !/^(?:scan|document|recipe|page)\b/i.test(fileTitle)
+    && fileTitle.length<=100;
+  const derivedTitleLooksLikeMetadata=/^(?:dinner|lunch|breakfast|brunch|snack|dessert|starter|main|side)\s+\d+$/i.test(derivedName);
+  const derivedTitleLooksLikeSentence=derivedName.length>70||/[.!?]$/.test(derivedName)
+    ||/^(?:this|here|learn how|of all the|grandma'?s zucchini cake lands)\b/i.test(derivedName);
+  if(filenameHasDishName&&((derivedName&&/^[a-z]/.test(derivedName))||derivedTitleLooksLikeMetadata||derivedTitleLooksLikeSentence)){
+    best.name=fileTitle;
+  }
   // Recover substantial introductory prose placed before Ingredient Notes or Equipment.
   if(!best.description){
     // If no prose intro was recovered, accept a clean, complete recipe-card
