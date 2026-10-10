@@ -335,7 +335,7 @@ function deriveRecipe(text,fileName){
       }
       if(!v||noise.test(v)||/^(?:print|share|pin it|back to recipes|see all recipes)$/i.test(v))continue;
       if(/^(?:english|india \(inr\)|and y cooks|shop|recipes|youtube|cookbook)$/i.test(v))continue;
-      parts.push(v);
+      parts.push(parentRecipeNotes?v.replace(/^Note:\s*/i,''):v);
     }
     if(parts.length)noteBlocks.push(sectionName+':\n'+parts.join(' '));
   }
