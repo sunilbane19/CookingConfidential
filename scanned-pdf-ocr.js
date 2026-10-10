@@ -401,7 +401,12 @@ function deriveRecipe(text,fileName){
   // Keep the 100-word limit as a guard rail, not as the candidate detector.
   const descriptionBoundary=stripped.findIndex((x,i)=>i>(titleIndex>=0?titleIndex:0)&&
     /^(?:ingredient notes?|equipment|ingredients?|directions?|instructions?|method|preparation|recipe notes?|chef tips?|notes?|storage|variations?|serving suggestions?|special equipment|make-ahead and storage|why make this|from the editors|recipe information|nutrition(?: facts)?)\s*:?$/i.test(heading(x)));
-  const candidateEnd=descriptionBoundary>=0?descriptionBoundary:Math.min(stripped.length, titleIndex>=0?titleIndex+24:35);
+  const candidateEndRaw=descriptionBoundary>=0?descriptionBoundary:Math.min(stripped.length, titleIndex>=0?titleIndex+24:35);
+  // Introductory descriptions must not cross the first printed page boundary.
+  // OCR on later pages often contains scrambled columns, recipe cards and comments;
+  // joining those lines to the intro was the source of the Tzatziki garbage text.
+  const candidatePageEnd=stripped.findIndex((x,i)=>i>0&&isPageMarker(x));
+  const candidateEnd=candidatePageEnd>=0?Math.min(candidateEndRaw,candidatePageEnd):candidateEndRaw;
   const candidateStart=titleIndex>=0?titleIndex+1:0;
   const candidateLines=stripped.slice(candidateStart,candidateEnd)
     .map(x=>String(x||'').replace(/\s+/g,' ').trim())
