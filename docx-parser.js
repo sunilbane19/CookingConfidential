@@ -2,8 +2,8 @@ const clean=s=>String(s??'').replace(/[\u0000-\u001F\u007F\uFFFD]/g,' ').replace
 
 const GENERIC=/^(recipe|recipes|ingredients?|ingredient list|the ingredients|method|the method|directions?|the directions|instructions?|the instructions|preparation|the preparation|steps?|the steps|contents?|index|introduction|description|overview|component breakdown|step[- ]by[- ]step execution plan|notes?|tips?|storage|serving suggestions?|servings?|yield)[:.]?$/i;
 const SECTION={
-  ingredients:/^(?:the\s+)?ingredients?(?:\s+list)?\s*:?$/i,
-  method:/^(?:the\s+)?(?:instructions?|method|directions?|preparation|steps?|stages?)\s*:?$/i,
+  ingredients:/^(?:the\s+)?ingredients?(?:\s+(?:list|profile|section))?\s*:?$/i,
+  method:/^(?:the\s+)?(?:instructions?|method|directions?|preparation|steps?|stages?|step[- ]by[- ]step(?: execution)?(?: guide| instructions?)?)\s*:?$/i,
   notes:/^(?:the\s+)?(?:notes?|storage|serving suggestions?)\s*:?$/i
 };
 const COMPONENT=/^(?:\d+[.)]?\s*)?(?:the\b.*\b(?:marinade|glaze|sauce|rub|dressing|paste|filling|stuffing|topping|mixture|aromatics?|seasoning|spice blend|velveting|brine|batter|coating|garnish|cooking|chicken|beef|pork|fish|vegetables?)\b|for\b.*\b(?:cooking|serving|garnish|sauce|chicken|beef|pork|fish|vegetables?)\b)$/i;
