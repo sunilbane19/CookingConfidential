@@ -4,7 +4,7 @@ import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
 const sb=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
-const OCR_PARSER_VERSION='1.0.86';
+const OCR_PARSER_VERSION='1.0.87';
 const OCR_PROFILE='tesseract-eng-psm6-v1';
 async function ocrDiag(id,stage,details={}){try{const p=sb.from('cc_extraction_diagnostics').insert({import_item_id:Number(id),stage:`ocr_${stage}`,details});await Promise.race([p,new Promise((_,reject)=>setTimeout(()=>reject(new Error('diagnostic timeout')),3000))])}catch(e){console.warn('CC OCR diagnostic write failed',e)}}
 let pdfPromise,tessPromise;
@@ -314,30 +314,48 @@ function deriveRecipe(text,fileName){
     &&/(?:\b(?:patricia'?s classic|\d+\s*[a-z]?d\b|\d+\s*comments?\b)|[@+•]|\s>\s)/i.test(cleanDescription);
   const usefulRecipeMetadata=/^(?:this recipe was developed by\b|the headnote was written by\b|nutrition facts\b|\d+\s*(?:mins?|minutes?)\b|\d+\s+servings?\b|\d+\s+pancakes?\b)/i.test(cleanDescription);
   best.description=cleanDescription.length>=30&&cleanDescription.length<700&&!noise.test(cleanDescription)&&(!fragmentHeavy||hasCoherentIntroCue||coherentIntroCue||usefulRecipeMetadata)&&!obviousOcrNoise&&!titleFragment&&!socialChrome?cleanDescription:'';
-  // Generic introduction recovery: an explicit introductory heading is a reliable
-  // Description boundary when the initial candidate was rejected by OCR quality checks.
-  // No recipe-specific text or dish-name heuristics belong in this recovery path.
+  // Generic introduction recovery: prefer an explicit introduction heading, but
+  // also accept a coherent opening paragraph when the article has no such heading.
+  // Page breaks may separate the opening prose from later article sections.
   if(!best.description){
     const introHeadingPattern=/^(?:introduction|intro(?:duction)? to .+|about this recipe|about the recipe|the story behind .+|recipe introduction|overview)\s*:?$/i;
-    const introHeading=stripped.findIndex(x=>introHeadingPattern.test(heading(x)));
     const stopIntro=/^(?:ingredients?|ingredient notes?|directions?|instructions?|method|preparation|recipe card|what you need|equipment|recipe notes?|notes?|storage|nutrition(?: facts| information)?|serving suggestions?|how to make .+|step[- ]by[- ]step|frequently asked questions|faqs?|related recipes?|more recipes?|comments?|reviews?|video|watch .+|subscribe|references?)\s*:?$/i;
+    const isIntroNoise=v=>noise.test(v)||/^(?:photo credit:|image credit:|by\s+|updated:|published:|first published:|prep(?:aration)?\s*time\b|cook(?:ing)?\s*time\b|total\s*time\b|keep screen awake\b|jump to recipe\b|jump to nutrition\b|nutrition facts\b)/i.test(v)||/^(?:\d+\s*(?:mins?|minutes?)|\d+\s+servings?)\b/i.test(v);
+    const introHeading=stripped.findIndex(x=>introHeadingPattern.test(heading(x)));
+    let recovered=[];
     if(introHeading>=0){
-      const recovered=[];
       for(let k=introHeading+1;k<stripped.length;k++){
-        const v=String(stripped[k]||'').trim();
-        const h=heading(v);
+        const v=String(stripped[k]||'').trim(), h=heading(v);
         if(isPageMarker(v)||stopIntro.test(h))break;
-        if(!v||noise.test(v))continue;
-        if(/^(?:photo credit:|image credit:|by\s+|updated:|published:|first published:|prep(?:aration)?\s*time\b|cook(?:ing)?\s*time\b|total\s*time\b|keep screen awake\b|jump to recipe\b|jump to nutrition\b)/i.test(v))continue;
-        if(/^(?:\d+\s*(?:mins?|minutes?)|\d+\s+servings?|nutrition facts?)\b/i.test(v))continue;
+        if(!v||isIntroNoise(v))continue;
         recovered.push(v);
+        if(recovered.join(' ').split(/\s+/).length>=100)break;
       }
-      const candidate=recovered.join(' ').replace(/\s+/g,' ').trim();
-      const words=candidate.split(/\s+/).filter(Boolean);
-      const candidateHasProse=words.length>=8&&/[.!?]/.test(candidate);
-      const candidateLooksLikeOcrNoise=noise.test(candidate)||/[\uFFFD©®™|¦]/.test(candidate)||/\b[A-Z]{4,}\b.*\b[A-Z]{4,}\b/.test(candidate);
-      if(candidate.length>=50&&candidate.length<=900&&candidateHasProse&&!candidateLooksLikeOcrNoise)best.description=candidate;
     }
+    // No explicit Introduction heading? Look for a coherent article-opening paragraph.
+    // This is generic prose detection, not a title or dish-specific rule.
+    if(!recovered.length){
+      const openingCue=/(?:\blearn how to make\b|\bthis authentic\b|\bthis recipe\b|\bof all the\b|\ba few years ago\b|\bdiscover how to\b|\bintroducing\b|\bmeet your new\b|\b(?:perfect for|perfect as|made with|great for)\b)/i;
+      const cueIndex=stripped.findIndex((x,i)=>i<Math.min(stripped.length,30)&&openingCue.test(x)&&!isIntroNoise(x));
+      if(cueIndex>=0){
+        for(let k=cueIndex;k<stripped.length;k++){
+          const v=String(stripped[k]||'').trim(), h=heading(v);
+          if(isPageMarker(v)||stopIntro.test(h))break;
+          if(!v||isIntroNoise(v))break;
+          if(/^(?:photo credit:|image credit:)/i.test(v))break;
+          recovered.push(v);
+          if(recovered.join(' ').split(/\s+/).length>=100)break;
+          // OCR commonly stores an opening paragraph as one text line; avoid
+          // walking into unrelated body text if the next line is a new heading.
+          if(k+1<stripped.length&&/^[A-Z][^.!?]{0,65}\??$/.test(stripped[k+1])&&stripped[k+1].split(/\s+/).length<=8)break;
+        }
+      }
+    }
+    const candidate=recovered.join(' ').replace(/\s+/g,' ').trim();
+    const words=candidate.split(/\s+/).filter(Boolean);
+    const candidateHasProse=words.length>=8&&/[.!?]/.test(candidate);
+    const candidateLooksLikeOcrNoise=noise.test(candidate)||/[\uFFFD©®™|¦]/.test(candidate)||/\b[A-Z]{4,}\b.*\b[A-Z]{4,}\b/.test(candidate);
+    if(candidate.length>=50&&candidateHasProse&&!candidateLooksLikeOcrNoise)best.description=candidate;
   }
   // A lower-case SEO headline such as "tzatziki sauce in 10 minutes or less"
   // is not a reliable recipe title. For scanned PDFs, the uploaded filename is a
