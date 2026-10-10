@@ -4,7 +4,7 @@ import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
 const sb=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
-const OCR_PARSER_VERSION='1.0.85';
+const OCR_PARSER_VERSION='1.0.86';
 const OCR_PROFILE='tesseract-eng-psm6-v1';
 async function ocrDiag(id,stage,details={}){try{const p=sb.from('cc_extraction_diagnostics').insert({import_item_id:Number(id),stage:`ocr_${stage}`,details});await Promise.race([p,new Promise((_,reject)=>setTimeout(()=>reject(new Error('diagnostic timeout')),3000))])}catch(e){console.warn('CC OCR diagnostic write failed',e)}}
 let pdfPromise,tessPromise;
@@ -318,9 +318,9 @@ function deriveRecipe(text,fileName){
   // Description boundary when the initial candidate was rejected by OCR quality checks.
   // No recipe-specific text or dish-name heuristics belong in this recovery path.
   if(!best.description){
-    const introHeadingPattern=/^(?:introduction|intro(?:duction)? to .+|about this recipe|about the recipe|the story behind .+|recipe introduction|overview)\\s*:?$/i;
+    const introHeadingPattern=/^(?:introduction|intro(?:duction)? to .+|about this recipe|about the recipe|the story behind .+|recipe introduction|overview)\s*:?$/i;
     const introHeading=stripped.findIndex(x=>introHeadingPattern.test(heading(x)));
-    const stopIntro=/^(?:ingredients?|ingredient notes?|directions?|instructions?|method|preparation|recipe card|what you need|equipment|recipe notes?|notes?|storage|nutrition(?: facts| information)?|serving suggestions?|how to make .+|step[- ]by[- ]step|frequently asked questions|faqs?|related recipes?|more recipes?|comments?|reviews?|video|watch .+|subscribe|references?)\\s*:?$/i;
+    const stopIntro=/^(?:ingredients?|ingredient notes?|directions?|instructions?|method|preparation|recipe card|what you need|equipment|recipe notes?|notes?|storage|nutrition(?: facts| information)?|serving suggestions?|how to make .+|step[- ]by[- ]step|frequently asked questions|faqs?|related recipes?|more recipes?|comments?|reviews?|video|watch .+|subscribe|references?)\s*:?$/i;
     if(introHeading>=0){
       const recovered=[];
       for(let k=introHeading+1;k<stripped.length;k++){
@@ -328,14 +328,14 @@ function deriveRecipe(text,fileName){
         const h=heading(v);
         if(isPageMarker(v)||stopIntro.test(h))break;
         if(!v||noise.test(v))continue;
-        if(/^(?:photo credit:|image credit:|by\\s+|updated:|published:|first published:|prep(?:aration)?\\s*time\\b|cook(?:ing)?\\s*time\\b|total\\s*time\\b|keep screen awake\\b|jump to recipe\\b|jump to nutrition\\b)/i.test(v))continue;
-        if(/^(?:\\d+\\s*(?:mins?|minutes?)|\\d+\\s+servings?|nutrition facts?)\\b/i.test(v))continue;
+        if(/^(?:photo credit:|image credit:|by\s+|updated:|published:|first published:|prep(?:aration)?\s*time\b|cook(?:ing)?\s*time\b|total\s*time\b|keep screen awake\b|jump to recipe\b|jump to nutrition\b)/i.test(v))continue;
+        if(/^(?:\d+\s*(?:mins?|minutes?)|\d+\s+servings?|nutrition facts?)\b/i.test(v))continue;
         recovered.push(v);
       }
-      const candidate=recovered.join(' ').replace(/\\s+/g,' ').trim();
-      const words=candidate.split(/\\s+/).filter(Boolean);
+      const candidate=recovered.join(' ').replace(/\s+/g,' ').trim();
+      const words=candidate.split(/\s+/).filter(Boolean);
       const candidateHasProse=words.length>=8&&/[.!?]/.test(candidate);
-      const candidateLooksLikeOcrNoise=noise.test(candidate)||/[\\uFFFD©®™|¦]/.test(candidate)||/\\b[A-Z]{4,}\\b.*\\b[A-Z]{4,}\\b/.test(candidate);
+      const candidateLooksLikeOcrNoise=noise.test(candidate)||/[\uFFFD©®™|¦]/.test(candidate)||/\b[A-Z]{4,}\b.*\b[A-Z]{4,}\b/.test(candidate);
       if(candidate.length>=50&&candidate.length<=900&&candidateHasProse&&!candidateLooksLikeOcrNoise)best.description=candidate;
     }
   }
