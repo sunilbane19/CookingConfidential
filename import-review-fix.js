@@ -122,6 +122,29 @@ async function showReview(x,id){
   await extractionDiag(id,'show_review_start',{extraction_status:x?.extraction_status});
   if(!x)return window.ccShowError('Import item could not be loaded.','Could not load import');
   const r=parseRecipe(x);
+  // DOCX-only enrichment: use the original Word HTML to retain bold, emphasis,
+  // subheadings and bullet/numbered list structure in the rich review fields.
+  // PDF/OCR and all other extraction paths remain unchanged.
+  if(/\.docx$/i.test(x.file_name||'')&&x.file_path){
+    try{
+      const signed=await getCachedSignedUrl(supabase,'cooking-confidential',x.file_path);
+      const response=await fetch(signed);
+      if(response.ok){
+        const blob=await response.blob();
+        const converted=await mammoth.convertToHtml({arrayBuffer:await blob.arrayBuffer()});
+        const docxRecipes=parseDocx(converted.value||'',x.file_name||'Imported document');
+        const formatted=docxRecipes.find(v=>(v.ingredients?.length||0)>=3)||docxRecipes[0];
+        if(formatted){
+          if(formatted.ingredientsHtml)r.ingredientsHtml=formatted.ingredientsHtml;
+          if(formatted.methodHtml)r.methodHtml=formatted.methodHtml;
+          if(formatted.notesHtml)r.notesHtml=formatted.notesHtml;
+          await extractionDiag(id,'docx_formatting_preserved',{parser:'mammoth-html',ingredient_html:!!r.ingredientsHtml,method_html:!!r.methodHtml,notes_html:!!r.notesHtml});
+        }
+      }
+    }catch(error){
+      await extractionDiag(id,'docx_formatting_fallback',{message:String(error?.message||error)});
+    }
+  }
   const ingredientHtml=Array.isArray(r.ingredients)
     ? r.ingredients.map(v=>typeof v==='string'?clean(v):[v?.quantity,v?.unit,v?.name].filter(Boolean).join(' ')).filter(Boolean).join('\n')
     : clean(r.ingredients||'');
