@@ -4,7 +4,7 @@ import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
 const sb=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
-const OCR_PARSER_VERSION='1.0.84';
+const OCR_PARSER_VERSION='1.0.85';
 const OCR_PROFILE='tesseract-eng-psm6-v1';
 async function ocrDiag(id,stage,details={}){try{const p=sb.from('cc_extraction_diagnostics').insert({import_item_id:Number(id),stage:`ocr_${stage}`,details});await Promise.race([p,new Promise((_,reject)=>setTimeout(()=>reject(new Error('diagnostic timeout')),3000))])}catch(e){console.warn('CC OCR diagnostic write failed',e)}}
 let pdfPromise,tessPromise;
@@ -314,33 +314,30 @@ function deriveRecipe(text,fileName){
     &&/(?:\b(?:patricia'?s classic|\d+\s*[a-z]?d\b|\d+\s*comments?\b)|[@+•]|\s>\s)/i.test(cleanDescription);
   const usefulRecipeMetadata=/^(?:this recipe was developed by\b|the headnote was written by\b|nutrition facts\b|\d+\s*(?:mins?|minutes?)\b|\d+\s+servings?\b|\d+\s+pancakes?\b)/i.test(cleanDescription);
   best.description=cleanDescription.length>=30&&cleanDescription.length<700&&!noise.test(cleanDescription)&&(!fragmentHeavy||hasCoherentIntroCue||coherentIntroCue||usefulRecipeMetadata)&&!obviousOcrNoise&&!titleFragment&&!socialChrome?cleanDescription:'';
-  // Recover coherent article-introduction prose when the initial OCR description
-  // was rejected. Prefer an explicitly labelled Introduction; otherwise use the
-  // known Tzatziki article-intro boundary. Keep the normal quality gate in place.
+  // Generic introduction recovery: an explicit introductory heading is a reliable
+  // Description boundary when the initial candidate was rejected by OCR quality checks.
+  // No recipe-specific text or dish-name heuristics belong in this recovery path.
   if(!best.description){
-    const introHeading=stripped.findIndex(x=>/^introduction\s*:?$/i.test(heading(x)));
-    const stopIntro=/^(?:ingredients?|directions?|instructions?|method|preparation|what is .+\??|why make this|how to make .+|recipe notes?|notes?|nutrition(?: facts)?|related recipes?|faqs?|frequently asked questions|video|comments?)\s*:?$/i;
-    let recovered=[];
+    const introHeadingPattern=/^(?:introduction|intro(?:duction)? to .+|about this recipe|about the recipe|the story behind .+|recipe introduction|overview)\\s*:?$/i;
+    const introHeading=stripped.findIndex(x=>introHeadingPattern.test(heading(x)));
+    const stopIntro=/^(?:ingredients?|ingredient notes?|directions?|instructions?|method|preparation|recipe card|what you need|equipment|recipe notes?|notes?|storage|nutrition(?: facts| information)?|serving suggestions?|how to make .+|step[- ]by[- ]step|frequently asked questions|faqs?|related recipes?|more recipes?|comments?|reviews?|video|watch .+|subscribe|references?)\\s*:?$/i;
     if(introHeading>=0){
+      const recovered=[];
       for(let k=introHeading+1;k<stripped.length;k++){
         const v=String(stripped[k]||'').trim();
-        if(isPageMarker(v)||stopIntro.test(heading(v)))break;
-        if(v&&!noise.test(v)&&!/^(?:photo credit:|my other videos|by\s+|updated:|published:|prep\s*[-:]|total\s*[-:]|keep screen awake)/i.test(v))recovered.push(v);
+        const h=heading(v);
+        if(isPageMarker(v)||stopIntro.test(h))break;
+        if(!v||noise.test(v))continue;
+        if(/^(?:photo credit:|image credit:|by\\s+|updated:|published:|first published:|prep(?:aration)?\\s*time\\b|cook(?:ing)?\\s*time\\b|total\\s*time\\b|keep screen awake\\b|jump to recipe\\b|jump to nutrition\\b)/i.test(v))continue;
+        if(/^(?:\\d+\\s*(?:mins?|minutes?)|\\d+\\s+servings?|nutrition facts?)\\b/i.test(v))continue;
+        recovered.push(v);
       }
+      const candidate=recovered.join(' ').replace(/\\s+/g,' ').trim();
+      const words=candidate.split(/\\s+/).filter(Boolean);
+      const candidateHasProse=words.length>=8&&/[.!?]/.test(candidate);
+      const candidateLooksLikeOcrNoise=noise.test(candidate)||/[\\uFFFD©®™|¦]/.test(candidate)||/\\b[A-Z]{4,}\\b.*\\b[A-Z]{4,}\\b/.test(candidate);
+      if(candidate.length>=50&&candidate.length<=900&&candidateHasProse&&!candidateLooksLikeOcrNoise)best.description=candidate;
     }
-    if(recovered.join(' ').trim().length<50){
-      const articleLead=stripped.findIndex(x=>/\bof all the Greek recipes on this site\b/i.test(x));
-      if(articleLead>=0){
-        recovered=[];
-        for(let k=articleLead;k<stripped.length;k++){
-          const v=String(stripped[k]||'').trim();
-          if(k>articleLead&&(isPageMarker(v)||stopIntro.test(heading(v))||/^what is tzatziki\??$/i.test(v)))break;
-          if(v&&!noise.test(v)&&!/^(?:photo credit:|my other videos|tzatziki recipe that will make yiayia smile!?|by\s+|updated:|published:|keep screen awake)/i.test(v))recovered.push(v);
-        }
-      }
-    }
-    const candidate=recovered.join(' ').replace(/\s+/g,' ').trim();
-    if(candidate.length>=50&&candidate.length<=900&&!/[\uFFFD©®™|¦]/.test(candidate)&&!(/\b[A-Z]{4,}\b.*\b[A-Z]{4,}\b/.test(candidate)))best.description=candidate;
   }
   // A lower-case SEO headline such as "tzatziki sauce in 10 minutes or less"
   // is not a reliable recipe title. For scanned PDFs, the uploaded filename is a
