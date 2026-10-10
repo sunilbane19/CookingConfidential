@@ -142,6 +142,7 @@ export function parseDocx(html,fileName='Imported document'){
     const sourceTitle=nodes[start].text;
     const r=makeRecipe(embeddedTitle(sourceTitle)||sourceTitle);
     let current='';
+    const rich={ingredients:[],method:[],notes:[]};
     for(const n of nodes.slice(start+1,end)){
       const t=cleanRecipeText(n.text);
       if(SECTION.ingredients.test(t)){current='ingredients';continue;}
@@ -150,17 +151,20 @@ export function parseDocx(html,fileName='Imported document'){
       if(isGarbage(t))continue;
 
       if(current==='ingredients'){
-        if(COMPONENT.test(t)){r.ingredients.push(t);continue;}
-        if(!STEP.test(t))r.ingredients.push(t);
+        if(COMPONENT.test(t)){r.ingredients.push(t);rich.ingredients.push(n);continue;}
+        if(!STEP.test(t)){r.ingredients.push(t);rich.ingredients.push(n);}
       }else if(current==='method'){
-        r.method.push(t);
+        r.method.push(t);rich.method.push(n);
       }else if(current==='notes'){
-        r.notes.push(t);
+        r.notes.push(t);rich.notes.push(n);
       }
     }
     r.ingredients=[...new Set(r.ingredients)].filter(Boolean);
     r.method=[...new Set(r.method)].filter(Boolean);
     r.notes=[...new Set(r.notes)].filter(Boolean);
+    r.ingredientsHtml=richSection(rich.ingredients);
+    r.methodHtml=richSection(rich.method);
+    r.notesHtml=richSection(rich.notes);
     if(r.ingredients.length||r.method.length)recipes.push(r);
   }
 
