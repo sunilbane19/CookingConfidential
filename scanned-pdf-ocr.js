@@ -4,7 +4,7 @@ import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
 const sb=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
-const OCR_PARSER_VERSION='1.0.81';
+const OCR_PARSER_VERSION='1.0.82';
 const OCR_PROFILE='tesseract-eng-psm6-v1';
 async function ocrDiag(id,stage,details={}){try{const p=sb.from('cc_extraction_diagnostics').insert({import_item_id:Number(id),stage:`ocr_${stage}`,details});await Promise.race([p,new Promise((_,reject)=>setTimeout(()=>reject(new Error('diagnostic timeout')),3000))])}catch(e){console.warn('CC OCR diagnostic write failed',e)}}
 let pdfPromise,tessPromise;
@@ -448,8 +448,12 @@ function deriveRecipe(text,fileName){
     : '';
   const existingDescription=String(best.description||'').replace(/\s+/g,' ').trim();
   const existingLooksLikeMetadata=/^(?:(?:this recipe was developed by|the headnote was written by|nutrition facts|recipe information|\d+\s*(?:mins?|minutes?)\b|\d+\s+servings?\b)|.*\b(?:like|comment|share|follow)\b.*(?:classic|\d+\s*comments?|[@+•]|\s>\s))/i.test(existingDescription);
+  const existingUpperTokens=(existingDescription.match(/\b[A-Z]{2,}\b/g)||[]).length;
+  const existingWordCount=existingDescription.split(/\s+/).filter(Boolean).length;
   const existingLooksLikeOcrNoise=/^(?:\d+\s*\(?\d*\)?\s*(?:reviews?|stars?)\b|[\W\d]*[A-Z]{2,}\s+\d+\s+[A-Z]{2,}\b)/i.test(existingDescription)
-    || /\b(?:REVIEWS?\b.*\b(?:SAVE|RATE|PRINT|SHARE)\b|\b(?:SAVE|RATE|PRINT|SHARE)\b.*\b[A-Z]{3,}\s+[A-Z]{3,})/i.test(existingDescription);
+    || /\b(?:REVIEWS?\b.*\b(?:SAVE|RATE|PRINT|SHARE)\b|\b(?:SAVE|RATE|PRINT|SHARE)\b.*\b[A-Z]{3,}\s+[A-Z]{3,})/i.test(existingDescription)
+    || /[\uFFFD©®™|¦]/.test(existingDescription)
+    || (existingUpperTokens>=5&&existingWordCount>0&&existingUpperTokens/existingWordCount>0.12);
   let chosenDescription=existingDescription;
   if(!chosenDescription||existingLooksLikeMetadata||existingLooksLikeOcrNoise||chosenDescription.length<30){
     chosenDescription=selectedDescription;
@@ -515,6 +519,13 @@ function deriveRecipe(text,fileName){
     .replace(/^Notes:\s*/i,'Ingredient Notes:\n');
   if(combinedNotes&&!/^(?:Recipe Notes|Ingredient Notes|Notes|Tips|Storage|Variations):/i.test(combinedNotes))combinedNotes='Recipe Notes:\n'+combinedNotes;
   best.notes=combinedNotes.slice(0,8000);
+  // Remove OCR control glyphs and recipe-card metadata before the quality gate.
+  // Keep raw_text untouched for diagnostics and future parser improvements.
+  const cleanField=value=>String(value||'').replace(/[\uFFFD©®™|¦]/g,' ').replace(/[ \t]+/g,' ').replace(/\s+([,.;:])/g,'$1').trim();
+  best.description=cleanField(best.description);
+  best.method=cleanField(best.method).replace(/\n\s*\n+/g,'\n').trim();
+  best.ingredients=(best.ingredients||[]).map(v=>cleanField(v).replace(/^[O0U]\s+(?=(?:\d|[½¼¾⅓⅔⅛⅜⅝⅞]|English|warm|sliced|Handful)\b)/i,'').trim())
+    .filter(v=>v&&!/\b(?:DIPS AND APPETIZERS|PREP\s*[-:]|TOTAL\s*[-:]|SERVES?\s*[-:]?\s*\d+\s*cups?)\b/i.test(v));
   best.raw_text=raw;
   return best;
 }
