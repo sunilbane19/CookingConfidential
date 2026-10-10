@@ -24,22 +24,9 @@ function mountReviewRichText(form,name,label){const ta=form.querySelector(`texta
 
 function selectField(label,name,list,value){const v=String(value||'');const known=list.includes(v);return `<label>${label}<select name="${name}">${list.map(o=>`<option value="${esc(o)}" ${o===v?'selected':''}>${esc(o||'Select…')}</option>`).join('')}<option value="__custom__" ${v&&!known?'selected':''}>Other / custom…</option></select><input name="${name}_custom" placeholder="Enter category" style="display:${v&&!known?'block':'none'};margin-top:8px" value="${v&&!known?esc(v):''}"></label>`}
 function cleanImportedDescription(value){
-  let s=clean(String(value||''))
-    .replace(/\bKeep\s+Screen\s+Awake\b/ig,' ')
-    .replace(/\bFROM\s+THE\s+EDITORS\b[\s\S]*$/i,' ')
-    .replace(/\bMore\s+Sheet\s+Cakes\s+to\s+Delight\s+a\s+Crowd\b[\s\S]*$/i,' ')
-    .replace(/\bNutrition\s+Facts\b[\s\S]*$/i,' ')
-    .replace(/\b(?:aD\)|ad\s+choices|advertisement)\b[\s\S]*$/i,' ')
-    .replace(/\s+/g,' ').trim();
-  // Social-media screenshot/PDF chrome is not recipe description prose.
-  // Drop the whole field when OCR has captured controls such as Like/Comment/
-  // Share/Follow alongside reaction symbols or account/post metadata.
-  if(/\b(?:like|comment|share|follow)\b/i.test(s)
-      && /(?:\b(?:patricia's classic|\d+\s*[a-z]?d\b|\d+\s*comments?\b)|[@+•]|\s>\s)/i.test(s))return '';
-  // These are publisher credits, not recipe descriptions. If no genuine
-  // introductory prose precedes them, leave the optional description blank.
-  if(/^(?:this recipe was developed by\b|the headnote was written by\b|nutrition facts\b|keep screen awake\b)/i.test(s))return '';
-  return s;
+  // Remove only the unwanted browser overlay phrase. Keep author credits,
+  // recipe timings, serving information, nutrition facts and other metadata.
+  return clean(String(value||'').replace(/\\bKeep\\s+Screen\\s+Awake\\b/ig,' '));
 }
 function parseRecipe(x){
   const rawFileTitle=String(x?.file_name||'Imported recipe').replace(/\.[^.]+$/,'').replace(/^\s*\d+[-_\s]+/,'').replace(/[_-]+/g,' ').replace(/\s+/g,' ').trim();
@@ -213,7 +200,7 @@ async function showReview(x,id){
   detailDialog.showModal();
   await extractionDiag(id,'show_review_dialog_shown',{});
 }
-const REVIEW_MODULE_VERSION='1.4.68';
+const REVIEW_MODULE_VERSION='1.4.69';
 export async function reviewImportFixed(id){window.ccImportReviewActive=true;await extractionDiag(id,'review_module_version',{version:REVIEW_MODULE_VERSION});window.ccReturnToImportInbox=true;importDialog?.close();detailDialog.querySelector('#detailContent').innerHTML='<div class="dialog-card"><p class="eyebrow">REVIEW IMPORT</p><h2>Preparing recipe…</h2><p class="small-note">Reading the selected upload. This may take a few seconds.</p></div>';detailDialog.showModal();let{data:x,error}=await supabase.from('cc_import_items').select('*').eq('id',id).single();if(error||!x){detailDialog.close();return window.ccShowError(error?.message||'Import item could not be loaded.','Could not load import')}const displayName=x.file_name||x.source_url||'Recipe import';await extractionDiag(id,'review_open',{file_name:x.file_name||null,mime_type:x.mime_type||null,extraction_status:x.extraction_status,review_status:x.review_status,has_scanned_pdf:typeof x.extracted_text==='string'&&x.extracted_text.includes('"scanned_pdf":true')});detailDialog.querySelector('#detailContent').innerHTML='<div class="dialog-card import-preparing"><p class="eyebrow">REVIEW IMPORT</p><h2>Preparing your recipe</h2><p class="small-note">Reading <strong>'+esc(displayName)+'</strong>.</p><div style="margin:18px 0 8px;padding:12px 14px;border:1px solid rgba(120,70,50,.18);border-radius:10px;background:rgba(120,70,50,.05);font-size:14px;line-height:1.5;color:#5d514a"><strong>Almost there.</strong><br>Your recipe is being extracted now.</div><p class="small-note import-status" style="margin-top:10px">Please keep this window open while the recipe is extracted.</p></div>';const image=/\.(png|jpe?g|webp)$/i.test(x.file_name||'')||String(x.mime_type||'').startsWith('image/');if(image){detailDialog.close();try{const mod=await import('./multi-recipe-import.js?v=1.2.11');if(typeof mod.reviewImageImport==='function')return mod.reviewImageImport(id);if(typeof window.ccMultiReview==='function')return window.ccMultiReview(id)}catch(e){return window.ccShowError(e.message||'Could not open image review.','Could not open image review')}return window.ccShowError('Image review module is not available.','Image review unavailable')}const pdf=/\.pdf$/i.test(x.file_name||'')||x.mime_type==='application/pdf';if(x.extraction_status==='pending'||x.extraction_status==='processing'){await extractionDiag(id,'before_invoke_extract',{status:x.extraction_status,pdf});const{error:fx}=await invokeExtract(id);if(fx){await extractionDiag(id,'invoke_extract_failed',{message:fx.message||null,status:fx.status||null});let detail=fx.message||'The recipe could not be extracted.';try{const ctx=fx.context;const body=ctx?.json?await ctx.json():ctx?.text?await ctx.text():null;if(body)detail=typeof body==='string'?body:(body.error||body.message||JSON.stringify(body))}catch{}if(!pdf){return window.ccShowError(detail,'Recipe extraction failed')}try{const mod=await import('./scanned-pdf-ocr.js?v=1.0.62');await extractionDiag(id,'legacy_scanned_pdf_invoked',{module:'scanned-pdf-ocr.js'});const out=await mod.ocrScannedPdf(id,x);x=out.item;const rr=out.recipe||{};if(!Array.isArray(rr.ingredients)||rr.ingredients.length<3){const rescue=await import('./rescue-ocr.js?v=1.1.1');return rescue.rescueImport(id)}}catch(e){try{const rescue=await import('./rescue-ocr.js?v=1.1.1');return rescue.rescueImport(id)}catch(_){return window.ccShowError(e.message||'The scanned PDF could not be read.','Scanned PDF could not be read')}}}else{await extractionDiag(id,'invoke_extract_succeeded',{});const q=await supabase.from('cc_import_items').select('*').eq('id',id).single();if(q.error)return window.ccShowError(q.error.message,'Could not refresh import');x=q.data;await extractionDiag(id,'after_invoke_refresh',{extraction_status:x.extraction_status,source_title:x.source_title,has_scanned_pdf:typeof x.extracted_text==='string'&&x.extracted_text.includes('"scanned_pdf":true'),extracted_length:String(x.extracted_text||'').length})}}// x is already current here: the initial read is sufficient for ready items, and
   // pending/processing items refresh x themselves after extraction. Avoiding a
   // second identical Supabase read prevents Review from hanging on this path.
