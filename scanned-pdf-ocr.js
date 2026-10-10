@@ -319,7 +319,7 @@ function deriveRecipe(text,fileName){
   // better fallback when it contains a recognisable dish name.
   const derivedName=String(best?.name||'').trim();
   const fileTitle=filenameTitle;
-  if(derivedName && /^[a-z]/.test(derivedName) && /\\b(?:sauce|salad|cake|curry|chutney|tzatziki|fritters?|dip|bread|chicken|fish|pasta|rice|soup|stew)\\b/i.test(fileTitle)
+  if(derivedName && /^[a-z]/.test(derivedName) && /\b(?:sauce|salad|cake|curry|chutney|tzatziki|fritters?|dip|bread|chicken|fish|pasta|rice|soup|stew)\b/i.test(fileTitle)
     && !/^(?:scan|document|recipe|page)\\b/i.test(fileTitle)) best.name=fileTitle;
   // Recover substantial introductory prose placed before Ingredient Notes or Equipment.
   if(!best.description){
