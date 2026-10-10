@@ -4,7 +4,7 @@ import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
 const sb=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
-const OCR_PARSER_VERSION='1.0.87';
+const OCR_PARSER_VERSION='1.0.88';
 const OCR_PROFILE='tesseract-eng-psm6-v1';
 async function ocrDiag(id,stage,details={}){try{const p=sb.from('cc_extraction_diagnostics').insert({import_item_id:Number(id),stage:`ocr_${stage}`,details});await Promise.race([p,new Promise((_,reject)=>setTimeout(()=>reject(new Error('diagnostic timeout')),3000))])}catch(e){console.warn('CC OCR diagnostic write failed',e)}}
 let pdfPromise,tessPromise;
@@ -516,6 +516,29 @@ function deriveRecipe(text,fileName){
     const clipped=chosenWords.slice(0,100).join(' ');
     const sentenceEnd=Math.max(clipped.lastIndexOf('.'),clipped.lastIndexOf('!'),clipped.lastIndexOf('?'));
     chosenDescription=(sentenceEnd>=Math.floor(clipped.length*.65)?clipped.slice(0,sentenceEnd+1):clipped.replace(/[,:;\s]+$/,'' )+'…');
+  }
+  // Last-resort generic opening-prose recovery, after candidate ranking.
+  // This ensures an earlier recovery candidate is not lost when title detection
+  // points at an SEO headline rather than the article's real title.
+  if(chosenDescription.length<30){
+    const firstPage=stripped.slice(0,Math.max(0,stripped.findIndex((x,i)=>i>0&&isPageMarker(x))>=0?stripped.findIndex((x,i)=>i>0&&isPageMarker(x)):stripped.length));
+    const cue=/(?:\blearn how to make\b|\bthis authentic\b|\bthis recipe\b|\ba few years ago\b|\bdiscover how to\b|\bintroducing\b|\bmeet your new\b|\b(?:perfect for|perfect as|made with|great for)\b)/i;
+    const start=firstPage.findIndex(x=>cue.test(x)&&!noise.test(x));
+    if(start>=0){
+      const parts=[];
+      for(let k=start;k<firstPage.length;k++){
+        const v=String(firstPage[k]||'').trim(), h=heading(v);
+        if(isPageMarker(v)||/^(?:ingredients?|ingredient notes?|directions?|instructions?|method|preparation|recipe card|equipment|notes?|nutrition(?: facts)?)\s*:?$/i.test(h))break;
+        if(!v||noise.test(v)||/^(?:by\s+|updated:|published:|photo credit:|image credit:|\d+\s*(?:mins?|minutes?)\b|nutrition facts\b)/i.test(v))break;
+        parts.push(v);
+        if(parts.join(' ').split(/\s+/).length>=100)break;
+      }
+      const fallback=parts.join(' ').replace(/\s+/g,' ').trim();
+      if(fallback.length>=50&&fallback.split(/\s+/).length>=8&&/[.!?]/.test(fallback)
+        &&!/[\uFFFD©®™|¦]/.test(fallback)&&!/\b[A-Z]{4,}\b.*\b[A-Z]{4,}\b/.test(fallback)){
+        chosenDescription=fallback;
+      }
+    }
   }
   best.description=chosenDescription.length>=30?chosenDescription:'';
   // Preserve labelled advice/notes sections, independent of recipe or chef names.
