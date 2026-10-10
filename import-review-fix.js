@@ -34,8 +34,8 @@ function cleanImportedDescription(value){
   // Social-media screenshot/PDF chrome is not recipe description prose.
   // Drop the whole field when OCR has captured controls such as Like/Comment/
   // Share/Follow alongside reaction symbols or account/post metadata.
-  if(/\\b(?:like|comment|share|follow)\\b/i.test(s)
-      && /(?:\\b(?:patricia's classic|\\d+\\s*[a-z]?d\\b|\\d+\\s*comments?\\b)|[@+•]|\\s>\\s)/i.test(s))return '';
+  if(/\b(?:like|comment|share|follow)\b/i.test(s)
+      && /(?:\b(?:patricia's classic|\d+\s*[a-z]?d\b|\d+\s*comments?\b)|[@+•]|\s>\s)/i.test(s))return '';
   // These are publisher credits, not recipe descriptions. If no genuine
   // introductory prose precedes them, leave the optional description blank.
   if(/^(?:this recipe was developed by\b|the headnote was written by\b|nutrition facts\b|keep screen awake\b)/i.test(s))return '';
