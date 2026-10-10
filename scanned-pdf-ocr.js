@@ -283,7 +283,7 @@ function deriveRecipe(text,fileName){
   best.description=cleanDescription.length>=30&&cleanDescription.length<700&&!noise.test(cleanDescription)&&(!fragmentHeavy||hasCoherentIntroCue||coherentIntroCue)&&!obviousOcrNoise&&!titleFragment&&!socialChrome?cleanDescription:'';
   // Recover substantial introductory prose placed before Ingredient Notes or Equipment.
   if(!best.description){
-    const boundary=stripped.findIndex(x=>/^(?:ingredient notes?|equipment|ingredients?|directions?|instructions?|method|preparation|storage|faqs?|frequently asked questions)\s*:?$/i.test(heading(x)));
+    const boundary=stripped.findIndex(x=>/^(?:ingredient notes?|equipment|ingredients?|directions?|instructions?|method|preparation|storage|faqs?|frequently asked questions|from the editors)\s*:?$/i.test(heading(x)));
     const beforeRecipe=stripped.slice(0,boundary>=0?boundary:Math.min(stripped.length,35)).filter(x=>!isPageMarker(x)).filter(x=>!noise.test(x)).filter(x=>!/^(?:category|serves?|servings?|yield|prep(?:aration)? time|cooking time|total time|rated?|jump to|home|recipes?|dinner|breakfast|lunch)\b/i.test(x));
     // OCR often breaks a paragraph into several short visual lines. Join the
     // pre-recipe lines first, then select the first coherent prose passage.
