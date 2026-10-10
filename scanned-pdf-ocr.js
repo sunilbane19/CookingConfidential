@@ -4,7 +4,7 @@ import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
 const sb=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
-const OCR_PARSER_VERSION='1.0.73';
+const OCR_PARSER_VERSION='1.0.74';
 const OCR_PROFILE='tesseract-eng-psm6-v1';
 async function ocrDiag(id,stage,details={}){try{const p=sb.from('cc_extraction_diagnostics').insert({import_item_id:Number(id),stage:`ocr_${stage}`,details});await Promise.race([p,new Promise((_,reject)=>setTimeout(()=>reject(new Error('diagnostic timeout')),3000))])}catch(e){console.warn('CC OCR diagnostic write failed',e)}}
 let pdfPromise,tessPromise;
@@ -28,7 +28,7 @@ function deriveRecipe(text,fileName){
   const stripped=a;
   const heading=x=>String(x||'').replace(/^#{1,6}\s*/,'').replace(/\s*[:\-–—]\s*$/,'').trim();
   const isPageMarker=x=>/^(?:[-=]{2,}\s*)?Page\s*\d+\s*(?:[-=]{2,})?$/i.test(String(x||'').trim())||/^[-=]{2,}\s*Page\s+\d+\s*[-=]{2,}$/i.test(String(x||'').trim());
-  const isIng=x=>/^(?:ingredients?|what you need|ingredients required|shopping list)\s*:?\s*$/i.test(heading(x));
+  const isIng=x=>/^(?:(?:[A-Za-z][A-Za-z'’ -]{0,45}\s+)?ingredients?|what you need|ingredients required|shopping list)(?:\s+(?:1x\s*)?(?:2x\s*)?(?:3x\s*)?)?\s*:?\s*$/i.test(heading(x));
   const isMethod=x=>/^(?:directions?|instructions?|method|preparation|preparations|steps?|step\s*\d+)\s*:?\s*$/i.test(heading(x));
   const isRecipeSubheading=x=>/^(?:shell|filling)\s*:?\s*$/i.test(heading(x));
   const isStepHeading=x=>/^step\s*\d+\s*:?\s*$/i.test(heading(x));
@@ -89,7 +89,13 @@ function deriveRecipe(text,fileName){
     // later page, never let page-two headings (for example "Clippings and Notes")
     // compete with the actual title from page one.
     const firstPageBreak=local.findIndex(isPageMarker);
-    if(firstPageBreak>=0)local=local.slice(0,firstPageBreak);
+    // OCR output begins with a page marker (--- Page 1 ---). Skip that marker
+    // rather than accidentally discarding the entire first page, where the real
+    // recipe title and introductory description usually appear.
+    if(firstPageBreak===0)local=local.slice(1);
+    else if(firstPageBreak>0)local=local.slice(0,firstPageBreak);
+    const nextPageBreak=local.findIndex(isPageMarker);
+    if(nextPageBreak>=0)local=local.slice(0,nextPageBreak);
     // Search the complete pre-recipe-section text, not only the last 28 lines:
     // long introductions and ingredient notes can otherwise push the real title out.
     const sectionBoundary=local.findIndex(x=>/^(?:ingredient notes?|equipment|recipe notes?|chef tips?|ingredients?|directions?|instructions?|method|preparation|storage|faqs?)\s*:?$/i.test(heading(x)));
@@ -359,7 +365,7 @@ function deriveRecipe(text,fileName){
   let descriptionMetadata='';
   const descriptionStartsWithCredit=/^(?:this recipe was developed by|the headnote was written by)\b/i.test(best.description);
   const descriptionStartsWithTiming=/^(?:(?:prep(?:aration)?|cook(?:ing)?|total)\s*time\b|\d+\s*(?:mins?|minutes?)\b|\d+\s+servings?\b|nutrition facts\b)/i.test(best.description);
-  const hasRealIntroProse=/\b(?:perfect for|perfect as|great for|made with|this (?:salad|sauce|cake|recipe|dish)|it'?s (?:a|an|the|perfect)|I think)\b/i.test(best.description);
+  const hasRealIntroProse=!descriptionStartsWithCredit&&/\b(?:perfect for|perfect as|great for|made with|this (?:salad|sauce|cake|recipe|dish)|it'?s (?:a|an|the|perfect)|I think)\b/i.test(best.description);
   if((descriptionStartsWithCredit&&!hasRealIntroProse)||(descriptionStartsWithTiming&&!/[.!?].{25,}/.test(best.description))){
     descriptionMetadata=best.description;
     best.description='';
