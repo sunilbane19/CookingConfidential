@@ -4,7 +4,7 @@ import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
 const sb=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
-const OCR_PARSER_VERSION='1.0.68';
+const OCR_PARSER_VERSION='1.0.69';
 const OCR_PROFILE='tesseract-eng-psm6-v1';
 async function ocrDiag(id,stage,details={}){try{const p=sb.from('cc_extraction_diagnostics').insert({import_item_id:Number(id),stage:`ocr_${stage}`,details});await Promise.race([p,new Promise((_,reject)=>setTimeout(()=>reject(new Error('diagnostic timeout')),3000))])}catch(e){console.warn('CC OCR diagnostic write failed',e)}}
 let pdfPromise,tessPromise;
@@ -317,6 +317,15 @@ function deriveRecipe(text,fileName){
   // Final description sanitation must run after every recovery fallback above:
   // fallback paragraphs can otherwise re-introduce site chrome after initial filtering.
   best.description=stripDescriptionArtifacts(best.description);
+  // Credits and recipe-card timings are useful, but are metadata rather than
+  // a recipe description. Preserve them for Notes instead of displaying them
+  // in the Description field.
+  let descriptionMetadata='';
+  if(/^(?:(?:this recipe was developed by|the headnote was written by)\\b|(?:prep(?:aration)?|cook(?:ing)?|total)\\s*time\\b|\\d+\\s*(?:mins?|minutes?)\\b|\\d+\\s+servings?\\b|nutrition facts\\b)/i.test(best.description)
+    && !/[.!?].{25,}/.test(best.description)){
+    descriptionMetadata=best.description;
+    best.description='';
+  }
   const finalSocialChrome=/\b(?:like|comment|share|follow)\b/i.test(best.description)
     &&/(?:\b(?:patricia'?s classic|\d+\s*[a-z]?d\b|\d+\s*comments?\b)|[@+•]|\s>\s)/i.test(best.description);
   if(finalSocialChrome)best.description='';
@@ -352,7 +361,7 @@ function deriveRecipe(text,fileName){
   }
   // Keep a clear parent label for the entire notes area. Individual source headings
   // (Ingredient Notes, Chef Tips, Storage, etc.) remain in the text underneath it.
-  let combinedNotes=[...new Set(noteBlocks)].join('\n\n').trim();
+  let combinedNotes=[...new Set([...noteBlocks,...(descriptionMetadata?[descriptionMetadata]:[])])].join('\n\n').trim();
   // Recipe Information is useful metadata; strip only social-media hashtags
   // and obvious trailing overlay fragments, preserving the labelled values.
   combinedNotes=combinedNotes
