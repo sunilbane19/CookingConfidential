@@ -4,7 +4,7 @@ import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
 const sb=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
-const OCR_PARSER_VERSION='1.0.74';
+const OCR_PARSER_VERSION='1.0.75';
 const OCR_PROFILE='tesseract-eng-psm6-v1';
 async function ocrDiag(id,stage,details={}){try{const p=sb.from('cc_extraction_diagnostics').insert({import_item_id:Number(id),stage:`ocr_${stage}`,details});await Promise.race([p,new Promise((_,reject)=>setTimeout(()=>reject(new Error('diagnostic timeout')),3000))])}catch(e){console.warn('CC OCR diagnostic write failed',e)}}
 let pdfPromise,tessPromise;
@@ -124,15 +124,20 @@ function deriveRecipe(text,fileName){
         if(titleish(candidate)&&/\b(?:sauce|salad|dip|dressing|chutney|curry|soup|bread|cake|rice|pasta|marinade)\b/i.test(candidate))return candidate;
       }
     }
-    // Join a title that visibly continues onto the next OCR line (for example,
-    // "Crunchy Mango Peanut Power Salad with a" + "Fiery Chili Lime Kick!").
-    for(let k=0;k<local.length-1;k++){
+    // Join wrapped standalone recipe titles even when the first line does not
+    // end in a connector (e.g. "Kolokithokeftedes (Greek Zucchini" +
+    // "Fritters) With Tzatziki"). These usually appear before ratings/bylines.
+    for(let k=0;k<Math.min(local.length-1,12);k++){
       const first=cleanTitleCandidate(clean(local[k]));
       const second=cleanTitleCandidate(clean(local[k+1]));
-      if(/\b(?:with|with a|with an|and|of|for|in|on|the|a|an|to|from|by)$/i.test(first)&&titleish(first)&&titleish(second)){
-        const joined=cleanTitleCandidate(first+' '+second);
-        if(titleish(joined))return joined;
-      }
+      const firstWords=first.split(/\s+/).filter(Boolean).length;
+      const secondWords=second.split(/\s+/).filter(Boolean).length;
+      const joined=cleanTitleCandidate(first+' '+second);
+      const beforeMetadata=!local.slice(0,k+1).some(x=>/\b(?:updated:|published on|\d+(?:\.\d+)?\s*\(?\d*\)?\s*reviews?|\bby\s+[A-Z])/i.test(x));
+      if(titleish(joined)&&firstWords>=2&&secondWords>=2&&firstWords<=7&&secondWords<=7&&beforeMetadata
+        &&/\b(?:recipe|sauce|cake|curry|salad|chutney|kibbeh|tzatziki|keftedes|fritters?|dip|bread|chicken|fish|mutton|beef|pasta|rice|dal|soup|stew|cookies?|biscuits?)\b/i.test(joined)
+        &&!/(?:need a new recipe|try our|perfect as|made with|comes straight from)/i.test(joined))return joined;
+      if(/\b(?:with|with a|with an|and|of|for|in|on|the|a|an|to|from|by)$/i.test(first)&&titleish(first)&&titleish(second)&&titleish(joined))return joined;
     }
     for(let k=0;k<local.length;k++){
       const d=local.length-1-k;
@@ -227,9 +232,14 @@ function deriveRecipe(text,fileName){
   // Description is the introductory prose after the recipe title, ending at the first major section.
   const normalizeTitle=x=>String(cleanTitleCandidate(x)||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
   const wantedTitle=normalizeTitle(best.name);
-  const titleIndex=stripped.findIndex(x=>{
+  const titleIndex=stripped.findIndex((x,i)=>{
     const candidate=normalizeTitle(x);
-    return candidate===wantedTitle || (candidate.length>=12&&wantedTitle.length>=12&&(candidate.startsWith(wantedTitle)||wantedTitle.startsWith(candidate)));
+    if(candidate===wantedTitle || (candidate.length>=12&&wantedTitle.length>=12&&(candidate.startsWith(wantedTitle)||wantedTitle.startsWith(candidate))))return true;
+    if(i+1<stripped.length){
+      const pair=normalizeTitle(x+' '+stripped[i+1]);
+      if(pair===wantedTitle || (pair.length>=12&&wantedTitle.length>=12&&(pair.startsWith(wantedTitle)||wantedTitle.startsWith(pair))))return true;
+    }
+    return false;
   });
   const introStart=titleIndex>=0?titleIndex+1:0;
   // A byline and recipe metadata can appear between the title and genuine
@@ -238,7 +248,7 @@ function deriveRecipe(text,fileName){
   const introEnd=stripped.findIndex((x,i)=>i>=introStart&&(
     /^(?:ingredient notes?|equipment|ingredients?|directions?|instructions?|method|preparation|recipe notes?|chef tips?|notes?|storage|variations?|serving suggestions?|special equipment|make-ahead and storage|why make this|from the editors)\s*:?$/i.test(heading(x))
     || /^first published\b/i.test(x)
-    || isPageMarker(x)
+    || (isPageMarker(x)&&i>introStart&&stripped.slice(introStart,i).some(v=>/\b(?:perfect for|perfect as|great for|made with|this recipe|this sauce|have more|learn how to make|it'?s|it is)\b/i.test(v)))
     || isRecipeSubheading(x)
   ));
   const descriptionLimit=introEnd>=0?introEnd:(ingIndex>=0?ingIndex:Math.min(stripped.length,20));
