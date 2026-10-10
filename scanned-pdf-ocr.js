@@ -4,7 +4,7 @@ import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
 const sb=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
-const OCR_PARSER_VERSION='1.0.63';
+const OCR_PARSER_VERSION='1.0.64';
 const OCR_PROFILE='tesseract-eng-psm6-v1';
 async function ocrDiag(id,stage,details={}){try{const p=sb.from('cc_extraction_diagnostics').insert({import_item_id:Number(id),stage:`ocr_${stage}`,details});await Promise.race([p,new Promise((_,reject)=>setTimeout(()=>reject(new Error('diagnostic timeout')),3000))])}catch(e){console.warn('CC OCR diagnostic write failed',e)}}
 let pdfPromise,tessPromise;
@@ -203,7 +203,7 @@ function deriveRecipe(text,fileName){
         if(first&&second&&first[1]===second[1]&&methodParts[k].length<methodParts[k+1].length){methodParts.splice(k,1);k--;}
       }
     }
-    let method=methodParts.join('\n').replace(/(?<!^)(?<!\n)\s+(?=\d+\.\s+)/g,'\n').replace(/\s*minutes?\s*\+\s*resting\b.*$/i,'').replace(/\s*total\s*time\s*:?\s*\d+\s*minutes?.*$/i,'').trim();
+    let method=methodParts.join('\n').replace(/(?<!^)(?<!\n)\s+(?=\d+\.\s+)/g,'\n').replace(/\s*minutes?\s*\+\s*resting\b.*$/i,'').replace(/\s*total\s*time\s*:?\s*\d+\s*minutes?.*$/i,'').replace(/\s*\([^)]{0,80}$/,'').trim();
     // OCR may split the final serving sentence, leaving only its last word in methodParts.
     const servingSentence=raw.match(/Serve\s+as\s+a\s+marinade,\s*condiment,\s*or\s*dressing\s*\./i);
     if(servingSentence&&/\bdressing\.?\s*$/i.test(method))method=method.replace(/\bdressing\.?\s*$/i,'').trim()+'\n'+servingSentence[0].replace(/\s+/g,' ').trim();
@@ -252,7 +252,7 @@ function deriveRecipe(text,fileName){
   const description=descLines
     .filter(x=>!/^\d+(?:\.\d+)?\s*\(?\d*\)?\s*(?:reviews?|stars?)?$/i.test(x))
     .filter(x=>!/^.{0,100}\b(?:fritters|tzatziki)\s*$/i.test(x)||x.split(/\s+/).length>4)
-    .filter(x=>!/^\s*(?:first published|this recipe was developed by|the headnote was written by)\b/i.test(x))
+    .filter(x=>!/^\s*first published\b/i.test(x))
     .join(' ').replace(/\s+/g,' ').trim();
   // Strip browser/website artifacts and recipe-page navigation accidentally
   // concatenated onto otherwise valid introductory descriptions.
@@ -306,8 +306,9 @@ function deriveRecipe(text,fileName){
   // Final description sanitation must run after every recovery fallback above:
   // fallback paragraphs can otherwise re-introduce site chrome after initial filtering.
   best.description=stripDescriptionArtifacts(best.description);
-  // Final sanitation is intentionally limited to the browser overlay phrase.
-  best.description=stripDescriptionArtifacts(best.description);
+  const finalSocialChrome=/\b(?:like|comment|share|follow)\b/i.test(best.description)
+    &&/(?:\b(?:patricia'?s classic|\d+\s*[a-z]?d\b|\d+\s*comments?\b)|[@+•]|\s>\s)/i.test(best.description);
+  if(finalSocialChrome)best.description='';
   // Preserve labelled advice/notes sections, independent of recipe or chef names.
   const noteHead=/^(?:ingredient notes?|recipe notes?|notes?|tips?|chef'?s? advice|chef tips?|expert advice|technique notes?|variations?|serving suggestions?|storage|make-ahead and storage|faqs?|frequently asked questions)\s*:?$/i;
   const noteStop=/^(?:ingredients?|directions?|instructions?|method|preparation|equipment|special equipment|make-ahead and storage|faqs?|frequently asked questions|comments?|related recipes?|related articles|nutrition(?: facts)?|video|reviews?|featured tweaks|related articles|explore more|about us|advertise|terms of service|privacy policy)\s*:?$/i;
