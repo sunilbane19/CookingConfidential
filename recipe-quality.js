@@ -50,14 +50,12 @@ export function checkRecipeQuality(recipe, {mode='single'}={}) {
     instructionLines=String(method).split(/\n+/).filter(Boolean).filter(looksLikeInstruction).length;
     if(instructionLines>=1) score+=10; else reasons.push('method_does_not_look_like_instructions');
   }else{
-    if(scannedPdfMode){
-      // Scanned-PDF recipes should not pass as complete when OCR found no method.
-      // This was the exact failure mode: a high score hid an empty method field.
-      reasons.push('scanned_pdf_method_missing');
-    }else{
-      // Other source types can legitimately be ingredients-only.
-      score+=15;
-    }
+    // A recipe can legitimately be ingredients-only. This applies to scanned
+    // PDFs and image-based imports as well as other single-recipe sources.
+    // Completeness is still guarded by the title, ingredient-count, plausible
+    // ingredient, readable-text and OCR-noise checks below; a blank method alone
+    // must not force a valid ingredient-only recipe into Rescue.
+    score+=15;
   }
   const letterRatio=letters(all)/Math.max(1,all.length);
   if(letterRatio>=0.45) score+=10; else reasons.push('low_readable_text_ratio');
