@@ -524,6 +524,7 @@ function deriveRecipe(text,fileName){
   const cleanField=value=>String(value||'').replace(/[\uFFFD©®™|¦]/g,' ').replace(/[ \t]+/g,' ').replace(/\s+([,.;:])/g,'$1').trim();
   best.description=cleanField(best.description);
   best.method=cleanField(best.method).replace(/\n\s*\n+/g,'\n').trim();
+  best.notes=cleanField(best.notes);
   best.ingredients=(best.ingredients||[]).map(v=>cleanField(v).replace(/^[O0U]\s+(?=(?:\d|[½¼¾⅓⅔⅛⅜⅝⅞]|English|warm|sliced|Handful)\b)/i,'').trim())
     .filter(v=>v&&!/\b(?:DIPS AND APPETIZERS|PREP\s*[-:]|TOTAL\s*[-:]|SERVES?\s*[-:]?\s*\d+\s*cups?)\b/i.test(v));
   best.raw_text=raw;
