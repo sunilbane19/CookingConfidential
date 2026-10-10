@@ -65,10 +65,46 @@ function embeddedTitle(s){
 
 function makeRecipe(name){return {name:cleanRecipeText(name)||'Imported recipe',description:'',cuisine:'',course:'',recipe_type:'Dish',servings:'',ingredients:[],method:[],notes:[]};}
 
-export function parseDocx(html,fileName='Imported document'){
+export function safeInlineHtml(html){
+  const doc=new DOMParser().parseFromString(String(html??''),'text/html');
+  const allowed=new Set(['STRONG','B','EM','I','U','S','SUB','SUP','BR','SPAN','A']);
+  const cleanNode=node=>{
+    if(node.nodeType===Node.TEXT_NODE)return node.textContent||'';
+    if(node.nodeType!==Node.ELEMENT_NODE)return '';
+    const tag=node.tagName;
+    if(!allowed.has(tag))return [...node.childNodes].map(cleanNode).join('');
+    const inner=[...node.childNodes].map(cleanNode).join('');
+    if(tag==='BR')return '<br>';
+    if(tag==='A')return inner;
+    return '<'+tag.toLowerCase()+'>'+inner+'</'+tag.toLowerCase()+'>';
+  };
+  return [...doc.body.childNodes].map(cleanNode).join('');
+}
+function richSection(nodes){
+  const out=[];
+  let listTag='';
+  const closeList=()=>{if(listTag){out.push('</'+listTag+'>');listTag='';}};
+  for(const n of nodes){
+    const inner=n.html||escHtml(n.text);
+    if(n.tag==='li'){
+      const desired=/\bol\b/i.test(n.listType||'')?'ol':'ul';
+      if(listTag!==desired){closeList();listTag=desired;out.push('<'+listTag+'>');}
+      out.push('<li>'+inner+'</li>');
+    }else{
+      closeList();
+      if(/^h[1-6]$/.test(n.tag))out.push('<'+n.tag+'>'+inner+'</'+n.tag+'>');
+      else out.push('<p>'+inner+'</p>');
+    }
+  }
+  closeList();
+  return out.join('');
+}
+function escHtml(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+function parseDocx(html,fileName='Imported document'){
   const doc=new DOMParser().parseFromString(html,'text/html');
   const nodes=[...doc.querySelectorAll('h1,h2,h3,h4,h5,h6,p,li')]
-    .flatMap(e=>expandedLines(e.textContent||'').map(text=>({raw:text,text,tag:e.tagName.toLowerCase()})))
+    .flatMap(e=>expandedLines(e.textContent||'').map(text=>({raw:text,text,tag:e.tagName.toLowerCase(),html:safeInlineHtml(e.innerHTML),listType:e.parentElement?.tagName?.toLowerCase()||''})))
     .filter(n=>n.text);
   if(!nodes.length)return[];
 
