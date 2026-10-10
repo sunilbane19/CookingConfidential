@@ -246,7 +246,7 @@ function deriveRecipe(text,fileName){
     if(introCue>=0){descriptionStart=introCue;hasCoherentIntroCue=true;}
   }
   const descLines=stripped.slice(descriptionStart,descriptionLimit)
-    .filter(x=>!isPageMarker(x)&&!/^by\s+/i.test(x)&&!/^(?:serves?\b|servings?\b|yield\b|prep(?:aration)?\s*time\b|cook(?:ing)?\s*time\b|resting\s*time\b|total\s*time\b|first published\b|published\b|this recipe was developed by\b|the headnote was written by\b)/i.test(x)&&!/(?:^\d+(?:\.\d+)?\s*\([^)]*\)\s+\d+\s+reviews?\b|\b\d+(?:\.\d+)?\s*stars?\b|\b\d+\s+reviews?\b|rated .*stars|^category\b|^(?:breakfast|brunch|lunch|dinner|starter|soup|salad|main|side|snack|dessert|bread|beverage)\s+\d+$|^dinner$|^servings?$|^prep(?:aration)? time$|^\d+\s*minutes?$|^\d+\s*(?:mins?|minutes?)$|^\d+\s+pancakes?$|^£?\d+$|jump to recipe|jump to nutrition|^why it works$|^ingredients$|^directions$)/i.test(x))
+    .filter(x=>!isPageMarker(x)&&!/^by\s+/i.test(x)&&!/^(?:serves?\b|servings?\b|yield\b|prep(?:aration)?\s*time\b|cook(?:ing)?\s*time\b|resting\s*time\b|total\s*time\b|first published\b|published\b)/i.test(x)&&!/(?:^\d+(?:\.\d+)?\s*\([^)]*\)\s+\d+\s+reviews?\b|\b\d+(?:\.\d+)?\s*stars?\b|\b\d+\s+reviews?\b|rated .*stars|^category\b|^(?:breakfast|brunch|lunch|dinner|starter|soup|salad|main|side|snack|dessert|bread|beverage)\s+\d+$|^dinner$|^servings?$|^prep(?:aration)? time$|^\d+\s*minutes?$|^\d+\s*(?:mins?|minutes?)$|^\d+\s+pancakes?$|^£?\d+$|jump to recipe|jump to nutrition|^why it works$|^ingredients$|^directions$)/i.test(x))
     .filter(x=>!/(?:\bfollow\b|\bshare\b|\bsubscribe\b|\blog\s*in\b|\bsign\s*up\b|\bclick\b|\bread\s+more\b|\bnewsletter\b|\bprivacy\b|\bcontact\b|write a comment|like\s+comment)/i.test(x))
     .filter(x=>!/[«»@+]/.test(x));
   const description=descLines
