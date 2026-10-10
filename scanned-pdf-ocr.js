@@ -280,7 +280,7 @@ function deriveRecipe(text,fileName){
   const coherentIntroCue=introLines.some(x=>x.split(/\s+/).length>=8&&/(?:\bI think\b|\bthis recipe\b|\bit'?s\b|\bit is\b|\bperfect for\b|\bperfect as\b|\bmade with\b|\bgreat for\b|\bmoist\b|\bflavou?r(?:s|ful)?\b)/i.test(x));
   const socialChrome=/\b(?:like|comment|share|follow)\b/i.test(cleanDescription)
     &&/(?:\b(?:patricia'?s classic|\d+\s*[a-z]?d\b|\d+\s*comments?\b)|[@+•]|\s>\s)/i.test(cleanDescription);
-  best.description=cleanDescription.length>=30&&cleanDescription.length<700&&!noise.test(cleanDescription)&&(!fragmentHeavy||hasCoherentIntroCue||coherentIntroCue)&&!obviousOcrNoise&&!titleFragment&&!socialChrome?cleanDescription:'';
+  const usefulRecipeMetadata=/^(?:this recipe was developed by\\b|the headnote was written by\\b|nutrition facts\\b|\\d+\\s*(?:mins?|minutes?)\\b|\\d+\\s+servings?\\b|\\d+\\s+pancakes?\\b)/i.test(cleanDescription);\n  best.description=cleanDescription.length>=30&&cleanDescription.length<700&&!noise.test(cleanDescription)&&(!fragmentHeavy||hasCoherentIntroCue||coherentIntroCue||usefulRecipeMetadata)&&!obviousOcrNoise&&!titleFragment&&!socialChrome?cleanDescription:'';
   // Recover substantial introductory prose placed before Ingredient Notes or Equipment.
   if(!best.description){
     const boundary=stripped.findIndex(x=>/^(?:ingredient notes?|equipment|ingredients?|directions?|instructions?|method|preparation|storage|faqs?|frequently asked questions|from the editors)\s*:?$/i.test(heading(x)));
