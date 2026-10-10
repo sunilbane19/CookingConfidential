@@ -4,7 +4,7 @@ import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
 const sb=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
-const OCR_PARSER_VERSION='1.0.67';
+const OCR_PARSER_VERSION='1.0.68';
 const OCR_PROFILE='tesseract-eng-psm6-v1';
 async function ocrDiag(id,stage,details={}){try{const p=sb.from('cc_extraction_diagnostics').insert({import_item_id:Number(id),stage:`ocr_${stage}`,details});await Promise.race([p,new Promise((_,reject)=>setTimeout(()=>reject(new Error('diagnostic timeout')),3000))])}catch(e){console.warn('CC OCR diagnostic write failed',e)}}
 let pdfPromise,tessPromise;
@@ -358,7 +358,8 @@ function deriveRecipe(text,fileName){
   combinedNotes=combinedNotes
     .replace(/\s+#(?:[\p{L}\p{N}_]+\s*)+/gu,' ')
     .replace(/\s+\d+\s*(?:ad|ads)\s*$/i,'')
-    .replace(/\s+/g,' ')
+    .replace(/[ \t]+/g,' ')
+    .replace(/ *\n */g,'\n')
     .replace(/^Notes:\s*/i,'Ingredient Notes:\n');
   if(combinedNotes&&!/^(?:Recipe Notes|Ingredient Notes|Notes|Tips|Storage|Variations):/i.test(combinedNotes))combinedNotes='Recipe Notes:\n'+combinedNotes;
   best.notes=combinedNotes.slice(0,8000);
