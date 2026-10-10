@@ -4,7 +4,7 @@ import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
 const sb=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
-const OCR_PARSER_VERSION='1.0.64';
+const OCR_PARSER_VERSION='1.0.65';
 const OCR_PROFILE='tesseract-eng-psm6-v1';
 async function ocrDiag(id,stage,details={}){try{const p=sb.from('cc_extraction_diagnostics').insert({import_item_id:Number(id),stage:`ocr_${stage}`,details});await Promise.race([p,new Promise((_,reject)=>setTimeout(()=>reject(new Error('diagnostic timeout')),3000))])}catch(e){console.warn('CC OCR diagnostic write failed',e)}}
 let pdfPromise,tessPromise;
@@ -280,7 +280,8 @@ function deriveRecipe(text,fileName){
   const coherentIntroCue=introLines.some(x=>x.split(/\s+/).length>=8&&/(?:\bI think\b|\bthis recipe\b|\bit'?s\b|\bit is\b|\bperfect for\b|\bperfect as\b|\bmade with\b|\bgreat for\b|\bmoist\b|\bflavou?r(?:s|ful)?\b)/i.test(x));
   const socialChrome=/\b(?:like|comment|share|follow)\b/i.test(cleanDescription)
     &&/(?:\b(?:patricia'?s classic|\d+\s*[a-z]?d\b|\d+\s*comments?\b)|[@+•]|\s>\s)/i.test(cleanDescription);
-  const usefulRecipeMetadata=/^(?:this recipe was developed by\\b|the headnote was written by\\b|nutrition facts\\b|\\d+\\s*(?:mins?|minutes?)\\b|\\d+\\s+servings?\\b|\\d+\\s+pancakes?\\b)/i.test(cleanDescription);\n  best.description=cleanDescription.length>=30&&cleanDescription.length<700&&!noise.test(cleanDescription)&&(!fragmentHeavy||hasCoherentIntroCue||coherentIntroCue||usefulRecipeMetadata)&&!obviousOcrNoise&&!titleFragment&&!socialChrome?cleanDescription:'';
+  const usefulRecipeMetadata=/^(?:this recipe was developed by\b|the headnote was written by\b|nutrition facts\b|\d+\s*(?:mins?|minutes?)\b|\d+\s+servings?\b|\d+\s+pancakes?\b)/i.test(cleanDescription);
+  best.description=cleanDescription.length>=30&&cleanDescription.length<700&&!noise.test(cleanDescription)&&(!fragmentHeavy||hasCoherentIntroCue||coherentIntroCue||usefulRecipeMetadata)&&!obviousOcrNoise&&!titleFragment&&!socialChrome?cleanDescription:'';
   // Recover substantial introductory prose placed before Ingredient Notes or Equipment.
   if(!best.description){
     const boundary=stripped.findIndex(x=>/^(?:ingredient notes?|equipment|ingredients?|directions?|instructions?|method|preparation|storage|faqs?|frequently asked questions|from the editors)\s*:?$/i.test(heading(x)));
