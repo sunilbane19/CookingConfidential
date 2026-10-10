@@ -25,15 +25,15 @@ function mountReviewRichText(form,name,label){const ta=form.querySelector(`texta
 function selectField(label,name,list,value){const v=String(value||'');const known=list.includes(v);return `<label>${label}<select name="${name}">${list.map(o=>`<option value="${esc(o)}" ${o===v?'selected':''}>${esc(o||'Select…')}</option>`).join('')}<option value="__custom__" ${v&&!known?'selected':''}>Other / custom…</option></select><input name="${name}_custom" placeholder="Enter category" style="display:${v&&!known?'block':'none'};margin-top:8px" value="${v&&!known?esc(v):''}"></label>`}
 function cleanImportedDescription(value){
   let s=clean(String(value||''))
-    .replace(/\\bKeep\\s+Screen\\s+Awake\\b/ig,' ')
-    .replace(/\\bFROM\\s+THE\\s+EDITORS\\b[\\s\\S]*$/i,' ')
-    .replace(/\\bMore\\s+Sheet\\s+Cakes\\s+to\\s+Delight\\s+a\\s+Crowd\\b[\\s\\S]*$/i,' ')
-    .replace(/\\bNutrition\\s+Facts\\b[\\s\\S]*$/i,' ')
-    .replace(/\\b(?:aD\\)|ad\\s+choices|advertisement)\\b[\\s\\S]*$/i,' ')
-    .replace(/\\s+/g,' ').trim();
+    .replace(/\bKeep\s+Screen\s+Awake\b/ig,' ')
+    .replace(/\bFROM\s+THE\s+EDITORS\b[\s\S]*$/i,' ')
+    .replace(/\bMore\s+Sheet\s+Cakes\s+to\s+Delight\s+a\s+Crowd\b[\s\S]*$/i,' ')
+    .replace(/\bNutrition\s+Facts\b[\s\S]*$/i,' ')
+    .replace(/\b(?:aD\)|ad\s+choices|advertisement)\b[\s\S]*$/i,' ')
+    .replace(/\s+/g,' ').trim();
   // These are publisher credits, not recipe descriptions. If no genuine
   // introductory prose precedes them, leave the optional description blank.
-  if(/^(?:this recipe was developed by\\b|the headnote was written by\\b|nutrition facts\\b|keep screen awake\\b)/i.test(s))return '';
+  if(/^(?:this recipe was developed by\b|the headnote was written by\b|nutrition facts\b|keep screen awake\b)/i.test(s))return '';
   return s;
 }
 function parseRecipe(x){
