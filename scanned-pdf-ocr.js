@@ -4,7 +4,7 @@ import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
 const sb=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
-const OCR_PARSER_VERSION='1.0.71';
+const OCR_PARSER_VERSION='1.0.72';
 const OCR_PROFILE='tesseract-eng-psm6-v1';
 async function ocrDiag(id,stage,details={}){try{const p=sb.from('cc_extraction_diagnostics').insert({import_item_id:Number(id),stage:`ocr_${stage}`,details});await Promise.race([p,new Promise((_,reject)=>setTimeout(()=>reject(new Error('diagnostic timeout')),3000))])}catch(e){console.warn('CC OCR diagnostic write failed',e)}}
 let pdfPromise,tessPromise;
@@ -296,14 +296,24 @@ function deriveRecipe(text,fileName){
   if(!best.description){
     // If no prose intro was recovered, accept a clean, complete recipe-card
     // headline from OCR lines even when the filename already supplied a title.
-    const headline=stripped.map(x=>stripDescriptionArtifacts(x)
+    const cleanHeadlineLine=x=>stripDescriptionArtifacts(x)
       .replace(/\s*(?:[@+•|&=~_-]+\s*)+$/g,'')
       .replace(/\s+(?:like|comment|share|follow|save|print)\b[\s\S]*$/i,'')
-      .replace(/\s+/g,' ').trim())
-      .find(v=>v.length>=35&&v.length<=180&&v.split(/\s+/).length>=7
-        &&/\b(?:salad|sauce|cake|fritters|soup|curry|pasta|bread|dip|dressing|chicken|fish|mango|peanut)\b/i.test(v)
-        &&! /\b(?:recipe information|preparation time|cooking time|total time|calories|servings?)\b/i.test(v)
-        &&!noise.test(v));
+      .replace(/\s+/g,' ').trim();
+    const headlineCandidates=[];
+    for(let j=0;j<stripped.length;j++){
+      const first=cleanHeadlineLine(stripped[j]);
+      headlineCandidates.push(first);
+      // OCR often wraps the title after a linking word, while the next line
+      // contains the rest of the headline plus social UI symbols.
+      if(j+1<stripped.length && /\b(?:with|with a|with an|and|of|for|in|on|the|a|an|to|from|by)$/i.test(first)){
+        headlineCandidates.push(cleanHeadlineLine(first+' '+stripped[j+1]));
+      }
+    }
+    const headline=headlineCandidates.find(v=>v.length>=35&&v.length<=180&&v.split(/\s+/).length>=7
+      &&/\b(?:salad|sauce|cake|fritters|soup|curry|pasta|bread|dip|dressing|chicken|fish|mango|peanut)\b/i.test(v)
+      &&! /\b(?:recipe information|preparation time|cooking time|total time|calories|servings?)\b/i.test(v)
+      &&!noise.test(v));
     if(headline)best.description=stripDescriptionArtifacts(headline).replace(/\s+/g,' ').trim();
     const boundary=stripped.findIndex(x=>/^(?:ingredient notes?|equipment|ingredients?|directions?|instructions?|method|preparation|storage|faqs?|frequently asked questions|from the editors)\s*:?$/i.test(heading(x)));
     const beforeRecipe=stripped.slice(0,boundary>=0?boundary:Math.min(stripped.length,35)).filter(x=>!isPageMarker(x)).filter(x=>!noise.test(x)).filter(x=>!/^(?:category|serves?|servings?|yield|prep(?:aration)? time|cooking time|total time|rated?|jump to|home|recipes?|dinner|breakfast|lunch)\b/i.test(x));
