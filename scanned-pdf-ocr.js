@@ -4,7 +4,7 @@ import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
 const sb=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
-const OCR_PARSER_VERSION='1.0.78';
+const OCR_PARSER_VERSION='1.0.79';
 const OCR_PROFILE='tesseract-eng-psm6-v1';
 async function ocrDiag(id,stage,details={}){try{const p=sb.from('cc_extraction_diagnostics').insert({import_item_id:Number(id),stage:`ocr_${stage}`,details});await Promise.race([p,new Promise((_,reject)=>setTimeout(()=>reject(new Error('diagnostic timeout')),3000))])}catch(e){console.warn('CC OCR diagnostic write failed',e)}}
 let pdfPromise,tessPromise;
@@ -427,9 +427,19 @@ function deriveRecipe(text,fileName){
     : '';
   const existingDescription=String(best.description||'').replace(/\s+/g,' ').trim();
   const existingLooksLikeMetadata=/^(?:(?:this recipe was developed by|the headnote was written by|nutrition facts|recipe information|\d+\s*(?:mins?|minutes?)\b|\d+\s+servings?\b)|.*\b(?:like|comment|share|follow)\b.*(?:classic|\d+\s*comments?|[@+•]|\s>\s))/i.test(existingDescription);
+  const existingLooksLikeOcrNoise=/^(?:\d+\s*\(?\d*\)?\s*(?:reviews?|stars?)\b|[\W\d]*[A-Z]{2,}\s+\d+\s+[A-Z]{2,}\b)/i.test(existingDescription)
+    || /\b(?:REVIEWS?\b.*\b(?:SAVE|RATE|PRINT|SHARE)\b|\b(?:SAVE|RATE|PRINT|SHARE)\b.*\b[A-Z]{3,}\s+[A-Z]{3,})/i.test(existingDescription);
   let chosenDescription=existingDescription;
-  if(!chosenDescription||existingLooksLikeMetadata||chosenDescription.length<30){
+  if(!chosenDescription||existingLooksLikeMetadata||existingLooksLikeOcrNoise||chosenDescription.length<30){
     chosenDescription=selectedDescription;
+  }
+  // Some PDFs place a clean, short editorial lead near the title while OCR
+  // scrambles the surrounding ratings/social row. Prefer that complete sentence
+  // over a noisy paragraph candidate when it is actually present in OCR text.
+  const cleanLeadMatch=raw.match(/([A-Z][^.!?\n]{15,140}\?\s*(?:Start here|Try this|Here(?:'s| is) how|Make this)\.)/);
+  if(cleanLeadMatch){
+    const lead=cleanLeadMatch[1].replace(/\s+/g,' ').trim();
+    if(lead.split(/\s+/).length<=30&&!/\b(?:reviews?|save|rate|print|share)\b/i.test(lead))chosenDescription=lead;
   }
   chosenDescription=stripDescriptionArtifacts(chosenDescription)
     .replace(/\s+/g,' ').trim();
