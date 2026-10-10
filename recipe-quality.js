@@ -36,9 +36,11 @@ export function checkRecipeQuality(recipe, {mode='single'}={}) {
   const all=[name,description,...ingredients,method,notes].join('\n');
   const reasons=[];
   let score=0;
+  const scannedPdfMode=mode==='scanned_pdf';
   if(name && words(name).length>=1 && name.length>=3 && name.length<=160) score+=20; else reasons.push('missing_or_implausible_title');
   const plausibleIngredients=ingredients.filter(looksLikeIngredient).length;
   if(ingredients.length>=3) score+=20; else reasons.push('too_few_ingredients');
+  if(scannedPdfMode && ingredients.length<5) reasons.push('scanned_pdf_ingredient_list_suspiciously_short');
   if(plausibleIngredients>=Math.min(3,ingredients.length)) score+=15; else reasons.push('ingredients_do_not_look_like_recipe_ingredients');
   const methodWords=words(method).length;
   let instructionLines=0;
@@ -48,10 +50,14 @@ export function checkRecipeQuality(recipe, {mode='single'}={}) {
     instructionLines=String(method).split(/\n+/).filter(Boolean).filter(looksLikeInstruction).length;
     if(instructionLines>=1) score+=10; else reasons.push('method_does_not_look_like_instructions');
   }else{
-    // A recipe can legitimately be ingredients-only (for example a chutney,
-    // sauce base, spice mix, or a photographed recipe page with no method).
-    // Keep a positive contribution without making Method mandatory.
-    score+=15;
+    if(scannedPdfMode){
+      // Scanned-PDF recipes should not pass as complete when OCR found no method.
+      // This was the exact failure mode: a high score hid an empty method field.
+      reasons.push('scanned_pdf_method_missing');
+    }else{
+      // Other source types can legitimately be ingredients-only.
+      score+=15;
+    }
   }
   const letterRatio=letters(all)/Math.max(1,all.length);
   if(letterRatio>=0.45) score+=10; else reasons.push('low_readable_text_ratio');
