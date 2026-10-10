@@ -4,7 +4,7 @@ import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
 const sb=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
-const OCR_PARSER_VERSION='1.0.62';
+const OCR_PARSER_VERSION='1.0.63';
 const OCR_PROFILE='tesseract-eng-psm6-v1';
 async function ocrDiag(id,stage,details={}){try{const p=sb.from('cc_extraction_diagnostics').insert({import_item_id:Number(id),stage:`ocr_${stage}`,details});await Promise.race([p,new Promise((_,reject)=>setTimeout(()=>reject(new Error('diagnostic timeout')),3000))])}catch(e){console.warn('CC OCR diagnostic write failed',e)}}
 let pdfPromise,tessPromise;
@@ -256,12 +256,10 @@ function deriveRecipe(text,fileName){
     .join(' ').replace(/\s+/g,' ').trim();
   // Strip browser/website artifacts and recipe-page navigation accidentally
   // concatenated onto otherwise valid introductory descriptions.
+  // The parser owns description cleanup. Remove only the known unwanted
+  // browser overlay; keep author credits, timings, servings and nutrition metadata.
   const stripDescriptionArtifacts = value => String(value||'')
     .replace(/\bKeep\s+Screen\s+Awake\b/ig,' ')
-    .replace(/\bFROM\s+THE\s+EDITORS\b[\s\S]*$/i,' ')
-    .replace(/\bMore\s+Sheet\s+Cakes\s+to\s+Delight\s+a\s+Crowd\b[\s\S]*$/i,' ')
-    .replace(/\bNutrition\s+Facts\b[\s\S]*$/i,' ')
-    .replace(/\b(?:aD\)|ad\s+choices|advertisement)\b[\s\S]*$/i,' ')
     .replace(/\s+/g,' ').trim();
   // Do not present scrambled OCR fragments as a recipe description. Graphic/social
   // recipe cards can be segmented into interleaved short lines by Tesseract; when
@@ -276,8 +274,13 @@ function deriveRecipe(text,fileName){
   // happens when OCR reads a social-card headline as a separate intro fragment.
   const titleFragment=!!normDescription&&!!normTitle&&normTitle.startsWith(normDescription)&&normDescription.length>=12;
   const cleanDescription=stripDescriptionArtifacts(description);
-  const descriptionIsMetadata=/^(?:this recipe was developed by\b|the headnote was written by\b|\d+\s*(?:mins?|minutes?)\b|\d+\s+servings?\b|\d+\s+pancakes?\b|nutrition facts\b|keep screen awake\b)/i.test(cleanDescription);
-  best.description=cleanDescription.length>=30&&cleanDescription.length<700&&!descriptionIsMetadata&&!noise.test(cleanDescription)&&(!fragmentHeavy||hasCoherentIntroCue)&&!obviousOcrNoise&&!titleFragment?cleanDescription:'';
+  // Preserve genuine introductory prose even when OCR has split it into
+  // several short visual lines. Keep social controls out, but don't discard
+  // useful recipe metadata such as bylines, timings, servings or nutrition.
+  const coherentIntroCue=introLines.some(x=>x.split(/\s+/).length>=8&&/(?:\bI think\b|\bthis recipe\b|\bit'?s\b|\bit is\b|\bperfect for\b|\bperfect as\b|\bmade with\b|\bgreat for\b|\bmoist\b|\bflavou?r(?:s|ful)?\b)/i.test(x));
+  const socialChrome=/\b(?:like|comment|share|follow)\b/i.test(cleanDescription)
+    &&/(?:\b(?:patricia'?s classic|\d+\s*[a-z]?d\b|\d+\s*comments?\b)|[@+•]|\s>\s)/i.test(cleanDescription);
+  best.description=cleanDescription.length>=30&&cleanDescription.length<700&&!noise.test(cleanDescription)&&(!fragmentHeavy||hasCoherentIntroCue||coherentIntroCue)&&!obviousOcrNoise&&!titleFragment&&!socialChrome?cleanDescription:'';
   // Recover substantial introductory prose placed before Ingredient Notes or Equipment.
   if(!best.description){
     const boundary=stripped.findIndex(x=>/^(?:ingredient notes?|equipment|ingredients?|directions?|instructions?|method|preparation|storage|faqs?|frequently asked questions)\s*:?$/i.test(heading(x)));
@@ -303,7 +306,8 @@ function deriveRecipe(text,fileName){
   // Final description sanitation must run after every recovery fallback above:
   // fallback paragraphs can otherwise re-introduce site chrome after initial filtering.
   best.description=stripDescriptionArtifacts(best.description);
-  if(/^(?:this recipe was developed by\b|the headnote was written by\b|nutrition facts\b|keep screen awake\b)/i.test(best.description))best.description='';
+  // Final sanitation is intentionally limited to the browser overlay phrase.
+  best.description=stripDescriptionArtifacts(best.description);
   // Preserve labelled advice/notes sections, independent of recipe or chef names.
   const noteHead=/^(?:ingredient notes?|recipe notes?|notes?|tips?|chef'?s? advice|chef tips?|expert advice|technique notes?|variations?|serving suggestions?|storage|make-ahead and storage|faqs?|frequently asked questions)\s*:?$/i;
   const noteStop=/^(?:ingredients?|directions?|instructions?|method|preparation|equipment|special equipment|make-ahead and storage|faqs?|frequently asked questions|comments?|related recipes?|related articles|nutrition(?: facts)?|video|reviews?|featured tweaks|related articles|explore more|about us|advertise|terms of service|privacy policy)\s*:?$/i;
