@@ -4,7 +4,7 @@ import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
 const sb=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
-const OCR_PARSER_VERSION='1.0.79';
+const OCR_PARSER_VERSION='1.0.80';
 const OCR_PROFILE='tesseract-eng-psm6-v1';
 async function ocrDiag(id,stage,details={}){try{const p=sb.from('cc_extraction_diagnostics').insert({import_item_id:Number(id),stage:`ocr_${stage}`,details});await Promise.race([p,new Promise((_,reject)=>setTimeout(()=>reject(new Error('diagnostic timeout')),3000))])}catch(e){console.warn('CC OCR diagnostic write failed',e)}}
 let pdfPromise,tessPromise;
@@ -308,6 +308,13 @@ function deriveRecipe(text,fileName){
     &&/(?:\b(?:patricia'?s classic|\d+\s*[a-z]?d\b|\d+\s*comments?\b)|[@+•]|\s>\s)/i.test(cleanDescription);
   const usefulRecipeMetadata=/^(?:this recipe was developed by\b|the headnote was written by\b|nutrition facts\b|\d+\s*(?:mins?|minutes?)\b|\d+\s+servings?\b|\d+\s+pancakes?\b)/i.test(cleanDescription);
   best.description=cleanDescription.length>=30&&cleanDescription.length<700&&!noise.test(cleanDescription)&&(!fragmentHeavy||hasCoherentIntroCue||coherentIntroCue||usefulRecipeMetadata)&&!obviousOcrNoise&&!titleFragment&&!socialChrome?cleanDescription:'';
+  // A lower-case SEO headline such as "tzatziki sauce in 10 minutes or less"
+  // is not a reliable recipe title. For scanned PDFs, the uploaded filename is a
+  // better fallback when it contains a recognisable dish name.
+  const derivedName=String(best?.name||'').trim();
+  const fileTitle=filenameTitle;
+  if(derivedName && /^[a-z]/.test(derivedName) && /\\b(?:sauce|salad|cake|curry|chutney|tzatziki|fritters?|dip|bread|chicken|fish|pasta|rice|soup|stew)\\b/i.test(fileTitle)
+    && !/^(?:scan|document|recipe|page)\\b/i.test(fileTitle)) best.name=fileTitle;
   // Recover substantial introductory prose placed before Ingredient Notes or Equipment.
   if(!best.description){
     // If no prose intro was recovered, accept a clean, complete recipe-card
@@ -422,8 +429,11 @@ function deriveRecipe(text,fileName){
     .map((text,index)=>({text,index,score:scoreDescriptionCandidate(text)}))
     .filter(x=>x.score>=2)
     .sort((a,b)=>b.score-a.score||a.index-b.index);
+  // Select only the strongest coherent sentence(s). Joining every sentence after
+  // the best candidate pulled page-two OCR noise and unrelated page content into
+  // otherwise good descriptions (notably multi-page food-site PDFs).
   const selectedDescription=rankedDescription.length
-    ? candidateSentences.slice(Math.min(...rankedDescription.map(x=>x.index))).join(' ')
+    ? rankedDescription.slice(0,3).sort((a,b)=>a.index-b.index).map(x=>x.text).join(' ')
     : '';
   const existingDescription=String(best.description||'').replace(/\s+/g,' ').trim();
   const existingLooksLikeMetadata=/^(?:(?:this recipe was developed by|the headnote was written by|nutrition facts|recipe information|\d+\s*(?:mins?|minutes?)\b|\d+\s+servings?\b)|.*\b(?:like|comment|share|follow)\b.*(?:classic|\d+\s*comments?|[@+•]|\s>\s))/i.test(existingDescription);
