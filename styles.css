@@ -205,11 +205,11 @@ dialog .dialog-card{box-sizing:border-box;max-width:100%;min-width:0;overflow-x:
 /* Rescue editor: show the emergency unassigned-lines panel only when it contains lines. */
 .cc-rescue-unassigned:has(#ccRescueLines:empty){display:none!important}
 
-/* Compact dietary/suitability checkbox options in the recipe editor. Override the global label-input spacing. */
-#detailDialog .cc-multi-panel{padding:4px!important;}
-#detailDialog .cc-multi-option{display:flex!important;align-items:center!important;gap:7px!important;padding:2px 6px!important;margin:0!important;min-height:21px!important;line-height:1.15!important;}
+/* Compact dietary/suitability options: reduce the vertical spacing by approximately half. */
+#detailDialog .cc-multi-panel{padding:2px!important;}
+#detailDialog .cc-multi-option{display:flex!important;align-items:center!important;gap:7px!important;padding:1px 6px!important;margin:0!important;min-height:11px!important;line-height:1.05!important;}
 #detailDialog .cc-multi-option input{display:inline-block!important;flex:0 0 13px!important;width:13px!important;height:13px!important;padding:0!important;margin:0!important;accent-color:var(--accent);}
-#detailDialog .cc-multi-option span{display:inline-block!important;line-height:1.15!important;}
+#detailDialog .cc-multi-option span{display:inline-block!important;line-height:1.05!important;}
 .cc-all-section{margin-bottom:30px;}
 .cc-all-section .section-head h2{font-size:28px;}
 @media(max-width:760px){.cc-all-section .cc-menu-library-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:10px!important}.cc-all-section .menu-card{padding:12px!important}}
