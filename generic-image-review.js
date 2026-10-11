@@ -27,6 +27,16 @@ async function reviewImage(id){
   try{
     const status=t=>{const e=document.querySelector('#genericImageStatus');if(e)e.textContent=t};
     const parsed=await readImage(x,status);
+    // OCR is only accepted when it produced enough recipe structure to be useful.
+    // Otherwise hand the original image to the universal rescue editor rather
+    // than showing a misleading/empty recipe review.
+    const ingredientCount=Array.isArray(parsed.ingredients)?parsed.ingredients.filter(Boolean).length:0;
+    const methodText=Array.isArray(parsed.method)?parsed.method.join(' '):String(parsed.method||'');
+    if(ingredientCount<3 || methodText.trim().length<25){
+      console.warn('Cooking Confidential image OCR was inadequate; opening rescue editor.');
+      const rescue=await import('./rescue-ocr.js?v=1.0.2');
+      return rescue.rescueImport(id);
+    }
     const rawName=(x.file_name||'').replace(/\.[^.]+$/,'').replace(/[_-]+/g,' ').trim();
     const parsedName=String(parsed.name||'').trim();
     const name=parsedName&&parsedName!=='Imported recipe'?parsedName:(rawName&&!/^(image|img|photo|scan|screenshot|file)$/i.test(rawName)?rawName:'Imported recipe');
@@ -91,6 +101,14 @@ async function reviewImage(id){
       }
     });
     imagePicker(editor.form,name);
-  }catch(e){window.ccShowError(e.message||String(e),'Image extraction failed')}
+  }catch(e){
+    console.warn('Cooking Confidential image extraction failed; opening rescue editor:',e);
+    try{
+      const rescue=await import('./rescue-ocr.js?v=1.0.2');
+      return rescue.rescueImport(id);
+    }catch(rescueError){
+      window.ccShowError(rescueError.message||e.message||String(e),'Image extraction failed');
+    }
+  }
 }
 export { reviewImage };
