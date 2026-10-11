@@ -35,6 +35,7 @@ async function uploadSelected(){
   const items=queued.length?queued:files.map(file=>({file,file_name:file.name,mime_type:file.type||'application/octet-stream',status:'Queued',selected:true}));
   if(!items.length){message('There are no new imports selected. Use Review on an uploaded item below.');return}
   running=true;
+  const multiReviewIds=[];
   const button=document.querySelector('#uploadAll');
   if(button){button.disabled=true;button.textContent='Uploading…'}
   try{
@@ -67,6 +68,15 @@ async function uploadSelected(){
       }
       const file=item.file;
       if(!file){item.status='Failed';setStatusForName(displayName,'Failed');continue}
+      // Persistent duplicate guard: the temporary queue guard cannot catch a file
+      // that has already reached the Import Inbox.
+      const duplicateRows=await api('/rest/v1/cc_import_items?select=id&created_by=eq.'+encodeURIComponent(userId)+'&file_name=eq.'+encodeURIComponent(file.name)+'&limit=1');
+      if(Array.isArray(duplicateRows)&&duplicateRows.length){
+        item.status='Skipped';
+        setStatusForName(displayName,'Skipped — already in Import Inbox');
+        message(displayName+' is already in the Import Inbox. It was not uploaded again.');
+        continue;
+      }
       const imports=await api('/rest/v1/cc_imports?select=id',{
         method:'POST',
         headers:{'Content-Type':'application/json','Prefer':'return=representation'},
@@ -96,10 +106,29 @@ async function uploadSelected(){
           await import('./multi-recipe-import.js?v=1.3.10');
         }
         if(typeof window.ccMultiReview!=='function') throw new Error('Multi-recipe importer could not be loaded.');
-        await window.ccMultiReview(itemRow.id);
+        await window.ccMultiReview(itemRow.id,false);
+        multiReviewIds.push(Number(itemRow.id));
         setStatusForName(displayName,'Uploaded');
       }else if(isImage){setStatusForName(displayName,'Reading image…');await startImageReview(itemRow.id)}
       else{setStatusForName(displayName,'Uploaded');message('Upload completed. Open Review in the Import Inbox to extract the recipe.')}
+    }
+    // All selected multi-recipe files are extracted independently before opening
+    // a single review dialog. This prevents the last file from overwriting the
+    // review dialog while earlier files are still being processed.
+    if(multiReviewIds.length&&typeof window.ccMultiReview==='function'){
+      await window.ccMultiReview(multiReviewIds[0],true);
+    }
+    // Uploaded files have now moved into the persistent Import Inbox.
+    // Remove successful items from this temporary upload queue so they are not shown twice.
+    if(Array.isArray(window.ccImportItems)){
+      const remaining=window.ccImportItems.filter(x=>x.status!=='Uploaded');
+      window.ccImportItems.length=0;
+      window.ccImportItems.push(...remaining);
+      window.ccImportItems.forEach(x=>{if(x.status==='Queued')x.selected=false});
+      const fileInput=document.querySelector('#fileInput');
+      if(fileInput)fileInput.value='';
+      if(typeof window.ccRenderImportQueue==='function')window.ccRenderImportQueue();
+      else window.dispatchEvent(new CustomEvent('cc:import-queue-changed'));
     }
     if(button){button.disabled=false;button.textContent='Upload selected'}
     if(typeof window.ccReloadImportInbox==='function')await window.ccReloadImportInbox();
