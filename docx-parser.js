@@ -2,8 +2,8 @@ const clean=s=>String(s??'').replace(/[\u0000-\u001F\u007F\uFFFD]/g,' ').replace
 
 const GENERIC=/^(recipe|recipes|ingredients?|ingredient list|the ingredients|method|the method|directions?|the directions|instructions?|the instructions|preparation|the preparation|steps?|the steps|contents?|index|introduction|description|overview|component breakdown|step[- ]by[- ]step execution plan|notes?|tips?|storage|serving suggestions?|servings?|yield)[:.]?$/i;
 const SECTION={
-  ingredients:/^(?:the\s+)?ingredients?(?:\s+list)?\s*:?$/i,
-  method:/^(?:the\s+)?(?:instructions?|method|directions?|preparation|steps?|stages?)\s*:?$/i,
+  ingredients:/^(?:the\s+)?ingredients?(?:\s+(?:list|profile|section))?\s*:?$/i,
+  method:/^(?:the\s+)?(?:instructions?|method|directions?|preparation|steps?|stages?|step[- ]by[- ]step(?: execution)?(?: guide| instructions?)?)\s*:?$/i,
   notes:/^(?:the\s+)?(?:notes?|storage|serving suggestions?)\s*:?$/i
 };
 const COMPONENT=/^(?:\d+[.)]?\s*)?(?:the\b.*\b(?:marinade|glaze|sauce|rub|dressing|paste|filling|stuffing|topping|mixture|aromatics?|seasoning|spice blend|velveting|brine|batter|coating|garnish|cooking|chicken|beef|pork|fish|vegetables?)\b|for\b.*\b(?:cooking|serving|garnish|sauce|chicken|beef|pork|fish|vegetables?)\b)$/i;
@@ -65,10 +65,46 @@ function embeddedTitle(s){
 
 function makeRecipe(name){return {name:cleanRecipeText(name)||'Imported recipe',description:'',cuisine:'',course:'',recipe_type:'Dish',servings:'',ingredients:[],method:[],notes:[]};}
 
+export function safeInlineHtml(html){
+  const doc=new DOMParser().parseFromString(String(html??''),'text/html');
+  const allowed=new Set(['STRONG','B','EM','I','U','S','SUB','SUP','BR','SPAN','A']);
+  const cleanNode=node=>{
+    if(node.nodeType===Node.TEXT_NODE)return node.textContent||'';
+    if(node.nodeType!==Node.ELEMENT_NODE)return '';
+    const tag=node.tagName;
+    if(!allowed.has(tag))return [...node.childNodes].map(cleanNode).join('');
+    const inner=[...node.childNodes].map(cleanNode).join('');
+    if(tag==='BR')return '<br>';
+    if(tag==='A')return inner;
+    return '<'+tag.toLowerCase()+'>'+inner+'</'+tag.toLowerCase()+'>';
+  };
+  return [...doc.body.childNodes].map(cleanNode).join('');
+}
+function richSection(nodes){
+  const out=[];
+  let listTag='';
+  const closeList=()=>{if(listTag){out.push('</'+listTag+'>');listTag='';}};
+  for(const n of nodes){
+    const inner=n.html||escHtml(n.text);
+    if(n.tag==='li'){
+      const desired=/\bol\b/i.test(n.listType||'')?'ol':'ul';
+      if(listTag!==desired){closeList();listTag=desired;out.push('<'+listTag+'>');}
+      out.push('<li>'+inner+'</li>');
+    }else{
+      closeList();
+      if(/^h[1-6]$/.test(n.tag))out.push('<'+n.tag+'>'+inner+'</'+n.tag+'>');
+      else out.push('<p>'+inner+'</p>');
+    }
+  }
+  closeList();
+  return out.join('');
+}
+function escHtml(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
 export function parseDocx(html,fileName='Imported document'){
   const doc=new DOMParser().parseFromString(html,'text/html');
   const nodes=[...doc.querySelectorAll('h1,h2,h3,h4,h5,h6,p,li')]
-    .flatMap(e=>expandedLines(e.textContent||'').map(text=>({raw:text,text,tag:e.tagName.toLowerCase()})))
+    .flatMap(e=>expandedLines(e.textContent||'').map(text=>({raw:text,text,tag:e.tagName.toLowerCase(),html:safeInlineHtml(e.innerHTML),listType:e.parentElement?.tagName?.toLowerCase()||''})))
     .filter(n=>n.text);
   if(!nodes.length)return[];
 
@@ -106,6 +142,7 @@ export function parseDocx(html,fileName='Imported document'){
     const sourceTitle=nodes[start].text;
     const r=makeRecipe(embeddedTitle(sourceTitle)||sourceTitle);
     let current='';
+    const rich={ingredients:[],method:[],notes:[]};
     for(const n of nodes.slice(start+1,end)){
       const t=cleanRecipeText(n.text);
       if(SECTION.ingredients.test(t)){current='ingredients';continue;}
@@ -114,17 +151,20 @@ export function parseDocx(html,fileName='Imported document'){
       if(isGarbage(t))continue;
 
       if(current==='ingredients'){
-        if(COMPONENT.test(t)){r.ingredients.push(t);continue;}
-        if(!STEP.test(t))r.ingredients.push(t);
+        if(COMPONENT.test(t)){r.ingredients.push(t);rich.ingredients.push(n);continue;}
+        if(!STEP.test(t)){r.ingredients.push(t);rich.ingredients.push(n);}
       }else if(current==='method'){
-        r.method.push(t);
+        r.method.push(t);rich.method.push(n);
       }else if(current==='notes'){
-        r.notes.push(t);
+        r.notes.push(t);rich.notes.push(n);
       }
     }
     r.ingredients=[...new Set(r.ingredients)].filter(Boolean);
     r.method=[...new Set(r.method)].filter(Boolean);
     r.notes=[...new Set(r.notes)].filter(Boolean);
+    r.ingredientsHtml=richSection(rich.ingredients);
+    r.methodHtml=richSection(rich.method);
+    r.notesHtml=richSection(rich.notes);
     if(r.ingredients.length||r.method.length)recipes.push(r);
   }
 
