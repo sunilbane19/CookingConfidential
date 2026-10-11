@@ -31,8 +31,8 @@ async function startImageReview(itemId){message('Upload completed. Starting imag
 async function uploadSelected(){
   if(running)return;
   const queued=Array.isArray(window.ccImportItems)?window.ccImportItems.filter(x=>x&&x.status==='Queued'&&x.selected):[];
-  const files=selectedFiles();
-  const items=queued.length?queued:files.map(file=>({file,file_name:file.name,mime_type:file.type||'application/octet-stream',status:'Queued',selected:true}));
+  // Upload only explicitly checked queue items. Never fall back to every file in the picker.
+  const items=queued;
   if(!items.length){message('There are no new imports selected. Use Review on an uploaded item below.');return}
   running=true;
   const multiReviewIds=[];
