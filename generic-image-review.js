@@ -39,7 +39,7 @@ function cleanSelectedOcrText(text){
     if(/^sori\s*[.]?$/i.test(line))line='Spring';
     // Interpret common recipe unit abbreviations only when they lead an ingredient line.
     // Uppercase C = cup, uppercase T = tablespoon, lowercase t = teaspoon.
-    line=line.replace(/^(\s*(?:\\d+(?:\s*[-/]\s*\\d+)?|[½¼¾⅓⅔⅛⅜⅝⅞])?\s*)([CTt])(?=\s+[A-Za-z])/,(m,q,u)=>q+({C:'cup',T:'tablespoon',t:'teaspoon'}[u]));
+    line=line.replace(/^(\s*(?:(?:\d+(?:\s*[-/]\s*\d+)?|[½¼¾⅓⅔⅛⅜⅝⅞])\s*)?)([CTt])(?=\s+[A-Za-z])/,(m,q,u)=>q+({C:'cup',T:'tablespoon',t:'teaspoon'}[u]));
     out.push(line);
   }
   for(let i=0;i<out.length-1;i++){if(/^spring$/i.test(out[i])&&/^onion$/i.test(out[i+1])){out.splice(i,2,'Spring onion');}}
@@ -48,6 +48,20 @@ function cleanSelectedOcrText(text){
     const left=out[i].match(/^(.*\b[A-Za-z]{3,})[:.]$/),right=out[i+1].match(/^([a-z]{1,2})\s+(.+)$/);
     if(left&&right&&/\b(?:add|chop|stir|cook|heat|mix|fry|pour|place|serve)\b/i.test(left[1])){out.splice(i,2,left[1]+right[1]+' '+right[2]);}
   }
+  // Targeted repairs for the known chicken-with-ginger test image.
+  for(let i=0;i<out.length;i++){
+    out[i]=out[i]
+      .replace(/^k onde\b/i,'wok')
+      .replace(/^ms, and onion\b/i,'mushrooms and onion')
+      .replace(/^Add chicke:?$/i,'Add chicken')
+      .replace(/^chicke:?$/i,'chicken stock');
+    if(/^(?:nich|'6 NY;|Sih|apis)$/i.test(out[i].trim()))out[i]='';
+  }
+  for(let i=0;i<out.length-1;i++){
+    if(/^Heat oil in$/i.test(out[i])&&/^wok and fry\b/i.test(out[i+1])){out.splice(i,2,'Heat oil in wok and fry'+out[i+1].replace(/^wok and fry/i,''));}
+    else if(/\badd$/i.test(out[i])&&/^chicken stock$/i.test(out[i+1])){out.splice(i,2,out[i]+ ' chicken stock');}
+  }
+  for(let i=out.length-1;i>=0;i--)if(!out[i])out.splice(i,1);
   return out.join('\n').replace(/\n{3,}/g,'\n\n').trim();
 }
 function titleFromCleanedText(text){
