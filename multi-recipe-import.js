@@ -3,7 +3,7 @@ import { createWorker } from 'https://esm.sh/tesseract.js@5';
 import * as mammoth from 'https://esm.sh/mammoth@1.6.0';
 import JSZip from 'https://esm.sh/jszip@3.10.1';
 import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
-import { createGenericEditor, editorValue, sanitizeRichHtml } from './generic-editor.js?v=1.3.5';
+import { createGenericEditor, editorValue, sanitizeRichHtml } from './generic-editor.js?v=1.3.17';
 import { checkRecipeQuality } from './recipe-quality.js?v=1.0.4';
 import { readSourceTextWithVision } from './vision-text-reader.js?v=1.0.0';
 
