@@ -110,6 +110,32 @@ async function readImage(item,status,traceId){
   if(!res.ok)throw Error('Could not load the uploaded image.');
   const blob=await res.blob();
   console.info('[CC image trace]',traceId,'source:blob-loaded',{httpStatus:res.status,blobType:blob.type,blobBytes:blob.size});
+  // Preferred image path: Vision transcribes the original upload; the image-specific parseLines parser classifies the text.
+  // PDF and DOCX extraction code is deliberately untouched.
+  try{
+    status('Reading image with Vision…');
+    console.info('[CC image trace]',traceId,'vision:start',{functionName:'cc-import-vision-read-staging-v1',importItemId:item.id,blobType:blob.type,blobBytes:blob.size});
+    const visionStarted=performance.now();
+    const {data:visionData,error:visionError}=await supabase.functions.invoke('cc-import-vision-read-staging-v1',{body:{import_item_id:item.id}});
+    if(visionError)throw visionError;
+    const rawText=String(visionData?.text||'');
+    console.info('[CC image trace]',traceId,'vision:result',{durationMs:Math.round(performance.now()-visionStarted),ok:!!visionData?.ok,reader:visionData?.reader||null,mode:visionData?.mode||null,textLength:rawText.length,rawText});
+    if(!rawText.trim())throw Error(visionData?.error||'Vision returned no readable text');
+    const cleanedText=cleanSelectedOcrText(rawText);
+    console.info('[CC image trace]',traceId,'vision:cleaned-text',{textLength:cleanedText.length,cleanedText});
+    const parsed=parseLines(cleanedText);
+    const textTitle=titleFromCleanedText(cleanedText);
+    if(textTitle&&textTitle!=='Imported recipe')parsed.name=textTitle;
+    parsed.raw_vision_text=rawText;
+    parsed.cleaned_vision_text=cleanedText;
+    parsed.reader='vision';
+    parsed.ingredients=(parsed.ingredients||[]).slice(0,80);
+    parsed.method=(parsed.method||[]).slice(0,80);
+    console.info('[CC image trace]',traceId,'vision:parser-output',{name:parsed.name,descriptionLength:String(parsed.description||'').length,ingredientCount:parsed.ingredients.length,ingredients:parsed.ingredients,methodCount:parsed.method.length,method:parsed.method,notes:parsed.notes||''});
+    return parsed;
+  }catch(visionFailure){
+    console.warn('[CC image trace]',traceId,'vision:failed-fallback-to-tesseract',{message:visionFailure?.message||String(visionFailure)});
+  }
   const workerStarted=performance.now();
   const worker=await createWorker('eng',1,{logger:m=>{if(m.status==='recognizing text')status(`Reading image… ${Math.round((m.progress||0)*100)}%`)}});
   console.info('[CC image trace]',traceId,'tesseract:worker-ready',{startupMs:Math.round(performance.now()-workerStarted),language:'eng'});
