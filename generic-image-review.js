@@ -4,7 +4,34 @@ import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
 import { createGenericEditor, editorValue, sanitizeRichHtml } from './generic-editor.js?v=1.3.3';
 const detailDialog=document.querySelector('#detailDialog');
 const esc=s=>String(s??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));
-const clean=s=>String(s??'').replace(/[\u0000-\u001F\u007F\uFFFD]/g,' ').replace(/^[\[\]{}()<>|•·▪◦●○✓✔☐☑\s]+/,'').replace(/\s+/g,' ').trim();
+const clean=s=>String(s??'').normalize('NFKC').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\uFFFD\u00AD]/g,' ').replace(/^[\[\]{}()<>|•·▪◦●○✓✔☐☑\s]+/,'').replace(/[ \t]+/g,' ').trim();
+function cleanSelectedOcrText(text){
+  const input=String(text||'').normalize('NFKC').replace(/\r/g,'').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\uFFFD\u00AD]/g,' ');
+  const out=[];
+  for(let rawLine of input.split('\n')){
+    let line=clean(rawLine);
+    if(!line)continue;
+    if(/^(?:course\s*\d+|[A-Z]{1,3}\s*\d{1,3}|page\s*\d+)$/i.test(line))continue;
+    if(/the\s+cooking\s+(?:class\s+)?academy/i.test(line)&&!/(ingredients?|preparation|method|directions?)/i.test(line)){
+      line=line.replace(/(?:the\s+)?cooking\s+(?:class\s+)?academy/ig,' ').trim();
+      if(!line)continue;
+    }
+    line=line.replace(/\bCourse\s*\d+\b/ig,' ').replace(/\s{2,}/g,' ').trim();
+    line=line.replace(/^[|~.,:;_\\-]+\s*/,'');
+    line=line.replace(/^[a-z]{1,2}\s+(?=[A-Z][A-Z '&(),-]{7,}$)/,'');
+    if(!line||/^[|~.,:;_\\-]+$/.test(line))continue;
+    out.push(line);
+  }
+  return out.join('\n').replace(/\n{3,}/g,'\n\n').trim();
+}
+function titleFromCleanedText(text){
+  const lines=String(text||'').split('\n').map(clean).filter(Boolean);
+  const stop=lines.findIndex(x=>headingKind(x)==='ingredients');
+  const before=lines.slice(0,stop>=0?stop:Math.min(lines.length,12));
+  const candidates=before.filter(x=>x.length>=8&&x.length<=90&&!/^course\s*\d+/i.test(x)&&!/^page\s*\d+/i.test(x)&&!generic.test(x)&&/[A-Za-z]{3}/.test(x));
+  const likely=candidates.filter(x=>/[A-Z]{3}/.test(x)&&x===x.toUpperCase());
+  return clean((likely.length?likely:candidates).sort((a,b)=>b.length-a.length)[0]||'Imported recipe');
+}
 const courses=['','Breakfast','Brunch','Starter','Soup','Salad','Main','Side','Snack','Dessert','Bread','Beverage'];
 const types=['','Dish','Dip','Dressing','Sauce','Chutney','Marinade','Rub','Paste','Spice Blend','Stock / Broth','Pickle','Condiment'];
 const generic=/^(recipe|recipes|ingredients?|method|directions?|instructions?|preparation|steps?|servings?|notes?|tips?|storage|serving suggestions?|for the .+|for .+)[:.]?$/i;
@@ -84,11 +111,14 @@ async function readImage(item,status,traceId){
     const chosen=ranked[0];
     const rawText=String(chosen.text||'');
     console.info('[CC image trace]',traceId,'recognition:selected-raw-text',{mode:chosen.mode,score:chosen.score,rawText});
-    const cleanedText=rawText.replace(/\r/g,'').split('\n').map(line=>clean(line)).filter(Boolean).join('\n');
-    console.info('[CC image trace]',traceId,'recognition:cleaned-text',{mode:chosen.mode,cleanedText});
+    const cleanedText=cleanSelectedOcrText(rawText);
+    console.info('[CC image trace]',traceId,'recognition:stage1-selected-output',{mode:chosen.mode,score:Math.round(chosen.score*100)/100,confidence:chosen.variant.data?.confidence??null,rawText});
+    console.info('[CC image trace]',traceId,'recognition:stage2-cleaned-output',{mode:chosen.mode,cleanedText});
     const parsed=parseLines(cleanedText);
+    const textTitle=titleFromCleanedText(cleanedText);
     const ocrTitle=titleFromOcr(chosen.variant);
-    if(ocrTitle&&ocrTitle!=='Imported recipe')parsed.name=ocrTitle;
+    if(textTitle&&textTitle!=='Imported recipe')parsed.name=textTitle;
+    else if(ocrTitle&&ocrTitle!=='Imported recipe')parsed.name=ocrTitle;
     parsed.raw_ocr_text=rawText;
     parsed.cleaned_ocr_text=cleanedText;
     parsed.ocr_mode=chosen.mode;
