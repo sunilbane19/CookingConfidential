@@ -124,7 +124,37 @@ async function readImage(item,status,traceId){
     const cleanedText=cleanSelectedOcrText(rawText);
     console.info('[CC image trace]',traceId,'recognition:stage1-selected-output',{mode:chosen.mode,score:Math.round(chosen.score*100)/100,confidence:chosen.variant.data?.confidence??null,rawText});
     console.info('[CC image trace]',traceId,'recognition:stage2-cleaned-output',{mode:chosen.mode,cleanedText});
+    // Parser boundary diagnostics: capture what the generic parser actually receives
+    // and whether section headings survive cleanup, without changing extraction behavior.
+    const parserInputLines=String(cleanedText||'').replace(/\\r/g,'').split('\\n');
+    const parserHeadingDiagnostics=parserInputLines.map((line,index)=>({
+      line:index+1,
+      text:clean(line).slice(0,180),
+      heading:headingKind(line)||null,
+      looksLikeIngredientHeading:/\\bingredients?\\b/i.test(line),
+      looksLikeMethodHeading:/\\b(method|directions?|instructions?|preparation|steps?)\\b/i.test(line),
+      looksLikeNotesHeading:/\\b(notes?|tips?|storage|serving suggestions?)\\b/i.test(line),
+      rejectedAsGarbage:!!garbage(clean(line))
+    })).filter(row=>row.text && (row.heading || row.looksLikeIngredientHeading || row.looksLikeMethodHeading || row.looksLikeNotesHeading));
+    console.info('[CC image trace]',traceId,'parser:input-summary',{
+      inputType:typeof cleanedText,
+      inputLength:String(cleanedText||'').length,
+      lineCount:parserInputLines.length,
+      nonEmptyLineCount:parserInputLines.filter(line=>clean(line)).length,
+      preview:parserInputLines.slice(0,35).map((line,index)=>({line:index+1,text:clean(line).slice(0,180)})),
+      recognizedHeadingLines:parserHeadingDiagnostics
+    });
     const parsed=parseLines(cleanedText);
+    console.info('[CC image trace]',traceId,'parser:output-summary',{
+      name:parsed.name,
+      descriptionLength:String(parsed.description||'').length,
+      ingredientCount:parsed.ingredients.length,
+      ingredientsPreview:parsed.ingredients.slice(0,20),
+      methodCount:parsed.method.length,
+      methodPreview:parsed.method.slice(0,20),
+      notesLength:String(parsed.notes||'').length,
+      headingsSeen:parserHeadingDiagnostics.map(row=>({line:row.line,text:row.text,heading:row.heading,rejectedAsGarbage:row.rejectedAsGarbage}))
+    });
     const textTitle=titleFromCleanedText(cleanedText);
     const ocrTitle=titleFromOcr(chosen.variant);
     if(textTitle&&textTitle!=='Imported recipe')parsed.name=textTitle;
