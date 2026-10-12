@@ -173,6 +173,50 @@ function scoreOcrVariant(variant){
     shortNoiseLineCount:shortNoise
   };
 }
+function mergeOcrLinesAcrossVariants(ranked){
+  // All variants are rendered at identical canvas dimensions, so their word boxes
+  // can be compared vertically. Keep one strongest line per vertical band.
+  const candidates=[];
+  for(const item of ranked){
+    const rows=ocrLineData(item.variant?.data?.words||[]);
+    for(const row of rows){
+      const text=clean(row.text);
+      if(!text)continue;
+      const words=(item.variant?.data?.words||[]).filter(w=>w.bbox &&
+        (w.bbox.y0+w.bbox.y1)/2 >= row.y0-3 &&
+        (w.bbox.y0+w.bbox.y1)/2 <= row.y1+3 &&
+        (w.bbox.x0 < Infinity) &&
+        text.toLowerCase().includes(String(w.text||'').trim().toLowerCase()));
+      const avgConfidence=words.length?words.reduce((sum,w)=>sum+(Number(w.confidence)||0),0)/words.length:(Number(item.variant?.data?.confidence)||0);
+      const hasQuantity=/\b(?:\d+|[½¼¾⅓⅔⅛⅜⅝⅞])(?:\s*[-/]\s*\d+)?\s*(?:C|T|t|g|kg|ml|l|oz|lb|cloves?|cups?|tablespoons?|teaspoons?)\b/i.test(text) ||
+        /^(?:\d+|[½¼¾⅓⅔⅛⅜⅝⅞])(?:\s|$)/.test(text);
+      const hasCookingCue=/\b(?:add|heat|stir|fry|cook|mix|pour|bring|boil|serve|place|chop|cut|season|remove|transfer|continue|until|onion|chicken|mushroom|ginger|stock|sauce)\b/i.test(text);
+      const noise=(text.match(/[|~_=]{2,}|[^A-Za-z0-9\s.,:;()/'’½¼¾⅓⅔⅛⅜⅝⅞-]/g)||[]).length;
+      const score=avgConfidence*.12+Math.min(text.length,100)*.12+(hasQuantity?8:0)+(hasCookingCue?4:0)-noise*2;
+      candidates.push({text,y0:row.y0,y1:row.y1,cy:(row.y0+row.y1)/2,mode:item.mode,score,avgConfidence,hasQuantity,hasCookingCue});
+    }
+  }
+  candidates.sort((a,b)=>a.cy-b.cy);
+  const bands=[];
+  for(const candidate of candidates){
+    let band=bands.find(b=>Math.abs(b.cy-candidate.cy)<=Math.max(10,Math.min(candidate.y1-candidate.y0,30)*.65));
+    if(!band){band={cy:candidate.cy,items:[]};bands.push(band);}
+    band.items.push(candidate);
+    band.cy=band.items.reduce((sum,item)=>sum+item.cy,0)/band.items.length;
+  }
+  const chosen=bands.map(b=>{
+    // Exact/near-exact duplicates can arise across preprocessing variants.
+    const unique=new Map();
+    for(const item of b.items){
+      const key=item.text.toLowerCase().replace(/[^a-z0-9½¼¾⅓⅔⅛⅜⅝⅞]+/g,' ').trim();
+      const old=unique.get(key);
+      if(!old||item.score>old.score)unique.set(key,item);
+    }
+    return [...unique.values()].sort((a,b)=>b.score-a.score)[0];
+  }).filter(Boolean).sort((a,b)=>a.cy-b.cy);
+  const text=chosen.map(x=>x.text).join('\n');
+  return {text,lines:chosen.map(x=>({y:Math.round(x.cy),mode:x.mode,score:Math.round(x.score*100)/100,confidence:Math.round(x.avgConfidence),hasQuantity:x.hasQuantity,hasCookingCue:x.hasCookingCue,text:x.text}))};
+}
 async function preprocessImage(blob,mode){const bmp=await createImageBitmap(blob);const max=2400,scale=Math.min(3,max/Math.max(bmp.width,bmp.height));const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(bmp.width*scale));canvas.height=Math.max(1,Math.round(bmp.height*scale));const ctx=canvas.getContext('2d',{willReadFrequently:true});ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.drawImage(bmp,0,0,canvas.width,canvas.height);bmp.close();if(mode!=='original'){const im=ctx.getImageData(0,0,canvas.width,canvas.height),d=im.data;for(let i=0;i<d.length;i+=4){const y=.299*d[i]+.587*d[i+1]+.114*d[i+2];let v=(y-128)*(mode==='threshold'?1.9:1.45)+128;if(mode==='threshold')v=v>160?255:0;v=Math.max(0,Math.min(255,v));d[i]=d[i+1]=d[i+2]=v}ctx.putImageData(im,0,0)}return canvas;}
 async function recognizeVariants(worker,blob,status,traceId){
   const variants=[];
@@ -214,10 +258,12 @@ async function readImage(item,status,traceId){
     }).sort((a,b)=>b.score-a.score);
     console.info('[CC image trace]',traceId,'recognition:comparison',{rankingVersion:'recipe-structure-v2',variants:ranked.map(v=>({mode:v.mode,score:Math.round(v.score*100)/100,quality:v.quality,confidence:v.variant.data?.confidence,textLength:v.text.length,rawText:v.text}))});
     const chosen=ranked[0];
-    const rawText=String(chosen.text||'');
-    console.info('[CC image trace]',traceId,'recognition:selected-raw-text',{mode:chosen.mode,score:chosen.score,rawText});
+    const merged=mergeOcrLinesAcrossVariants(ranked);
+    const rawText=String(merged.text||chosen.text||'');
+    console.info('[CC image trace]',traceId,'recognition:line-merge',{strategy:'vertical-band-best-line-v1',selectedVariant:chosen.mode,mergedLineCount:merged.lines.length,lines:merged.lines,mergedRawText:rawText});
+    console.info('[CC image trace]',traceId,'recognition:selected-raw-text',{mode:'merged-lines',primaryVariant:chosen.mode,score:chosen.score,rawText});
     const cleanedText=cleanSelectedOcrText(rawText);
-    console.info('[CC image trace]',traceId,'recognition:stage1-selected-output',{mode:chosen.mode,score:Math.round(chosen.score*100)/100,confidence:chosen.variant.data?.confidence??null,rawText});
+    console.info('[CC image trace]',traceId,'recognition:stage1-selected-output',{mode:'merged-lines',primaryVariant:chosen.mode,score:Math.round(chosen.score*100)/100,confidence:chosen.variant.data?.confidence??null,rawText});
     console.info('[CC image trace]',traceId,'recognition:stage2-cleaned-output',{mode:chosen.mode,cleanedText});
     // Parser boundary diagnostics: capture what the generic parser actually receives
     // and whether section headings survive cleanup, without changing extraction behavior.
@@ -256,7 +302,7 @@ async function readImage(item,status,traceId){
     else if(ocrTitle&&ocrTitle!=='Imported recipe')parsed.name=ocrTitle;
     parsed.raw_ocr_text=rawText;
     parsed.cleaned_ocr_text=cleanedText;
-    parsed.ocr_mode=chosen.mode;
+    parsed.ocr_mode='merged-lines';
     parsed.ocr_confidence=chosen.variant.data?.confidence??null;
     parsed.ingredients=(parsed.ingredients||[]).slice(0,80);
     parsed.method=(parsed.method||[]).slice(0,80);
