@@ -109,7 +109,7 @@ async function uploadSelected(){
         await window.ccMultiReview(itemRow.id,false);
         multiReviewIds.push(Number(itemRow.id));
         setStatusForName(displayName,'Uploaded');
-      }else if(isImage){setStatusForName(displayName,'Reading image…');await startImageReview(itemRow.id)}
+      }else if(isImage){setStatusForName(displayName,'Uploaded');message('Image uploaded. It is waiting in the Import Inbox. Press Review when you are ready to read and process it.')}
       else{setStatusForName(displayName,'Uploaded');message('Upload completed. Open Review in the Import Inbox to extract the recipe.')}
     }
     // All selected multi-recipe files are extracted independently before opening
