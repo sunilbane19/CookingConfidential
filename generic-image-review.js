@@ -48,7 +48,7 @@ const generic=/^(recipe|recipes|ingredients?|method|directions?|instructions?|pr
 const garbage=s=>{const x=clean(s);if(!x||generic.test(x)||/[©®™]/.test(x))return true;if(/\b(?:follow|subscribe|like|share|save|comment|link in bio|learn more|ends in)\b/i.test(x))return true;if((x.match(/[A-Za-z]/g)||[]).length<2)return true;return false};
 function headingKind(x){const s=clean(x).toLowerCase().replace(/[^a-z ]/g,' ').replace(/\s+/g,' ').trim();if(/\bingredients?\b/.test(s)||/\bingredient\s+list\b/.test(s))return'ingredients';if(/\b(method|directions?|instructions?|preparation|steps?)\b/.test(s))return'method';if(/\b(notes?|tips?|storage|serving suggestions?)\b/.test(s))return'notes';return'';}
 function parseLines(text){
-  const a=String(text||'').replace(/\r/g,'').split('\n').map(clean).filter(x=>!garbage(x));
+  const a=String(text||'').replace(/\r/g,'').split('\n').map(clean).filter(x=>headingKind(x)||!garbage(x));
   let section='',ingredients=[],method=[],notes=[],beforeIngredients=[];
   for(let x of a){
     const kind=headingKind(x);
