@@ -14,7 +14,9 @@ async function blob(x){const p=x.file_path||x.original_file_path;if(!p)throw Err
 async function ocr(b,name,status,traceId){
   const started=performance.now(),out=[];
   console.info('[CC image trace]',traceId,'rescue:ocr:start',{name,blobType:b.type,blobBytes:b.size});
-  const T=await import('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'),w=await T.createWorker('eng');
+  const {createWorker}=await import('https://esm.sh/tesseract.js@5');
+  if(typeof createWorker!=='function')throw Error('Tesseract createWorker export is unavailable.');
+  const w=await createWorker('eng');
   try{
     if(b.type==='application/pdf'||/\.pdf$/i.test(name)){
       const p=await import('https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs');p.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs';
