@@ -86,25 +86,25 @@ function cleanSelectedOcrText(text){
   return out.join('\n').replace(/\n{3,}/g,'\n\n').trim();
 }
 function cleanImageRecipeSection(lines,kind){
-  const keep=new Set(['add','oil','in','to','of','on','at','by','up','if','as','or','no','so','do','dry','fry','try','mix','cut','hot','ml','kg','tsp','tbsp','oz','lb','salt','egg','tea','cup','and','the','then','until','heat','stir','cook','serve','bring','boil','turn','off','with','from','garlic','chicken','stock','onion','sauce','ginger']);
   const result=[];
   for(let raw of (Array.isArray(lines)?lines:[])){
     let line=clean(raw);
     if(!line)continue;
     if(/^(?:course\s*\d+|page\s*\d+|(?:serves?|servings?|yield)\s*[:\-]?\s*\d+.*|\d+\s*(?:serves?|servings?)\s*[:\-]?\s*\d*.*)$/i.test(line))continue;
+    if(kind==='description'){
+      // Descriptions must be coherent prose, not title-edge or layout remnants.
+      if(/^(?:re|ee|eee|cr|sih|apis|[-—–|_%~.,:;]+)$/i.test(line))continue;
+      if(line.length<12 || !/[aeiou]{2}/i.test(line) || /^[^A-Za-z]*[—–-]+[^A-Za-z]*$/.test(line))continue;
+      if(/^(?:ingredients?|method|directions?|instructions?|preparation|notes?)\b/i.test(line))continue;
+    }
     if(kind==='method'||kind==='notes'){
-      // Remove isolated short OCR fragments without deleting legitimate short cooking words.
-      line=line.split(/\s+/).filter(token=>{
-        const normalized=token.toLowerCase().replace(/^[^a-z]+|[^a-z]+$/g,'');
-        if(!normalized)return true;
-        if(normalized.length<=3 && /^[a-z]+$/i.test(normalized) && !keep.has(normalized))return false;
-        return true;
-      }).join(' ').replace(/\s+([,.;:])/g,'$1').replace(/\s{2,}/g,' ').trim();
-      // Drop residual OCR-only lines such as “EEE” or “— cr”.
-      if(!line || /^(?:[A-Z]{2,5}|[—–-]+\s*[a-z]{1,3})$/.test(line))continue;
+      // Do not delete short tokens inside sentences: they may be valid words lost by OCR.
+      // Only remove lines that are clearly isolated OCR noise.
+      if(/^(?:[A-Z]{2,5}|[—–-]+\s*[a-z]{1,3}|(?:re|ee|eee|cr|sih|apis))$/i.test(line))continue;
+      line=line.replace(/\s+([,.;:])/g,'$1').replace(/\s{2,}/g,' ').trim();
+      if(kind==='notes' && /^(?:with thai meals,\s*siways|—\s*)$/i.test(line))continue;
     }
     if(kind==='ingredients'){
-      // Remove isolated OCR layout markers at the beginning, but never fabricate a quantity.
       line=line.replace(/^(?:(?:Y|Ya|Ye|Tam|I|l|\|)\s+)+(?=[A-Za-z])/,'');
       line=line.replace(/\s+[|%]\s*$/,'').trim();
     }
@@ -286,6 +286,12 @@ async function readImage(item,status,traceId){
     console.info('[CC image trace]',traceId,'recognition:comparison',{rankingVersion:'recipe-structure-v2',variants:ranked.map(v=>({mode:v.mode,score:Math.round(v.score*100)/100,quality:v.quality,confidence:v.variant.data?.confidence,textLength:v.text.length,rawText:v.text}))});
     const chosen=ranked[0];
     const merged=mergeOcrLinesAcrossVariants(ranked);
+    const quantityWordCandidates=ranked.map(item=>({
+      mode:item.mode,
+      words:(item.variant?.data?.words||[]).filter(w=>/^(?:[0-9]+(?:[.,][0-9]+)?|[½¼¾⅓⅔⅛⅜⅝⅞]|[uUlI|!%‰]+|C|T|t|g|kg|ml|l|oz|lb|cloves?)$/i.test(String(w.text||'').trim()))
+        .map(w=>({text:w.text,confidence:w.confidence,bbox:w.bbox}))
+    }));
+    console.info('[CC image trace]',traceId,'recognition:quantity-word-candidates',{variants:quantityWordCandidates});
     const rawText=String(merged.text||chosen.text||'');
     console.info('[CC image trace]',traceId,'recognition:line-merge',{strategy:'vertical-band-best-line-v1',selectedVariant:chosen.mode,mergedLineCount:merged.lines.length,lines:merged.lines,mergedRawText:rawText});
     console.info('[CC image trace]',traceId,'recognition:selected-raw-text',{mode:'merged-lines',primaryVariant:chosen.mode,score:chosen.score,rawText});
