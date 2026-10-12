@@ -48,18 +48,30 @@ function cleanSelectedOcrText(text){
     const left=out[i].match(/^(.*\b[A-Za-z]{3,})[:.]$/),right=out[i+1].match(/^([a-z]{1,2})\s+(.+)$/);
     if(left&&right&&/\b(?:add|chop|stir|cook|heat|mix|fry|pour|place|serve)\b/i.test(left[1])){out.splice(i,2,left[1]+right[1]+' '+right[2]);}
   }
-  // Targeted repairs for the known chicken-with-ginger test image.
+  // General image-OCR cleanup: remove likely footer/serving metadata from method text,
+  // repair line-wrapped words, and discard short non-word fragments conservatively.
   for(let i=0;i<out.length;i++){
-    out[i]=out[i]
-      .replace(/^k onde\b/i,'wok')
-      .replace(/^ms, and onion\b/i,'mushrooms and onion')
-      .replace(/^Add chicke:?$/i,'Add chicken')
-      .replace(/^chicke:?$/i,'chicken stock');
-    if(/^(?:nich|'6 NY;|Sih|apis)$/i.test(out[i].trim()))out[i]='';
+    const line=out[i].trim();
+    if(/^(?:serves?|servings?|yield)\s*[:\-]?\s*\d+.*$/i.test(line) ||
+       /^\d+\s*(?:serves?|servings?)\s*[:\-]?\s*\d*.*$/i.test(line) ||
+       /^(?:recipe|page)\s*\d+\s*(?:of\s*\d+)?$/i.test(line)){
+      out[i]='';
+      continue;
+    }
+    // Remove isolated OCR fragments with no vowel and no clear culinary meaning.
+    if(/^[A-Za-z]{2,4}[.,;:'’)]?$/.test(line) && !/[aeiou]/i.test(line) &&
+       !new Set(['thy','dry','fry','try','dry','ml','kg','tsp','tbsp','oz','lb']).has(line.toLowerCase().replace(/[.,;:'’)]$/,''))){
+      out[i]='';
+    }
   }
+  // Rejoin a word split across adjacent lines when the first line ends with a
+  // partial word plus colon and the next starts with its lowercase continuation.
   for(let i=0;i<out.length-1;i++){
-    if(/^Heat oil in$/i.test(out[i])&&/^wok and fry\b/i.test(out[i+1])){out.splice(i,2,'Heat oil in wok and fry'+out[i+1].replace(/^wok and fry/i,''));}
-    else if(/\badd$/i.test(out[i])&&/^chicken stock$/i.test(out[i+1])){out.splice(i,2,out[i]+ ' chicken stock');}
+    const left=out[i].match(/^(.*?)([A-Za-z]{3,})[:.]$/);
+    const right=out[i+1].match(/^([a-z]{1,2})\s+(.+)$/);
+    if(left&&right && /\b(?:add|chop|stir|cook|heat|mix|fry|pour|place|serve|bring|continue)\b/i.test(left[1])){
+      out.splice(i,2,(left[1]+left[2]+right[1]+' '+right[2]).replace(/\s+/g,' ').trim());
+    }
   }
   for(let i=out.length-1;i>=0;i--)if(!out[i])out.splice(i,1);
   return out.join('\n').replace(/\n{3,}/g,'\n\n').trim();
