@@ -126,14 +126,14 @@ async function readImage(item,status,traceId){
     console.info('[CC image trace]',traceId,'recognition:stage2-cleaned-output',{mode:chosen.mode,cleanedText});
     // Parser boundary diagnostics: capture what the generic parser actually receives
     // and whether section headings survive cleanup, without changing extraction behavior.
-    const parserInputLines=String(cleanedText||'').replace(/\\r/g,'').split('\\n');
+    const parserInputLines=String(cleanedText||'').replace(/\r/g,'').split('\n');
     const parserHeadingDiagnostics=parserInputLines.map((line,index)=>({
       line:index+1,
       text:clean(line).slice(0,180),
       heading:headingKind(line)||null,
-      looksLikeIngredientHeading:/\\bingredients?\\b/i.test(line),
-      looksLikeMethodHeading:/\\b(method|directions?|instructions?|preparation|steps?)\\b/i.test(line),
-      looksLikeNotesHeading:/\\b(notes?|tips?|storage|serving suggestions?)\\b/i.test(line),
+      looksLikeIngredientHeading:/\bingredients?\b/i.test(line),
+      looksLikeMethodHeading:/\b(method|directions?|instructions?|preparation|steps?)\b/i.test(line),
+      looksLikeNotesHeading:/\b(notes?|tips?|storage|serving suggestions?)\b/i.test(line),
       rejectedAsGarbage:!!garbage(clean(line))
     })).filter(row=>row.text && (row.heading || row.looksLikeIngredientHeading || row.looksLikeMethodHeading || row.looksLikeNotesHeading));
     console.info('[CC image trace]',traceId,'parser:input-summary',{
