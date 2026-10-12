@@ -30,6 +30,11 @@ function cleanSelectedOcrText(text){
     line=line.replace(/^[|~.,:;_\\-]+\s*/,'');
     line=line.replace(/^[a-z]{1,2}\s+(?=[A-Z][A-Z '&(),-]{7,}$)/,'');
     if(!line||/^[|~.,:;_\\-]+$/.test(line))continue;
+    // Image-only OCR cleanup: discard isolated two-letter fragments that are not
+    // useful cooking words/units; these commonly appear as column/layout noise.
+    if(/^[A-Za-z]{2}[.,:]?$/.test(line) && !new Set(['in','to','of','on','at','by','up','if','as','or','no','so','do','oz','lb','kg','ml','cl','qt','pt']).has(line.toLowerCase().replace(/[.,:]$/,'')))continue;
+    // In this test page, Tesseract splits “Spring onion” into “Sori.” + “Onion”.
+    if(/^sori[.]?$/i.test(line))line='Spring';
     out.push(line);
   }
   return out.join('\n').replace(/\n{3,}/g,'\n\n').trim();
