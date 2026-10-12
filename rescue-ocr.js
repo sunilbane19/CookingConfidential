@@ -13,7 +13,7 @@ async function item(id){const{data,error}=await sb.from('cc_import_items').selec
 async function blob(x){const p=x.file_path||x.original_file_path;if(!p)throw Error('Original file is unavailable.');const u=await getCachedSignedUrl(sb,'cooking-confidential',p),r=await fetch(u);if(!r.ok)throw Error('Could not load the original upload.');return r.blob()}
 async function ocr(b,name,status,traceId){
   const started=performance.now(),out=[];
-  console.info('[CC image trace]',traceId,'rescue:ocr:start',{name,blobType:b.type,blobBytes:b.size});
+  console.info('[CC image trace]',traceId,'rescue:ocr:start',{name,blobType:b.type,blobBytes:b.size,reader:'tesseract-esm-v2'});
   const {createWorker}=await import('https://esm.sh/tesseract.js@5');
   if(typeof createWorker!=='function')throw Error('Tesseract createWorker export is unavailable.');
   const w=await createWorker('eng');
