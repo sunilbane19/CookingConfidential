@@ -126,12 +126,52 @@ function titleFromOcr(variant){
   return clean((uppercase.length?uppercase:candidates).sort((x,y)=>y.height-x.height||x.y0-y.y0)[0].text);
 }
 function scoreOcrVariant(variant){
-  const text=String(variant?.data?.text||'').trim();
+  const text=String(variant?.data?.text||'').normalize('NFKC').trim();
   const lines=text.split(/\r?\n/).map(clean).filter(Boolean);
-  const headings=(text.match(/ingredients?|preparation|method|directions?|serves?/ig)||[]).length;
-  const words=(text.match(/[A-Za-z]{2,}/g)||[]).length;
-  const replacement=(text.match(/[�|{}\\]/g)||[]).length;
-  return (Number(variant?.data?.confidence)||0)*0.25+Math.min(words,180)*0.35+Math.min(headings,5)*8+Math.min(lines.length,45)*0.25-replacement*2;
+  const lower=text.toLowerCase();
+  const words=(text.match(/[A-Za-z]{2,}/g)||[]);
+  const headings=(text.match(/\b(?:ingredients?|preparation|method|directions?|instructions?|steps?)\b/ig)||[]).length;
+  const ingredientHeading=lines.some(line=>headingKind(line)==='ingredients');
+  const methodHeading=lines.some(line=>headingKind(line)==='method');
+  const quantityLines=lines.filter(line=>/\b(?:\d+\s*[-/]\s*\d+|\d+|[½¼¾⅓⅔⅛⅜⅝⅞])\s*(?:cups?|tablespoons?|teaspoons?|C|T|t|g|kg|ml|l|oz|lb|cloves?|pieces?|slices?)\b/i.test(line) ||
+    /^(?:[½¼¾⅓⅔⅛⅜⅝⅞]|\d+(?:\.\d+)?)(?:\s|$)/.test(line));
+  const methodCueLines=lines.filter(line=>/\b(?:add|heat|stir|fry|cook|mix|pour|bring|boil|serve|place|chop|cut|season|remove|transfer|continue|until)\b/i.test(line));
+  const ingredientLikeLines=lines.filter(line=>/\b(?:chicken|mushroom|onion|chili|chilli|ginger|garlic|stock|sauce|oil|salt|pepper|water|flour|sugar|butter|fish|vegetable|herb|spice)\b/i.test(line));
+  const replacement=(text.match(/[�{}\\]/g)||[]).length;
+  const symbolNoise=(text.match(/[|~_=]{2,}|\b(?:[A-Z]{1,2}\s*){3,}\b/g)||[]).length;
+  const shortNoise=lines.filter(line=>line.length<=4&&!/^(?:C|T|t|ml|g|kg|oz|lb|½|¼|¾|⅓|⅔|⅛|⅜|⅝|salt|oil|dry|fry)$/i.test(line)).length;
+  const usefulWords=Math.min(words.length,220);
+  // Structure and recoverable recipe information matter more than raw OCR confidence.
+  // Confidence is deliberately capped so a short, neat but incomplete variant cannot win automatically.
+  const confidence=Math.max(0,Math.min(100,Number(variant?.data?.confidence)||0));
+  const score=
+    confidence*0.10 +
+    usefulWords*0.18 +
+    Math.min(lines.length,60)*0.18 +
+    Math.min(headings,4)*7 +
+    (ingredientHeading?10:0) +
+    (methodHeading?10:0) +
+    Math.min(quantityLines.length,20)*2.4 +
+    Math.min(ingredientLikeLines.length,25)*0.9 +
+    Math.min(methodCueLines.length,25)*1.2 -
+    replacement*3 -
+    symbolNoise*2 -
+    Math.min(shortNoise,20)*0.8;
+  return {
+    score,
+    confidence,
+    lineCount:lines.length,
+    wordCount:words.length,
+    headingCount:headings,
+    hasIngredientHeading:ingredientHeading,
+    hasMethodHeading:methodHeading,
+    quantityLineCount:quantityLines.length,
+    ingredientLikeLineCount:ingredientLikeLines.length,
+    methodCueLineCount:methodCueLines.length,
+    replacementCount:replacement,
+    symbolNoiseCount:symbolNoise,
+    shortNoiseLineCount:shortNoise
+  };
 }
 async function preprocessImage(blob,mode){const bmp=await createImageBitmap(blob);const max=2400,scale=Math.min(3,max/Math.max(bmp.width,bmp.height));const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(bmp.width*scale));canvas.height=Math.max(1,Math.round(bmp.height*scale));const ctx=canvas.getContext('2d',{willReadFrequently:true});ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.drawImage(bmp,0,0,canvas.width,canvas.height);bmp.close();if(mode!=='original'){const im=ctx.getImageData(0,0,canvas.width,canvas.height),d=im.data;for(let i=0;i<d.length;i+=4){const y=.299*d[i]+.587*d[i+1]+.114*d[i+2];let v=(y-128)*(mode==='threshold'?1.9:1.45)+128;if(mode==='threshold')v=v>160?255:0;v=Math.max(0,Math.min(255,v));d[i]=d[i+1]=d[i+2]=v}ctx.putImageData(im,0,0)}return canvas;}
 async function recognizeVariants(worker,blob,status,traceId){
@@ -168,8 +208,11 @@ async function readImage(item,status,traceId){
   try{
     const variants=await recognizeVariants(worker,blob,status,traceId);
     const texts=variants.map(v=>String(v.data?.text||''));
-    const ranked=variants.map((v,i)=>({variant:v,mode:['original','enhanced','threshold'][i],score:scoreOcrVariant(v),text:texts[i]})).sort((a,b)=>b.score-a.score);
-    console.info('[CC image trace]',traceId,'recognition:comparison',{variants:ranked.map(v=>({mode:v.mode,score:Math.round(v.score*100)/100,confidence:v.variant.data?.confidence,textLength:v.text.length,rawText:v.text}))});
+    const ranked=variants.map((v,i)=>{
+      const quality=scoreOcrVariant(v);
+      return {variant:v,mode:['original','enhanced','threshold'][i],score:quality.score,quality,text:texts[i]};
+    }).sort((a,b)=>b.score-a.score);
+    console.info('[CC image trace]',traceId,'recognition:comparison',{rankingVersion:'recipe-structure-v2',variants:ranked.map(v=>({mode:v.mode,score:Math.round(v.score*100)/100,quality:v.quality,confidence:v.variant.data?.confidence,textLength:v.text.length,rawText:v.text}))});
     const chosen=ranked[0];
     const rawText=String(chosen.text||'');
     console.info('[CC image trace]',traceId,'recognition:selected-raw-text',{mode:chosen.mode,score:chosen.score,rawText});
