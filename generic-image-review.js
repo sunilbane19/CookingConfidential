@@ -124,7 +124,7 @@ async function reviewImage(id){
     if(ingredientCount<3 || methodText.trim().length<25){
       console.warn('[CC image trace]',traceId,'fallback:rescue-editor',{reason:'insufficient recipe structure',ingredientCount,methodLength:methodText.trim().length,parsed});
       console.warn('Cooking Confidential image OCR was inadequate; opening rescue editor.');
-      const rescue=await import('./rescue-ocr.js?v=1.0.2');
+      const rescue=await import('./rescue-ocr.js?v=1.1.2');
       return rescue.rescueImport(id);
     }
     const rawName=(x.file_name||'').replace(/\.[^.]+$/,'').replace(/[_-]+/g,' ').trim();
@@ -195,7 +195,7 @@ async function reviewImage(id){
     console.error('[CC image trace]',traceId,'reviewImage:exception',{durationMs:Math.round(performance.now()-traceStarted),name:e?.name,message:e?.message,stack:e?.stack});
     console.warn('Cooking Confidential image extraction failed; opening rescue editor:',e);
     try{
-      const rescue=await import('./rescue-ocr.js?v=1.0.2');
+      const rescue=await import('./rescue-ocr.js?v=1.1.2');
       return rescue.rescueImport(id);
     }catch(rescueError){
       window.ccShowError(rescueError.message||e.message||String(e),'Image extraction failed');
