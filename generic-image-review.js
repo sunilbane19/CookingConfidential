@@ -37,6 +37,7 @@ function cleanSelectedOcrText(text){
     if(/^sori[.]?$/i.test(line))line='Spring';
     out.push(line);
   }
+  for(let i=0;i<out.length-1;i++){if(/^spring$/i.test(out[i])&&/^onion$/i.test(out[i+1])){out.splice(i,2,'Spring onion');}}
   return out.join('\n').replace(/\n{3,}/g,'\n\n').trim();
 }
 function titleFromCleanedText(text){
