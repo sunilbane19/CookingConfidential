@@ -262,6 +262,62 @@ async function recognizeVariants(worker,blob,status,traceId){
   }
   return variants;
 }
+function findSectionY(words,kind){
+  const lines=ocrLineData(words||[]);
+  const hit=lines.find(line=>headingKind(line.text)===kind);
+  return hit?{y0:hit.y0,y1:hit.y1,text:hit.text}:null;
+}
+function recoverIngredientLinesFromCrop(text){
+  const lines=String(text||'').replace(/\r/g,'').split('\n').map(clean).filter(Boolean);
+  const start=lines.findIndex(line=>headingKind(line)==='ingredients');
+  const end=lines.findIndex((line,index)=>index>(start>=0?start:-1)&&headingKind(line)==='method');
+  const body=lines.slice(start>=0?start+1:0,end>=0?end:lines.length);
+  return body.map(line=>clean(line))
+    .filter(line=>line&&!garbage(line)&&!headingKind(line)&&!/^\d{1,2}[.)]$/.test(line))
+    .filter(line=>!/^\d+\s*(?:serves?|servings?)\b/i.test(line));
+}
+async function recoverIngredientRegion(worker,blob,referenceVariant,status,traceId){
+  const page=await preprocessImage(blob,'enhanced');
+  const words=referenceVariant?.data?.words||[];
+  const ing=findSectionY(words,'ingredients');
+  const method=findSectionY(words,'method');
+  if(!ing||!method||method.y0<=ing.y1){
+    console.info('[CC image trace]',traceId,'recognition:ingredient-crop-skipped',{reason:'section boundaries not found',ingredientHeading:ing,methodHeading:method});
+    page.width=1;page.height=1;
+    return null;
+  }
+  const pad=Math.max(8,Math.round((ing.y1-ing.y0)*.6));
+  const top=Math.max(0,Math.floor(ing.y0-pad));
+  const bottom=Math.min(page.height,Math.ceil(method.y0-pad*.25));
+  if(bottom-top<40){page.width=1;page.height=1;return null;}
+  const crop=document.createElement('canvas');
+  crop.width=page.width;crop.height=bottom-top;
+  crop.getContext('2d').drawImage(page,0,top,page.width,bottom-top,0,0,page.width,bottom-top);
+  page.width=1;page.height=1;
+  const results=[];
+  for(const mode of ['crop-psm6','crop-psm11']){
+    await worker.setParameters({tessedit_pageseg_mode:mode==='crop-psm6'?'6':'11',preserve_interword_spaces:'1'});
+    const result=await worker.recognize(crop);
+    results.push({mode,result});
+  }
+  crop.width=1;crop.height=1;
+  const ranked=results.map(item=>{
+    const rows=ocrLineData(item.result.data?.words||[]);
+    const ingredientHeading=rows.some(row=>headingKind(row.text)==='ingredients');
+    const quantityRows=rows.filter(row=>/^(?:\s*[0-9]+(?:[.,][0-9]+)?|\s*[½¼¾⅓⅔⅛⅜⅝⅞]|\s*[uUlI|!])/.test(row.text));
+    const foodRows=rows.filter(row=>/\b(?:chicken|mushroom|onion|chili|chilli|ginger|garlic|stock|sauce|oil|salt|pepper|water|flour|sugar|butter|fish|vegetable|herb|spice|cloves?)\b/i.test(row.text));
+    const score=Math.min(100,Number(item.result.data?.confidence)||0)*.12+Math.min(rows.length,30)*.6+(ingredientHeading?12:0)+Math.min(quantityRows.length,20)*2+Math.min(foodRows.length,25)*1.2;
+    return {...item,score,rows,ingredientHeading,quantityRows:quantityRows.length,foodRows:foodRows.length};
+  }).sort((a,b)=>b.score-a.score);
+  const best=ranked[0];
+  const recovered=recoverIngredientLinesFromCrop(best?.result.data?.text||'');
+  console.info('[CC image trace]',traceId,'recognition:ingredient-region-recovery',{
+    strategy:'full-width-ingredient-crop-v1',cropY:{top,bottom},referenceMode:referenceVariant?.mode||null,
+    variants:ranked.map(item=>({mode:item.mode,score:Math.round(item.score*100)/100,confidence:item.result.data?.confidence,ingredientHeading:item.ingredientHeading,quantityRows:item.quantityRows,foodRows:item.foodRows,rawText:item.result.data?.text||'',words:(item.result.data?.words||[]).filter(w=>/^(?:[0-9]+(?:[.,][0-9]+)?|[½¼¾⅓⅔⅛⅜⅝⅞]|[uUlI|!]|C|T|t|g|kg|ml|l|oz|lb|cloves?)$/i.test(String(w.text||'').trim())).map(w=>({text:w.text,confidence:w.confidence,bbox:w.bbox}))})),
+    recoveredLines:recovered
+  });
+  return recovered.length>=3?{lines:recovered,mode:best.mode,score:best.score}:null;
+}
 async function readImage(item,status,traceId){
   const path=item.file_path||item.original_file_path;
   console.info('[CC image trace]',traceId,'source:db-item',{id:item.id,file_name:item.file_name,mime_type:item.mime_type,file_path:path,original_file_path:item.original_file_path,extraction_status:item.extraction_status,review_status:item.review_status,extractedTextType:typeof item.extracted_text,extractedTextLength:String(item.extracted_text||'').length});
@@ -319,6 +375,19 @@ async function readImage(item,status,traceId){
       recognizedHeadingLines:parserHeadingDiagnostics
     });
     const parsed=parseLines(cleanedText);
+    const ingredientRecovery=await recoverIngredientRegion(worker,blob,{...chosen,mode:chosen.mode},status,traceId);
+    if(ingredientRecovery){
+      const before=parsed.ingredients||[];
+      const after=ingredientRecovery.lines;
+      const beforeQuantity=before.filter(line=>/^(?:\s*(?:\d+|[½¼¾⅓⅔⅛⅜⅝⅞])\b)/.test(line)).length;
+      const afterQuantity=after.filter(line=>/^(?:\s*(?:\d+|[½¼¾⅓⅔⅛⅜⅝⅞])\b)/.test(line)).length;
+      if(after.length>=before.length-2 && (afterQuantity>beforeQuantity || after.some(line=>/\b(?:cups?|tablespoons?|teaspoons?|C|T|t|g|kg|ml|cloves?)\b/i.test(line)))){
+        parsed.ingredients=after;
+        console.info('[CC image trace]',traceId,'recognition:ingredient-region-applied',{beforeCount:before.length,afterCount:after.length,beforeQuantityLines:beforeQuantity,afterQuantityLines:afterQuantity,mode:ingredientRecovery.mode});
+      }else{
+        console.info('[CC image trace]',traceId,'recognition:ingredient-region-not-applied',{reason:'crop result did not improve quantity/coverage safely',beforeCount:before.length,afterCount:after.length,beforeQuantityLines:beforeQuantity,afterQuantityLines:afterQuantity});
+      }
+    }
     parsed.ingredients=cleanImageRecipeSection(parsed.ingredients,'ingredients');
     parsed.method=cleanImageRecipeSection(parsed.method,'method');
     parsed.notes=cleanImageRecipeSection(String(parsed.notes||'').split('\n'),'notes').join('\n');
