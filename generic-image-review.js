@@ -85,6 +85,33 @@ function cleanSelectedOcrText(text){
   for(let i=out.length-1;i>=0;i--)if(!out[i])out.splice(i,1);
   return out.join('\n').replace(/\n{3,}/g,'\n\n').trim();
 }
+function cleanImageRecipeSection(lines,kind){
+  const keep=new Set(['add','oil','in','to','of','on','at','by','up','if','as','or','no','so','do','dry','fry','try','mix','cut','hot','ml','kg','tsp','tbsp','oz','lb','salt','egg','tea','cup','and','the','then','until','heat','stir','cook','serve','bring','boil','turn','off','with','from','garlic','chicken','stock','onion','sauce','ginger']);
+  const result=[];
+  for(let raw of (Array.isArray(lines)?lines:[])){
+    let line=clean(raw);
+    if(!line)continue;
+    if(/^(?:course\s*\d+|page\s*\d+|(?:serves?|servings?|yield)\s*[:\-]?\s*\d+.*|\d+\s*(?:serves?|servings?)\s*[:\-]?\s*\d*.*)$/i.test(line))continue;
+    if(kind==='method'||kind==='notes'){
+      // Remove isolated short OCR fragments without deleting legitimate short cooking words.
+      line=line.split(/\s+/).filter(token=>{
+        const normalized=token.toLowerCase().replace(/^[^a-z]+|[^a-z]+$/g,'');
+        if(!normalized)return true;
+        if(normalized.length<=3 && /^[a-z]+$/i.test(normalized) && !keep.has(normalized))return false;
+        return true;
+      }).join(' ').replace(/\s+([,.;:])/g,'$1').replace(/\s{2,}/g,' ').trim();
+      // Drop residual OCR-only lines such as “EEE” or “— cr”.
+      if(!line || /^(?:[A-Z]{2,5}|[—–-]+\s*[a-z]{1,3})$/.test(line))continue;
+    }
+    if(kind==='ingredients'){
+      // Remove isolated OCR layout markers at the beginning, but never fabricate a quantity.
+      line=line.replace(/^(?:(?:Y|Ya|Ye|Tam|I|l|\|)\s+)+(?=[A-Za-z])/,'');
+      line=line.replace(/\s+[|%]\s*$/,'').trim();
+    }
+    result.push(line);
+  }
+  return [...new Set(result)];
+}
 function titleFromCleanedText(text){
   const lines=String(text||'').split('\n').map(clean).filter(Boolean);
   const stop=lines.findIndex(x=>headingKind(x)==='ingredients');
@@ -286,6 +313,15 @@ async function readImage(item,status,traceId){
       recognizedHeadingLines:parserHeadingDiagnostics
     });
     const parsed=parseLines(cleanedText);
+    parsed.ingredients=cleanImageRecipeSection(parsed.ingredients,'ingredients');
+    parsed.method=cleanImageRecipeSection(parsed.method,'method');
+    parsed.notes=cleanImageRecipeSection(String(parsed.notes||'').split('\n'),'notes').join('\n');
+    parsed.description=cleanImageRecipeSection(String(parsed.description||'').split(/(?<=[.!?])\s+/),'description').join(' ').trim();
+    console.info('[CC image trace]',traceId,'parser:post-cleanup-summary',{
+      ingredientCount:parsed.ingredients.length,ingredients:parsed.ingredients,
+      methodCount:parsed.method.length,method:parsed.method,
+      notes:parsed.notes,description:parsed.description
+    });
     console.info('[CC image trace]',traceId,'parser:output-summary',{
       name:parsed.name,
       descriptionLength:String(parsed.description||'').length,
