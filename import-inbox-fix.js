@@ -46,7 +46,7 @@ async function review(id,isImage,isMulti=false){try{
   if(isImage){
     // Single-image Review is deliberately isolated from Vision and multi-recipe workflows.
     console.info('[CC image trace] inbox:direct-single-image-review',{id,handler:'generic-image-review.js'});
-    const mod=await import('./generic-image-review.js?v=1.0.10');
+    const mod=await import('./generic-image-review.js?v=1.0.11');
     if(typeof mod.reviewImage!=='function')throw Error('Generic single-image reader could not be loaded.');
     return mod.reviewImage(id);
   }
