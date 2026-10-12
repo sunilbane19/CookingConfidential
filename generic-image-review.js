@@ -9,12 +9,12 @@ function cleanSelectedOcrText(text){
   const source=String(text||'').normalize('NFKC');
   // OCR variants can return escaped newline sequences as literal characters.
   // Decode those before line-based cleanup and before passing text to parseLines.
-  const hadEscapedLineBreaks=/\\(?:r\\n|n|r)/.test(source);
+  const hadEscapedLineBreaks=/\\+(?:r\\+n|n|r)/.test(source);
   console.info('[CC image trace] OCR cleanup line-break decoding',{hadEscapedLineBreaks,sourceLength:source.length});
+  // Some OCR paths double-escape the backslashes. Accept one or more before n/r.
   const input=source
-    .replace(/\\r\\n/g,'\n')
-    .replace(/\\n/g,'\n')
-    .replace(/\\r/g,'\n')
+    .replace(/\\+r\\+n/g,'\n')
+    .replace(/\\+[nr]/g,'\n')
     .replace(/\r\n?/g,'\n')
     .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\uFFFD\u00AD]/g,' ');
   const out=[];
