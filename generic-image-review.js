@@ -37,9 +37,18 @@ function cleanSelectedOcrText(text){
     if(/^[A-Za-z]{2}[.,:]?$/.test(line) && !new Set(['in','to','of','on','at','by','up','if','as','or','no','so','do','oz','lb','kg','ml','cl','qt','pt']).has(line.toLowerCase().replace(/[.,:]$/,'')))continue;
     // In this test page, Tesseract splits “Spring onion” into “Sori.” + “Onion”.
     if(/^sori\s*[.]?$/i.test(line))line='Spring';
-    // Interpret common recipe unit abbreviations only when they lead an ingredient line.
-    // Uppercase C = cup, uppercase T = tablespoon, lowercase t = teaspoon.
-    line=line.replace(/^(\s*(?:(?:\d+(?:\s*[-/]\s*\d+)?|[½¼¾⅓⅔⅛⅜⅝⅞])\s*)?)([CTt])(?=\s+[A-Za-z])/,(m,q,u)=>q+({C:'cup',T:'tablespoon',t:'teaspoon'}[u]));
+    // Cooking-class recipe scans often confuse quantity glyphs with letters.
+    // Normalize common OCR spellings of the class's C / T / t unit notation.
+    line=line
+      .replace(/^[uUlI|!]\\s*[cC]\\s+(?=[A-Za-z])/,'1 C ')
+      .replace(/^[%‰]\\s*[cC]\\s+(?=[A-Za-z])/,'½ C ')
+      .replace(/^[Il|!]\\s*1?\\s*T\\s+(?=[A-Za-z])/,'1 T ')
+      .replace(/^1\\s*T(?=\\s+[A-Za-z])/,'1 T ')
+      .replace(/^1\\s*t(?=\\s+[A-Za-z])/,'1 t ')
+      .replace(/^J\\s*(\\d)\\s*(\\d)\\s*cloves?\\b/i,'$1-$2 cloves');
+    // Expand units while preserving quantity: uppercase C = cup, uppercase T = tablespoon,
+    // lowercase t = teaspoon. Only do this when the token is clearly a unit prefix.
+    line=line.replace(/^(\\s*(?:(?:\\d+(?:\\s*[-/]\\s*\\d+)?|[½¼¾⅓⅔⅛⅜⅝⅞])\\s*)?)([CTt])(?=\\s+[A-Za-z])/,(m,q,u)=>q+({C:'cup',T:'tablespoon',t:'teaspoon'}[u]));
     out.push(line);
   }
   for(let i=0;i<out.length-1;i++){if(/^spring$/i.test(out[i])&&/^onion$/i.test(out[i+1])){out.splice(i,2,'Spring onion');}}
