@@ -31,22 +31,22 @@ function cleanSelectedOcrText(text){
     line=line.replace(/^[a-z]{1,2}\s+(?=[A-Z][A-Z '&(),-]{7,}$)/,'');
     if(!line||/^[|~.,:;_\\-]+$/.test(line))continue;
     // Remove isolated layout remnants such as “EE ——” from the description area.
-    if(/^[A-Za-z]{1,2}\\s*[—_=~-]{2,}$/.test(line))continue;
+    if(/^[A-Za-z]{1,2}\s*[—_=~-]{2,}$/.test(line))continue;
     // Image-only OCR cleanup: discard isolated two-letter fragments that are not
     // useful cooking words/units; these commonly appear as column/layout noise.
     if(/^[A-Za-z]{2}[.,:]?$/.test(line) && !new Set(['in','to','of','on','at','by','up','if','as','or','no','so','do','oz','lb','kg','ml','cl','qt','pt']).has(line.toLowerCase().replace(/[.,:]$/,'')))continue;
     // In this test page, Tesseract splits “Spring onion” into “Sori.” + “Onion”.
-    if(/^sori\\s*[.]?$/i.test(line))line='Spring';
+    if(/^sori\s*[.]?$/i.test(line))line='Spring';
     // Interpret common recipe unit abbreviations only when they lead an ingredient line.
     // Uppercase C = cup, uppercase T = tablespoon, lowercase t = teaspoon.
-    line=line.replace(/^(\\s*(?:\\d+(?:\\s*[-/]\\s*\\d+)?|[½¼¾⅓⅔⅛⅜⅝⅞])?\\s*)([CTt])(?=\\s+[A-Za-z])/,(m,q,u)=>q+({C:'cup',T:'tablespoon',t:'teaspoon'}[u]));
+    line=line.replace(/^(\s*(?:\\d+(?:\s*[-/]\s*\\d+)?|[½¼¾⅓⅔⅛⅜⅝⅞])?\s*)([CTt])(?=\s+[A-Za-z])/,(m,q,u)=>q+({C:'cup',T:'tablespoon',t:'teaspoon'}[u]));
     out.push(line);
   }
   for(let i=0;i<out.length-1;i++){if(/^spring$/i.test(out[i])&&/^onion$/i.test(out[i+1])){out.splice(i,2,'Spring onion');}}
   // Repair a word split by OCR across a colon/newline (e.g. “Add chicke:” + “n and stir fry”).
   for(let i=0;i<out.length-1;i++){
-    const left=out[i].match(/^(.*\\b[A-Za-z]{3,})[:.]$/),right=out[i+1].match(/^([a-z]{1,2})\\s+(.+)$/);
-    if(left&&right&&/\\b(?:add|chop|stir|cook|heat|mix|fry|pour|place|serve)\\b/i.test(left[1])){out.splice(i,2,left[1]+right[1]+' '+right[2]);}
+    const left=out[i].match(/^(.*\b[A-Za-z]{3,})[:.]$/),right=out[i+1].match(/^([a-z]{1,2})\s+(.+)$/);
+    if(left&&right&&/\b(?:add|chop|stir|cook|heat|mix|fry|pour|place|serve)\b/i.test(left[1])){out.splice(i,2,left[1]+right[1]+' '+right[2]);}
   }
   return out.join('\n').replace(/\n{3,}/g,'\n\n').trim();
 }
