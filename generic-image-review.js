@@ -10,9 +10,41 @@ const types=['','Dish','Dip','Dressing','Sauce','Chutney','Marinade','Rub','Past
 const generic=/^(recipe|recipes|ingredients?|method|directions?|instructions?|preparation|steps?|servings?|notes?|tips?|storage|serving suggestions?|for the .+|for .+)[:.]?$/i;
 const garbage=s=>{const x=clean(s);if(!x||generic.test(x)||/[©®™]/.test(x))return true;if(/\b(?:follow|subscribe|like|share|save|comment|link in bio|learn more|ends in)\b/i.test(x))return true;if((x.match(/[A-Za-z]/g)||[]).length<2)return true;return false};
 function headingKind(x){const s=clean(x).toLowerCase().replace(/[^a-z ]/g,' ').replace(/\s+/g,' ').trim();if(/\bingredients?\b/.test(s)||/\bingredient\s+list\b/.test(s))return'ingredients';if(/\b(method|directions?|instructions?|preparation|steps?)\b/.test(s))return'method';if(/\b(notes?|tips?|storage|serving suggestions?)\b/.test(s))return'notes';return'';}
-function parseLines(text){const a=String(text||'').replace(/\r/g,'').split('\n').map(clean).filter(x=>!garbage(x));let section='',ingredients=[],method=[];for(let x of a){const kind=headingKind(x);if(kind==='ingredients'){section='ingredients';x=x.replace(/.*?\bingredients?(?:\s+list)?\b\s*[:\-]?/i,'').trim();if(!x)continue}else if(kind==='method'){section='method';x=x.replace(/.*?\b(method|directions?|instructions?|preparation|steps?)\b\s*[:\-]?/i,'').trim();if(!x)continue}else if(kind==='notes'){section='notes';continue}if(/^(?:\d{1,2}[.)]|step\s*\d+)/i.test(x)&&section!=='notes')section='method';if(!x||garbage(x))continue;if(section==='method')method.push(x);else ingredients.push(x)}return{ingredients:[...new Set(ingredients)],method:[...new Set(method)]};}
+function parseLines(text){
+  const a=String(text||'').replace(/\r/g,'').split('\n').map(clean).filter(x=>!garbage(x));
+  let section='',ingredients=[],method=[],notes=[],beforeIngredients=[];
+  for(let x of a){
+    const kind=headingKind(x);
+    if(kind==='ingredients'){section='ingredients';x=x.replace(/.*?\bingredients?(?:\s+list)?\b\s*[:\-]?/i,'').trim();if(!x)continue}
+    else if(kind==='method'){section='method';x=x.replace(/.*?\b(method|directions?|instructions?|preparation|steps?)\b\s*[:\-]?/i,'').trim();if(!x)continue}
+    else if(kind==='notes'){section='notes';x=x.replace(/^notes?\s*[:\-]?/i,'').trim();if(!x)continue}
+    if(/^(?:\d{1,2}[.)]|step\s*\d+)/i.test(x)&&section!=='notes')section='method';
+    if(!x||garbage(x))continue;
+    if(section==='method')method.push(x);else if(section==='notes')notes.push(x);else if(section==='ingredients')ingredients.push(x);else beforeIngredients.push(x);
+  }
+  const titleIndex=beforeIngredients.findIndex(x=>/^[A-Z][A-Z0-9 '&(),-]{5,75}$/.test(x)&&!generic.test(x));
+  const name=titleIndex>=0?beforeIngredients[titleIndex]:(beforeIngredients.find(x=>x.length>=5&&x.length<=75)||'Imported recipe');
+  const description=beforeIngredients.filter(x=>x!==name&&!/^course\s*\d+/i.test(x)&&!/^the cooking academy$/i.test(x)).join(' ').trim();
+  return {name:clean(name),description,ingredients:[...new Set(ingredients)],method:[...new Set(method)],notes:[...new Set(notes)].join('\n')};
+}
 function ocrLineData(words){const valid=(words||[]).filter(w=>w.text?.trim()&&Number(w.confidence||0)>=20&&w.bbox);if(!valid.length)return[];const medH=valid.map(w=>w.bbox.y1-w.bbox.y0).sort((a,b)=>a-b)[Math.floor(valid.length/2)]||20,rows=[];for(const w of [...valid].sort((a,b)=>a.bbox.y0-b.bbox.y0||a.bbox.x0-b.bbox.x0)){const cy=(w.bbox.y0+w.bbox.y1)/2;let row=rows.find(r=>Math.abs(r.cy-cy)<Math.max(8,medH*.6));if(!row){row={cy,words:[]};rows.push(row)}row.words.push(w)}return rows.map(r=>{r.words.sort((a,b)=>a.bbox.x0-b.bbox.x0);return{text:clean(r.words.map(w=>w.text).join(' ')),height:Math.max(...r.words.map(w=>w.bbox.y1-w.bbox.y0)),y0:Math.min(...r.words.map(w=>w.bbox.y0)),y1:Math.max(...r.words.map(w=>w.bbox.y1))}}).filter(r=>r.text.length>1);}
-function titleFromOcr(variants){const all=variants.flatMap(v=>ocrLineData(v.data?.words||[]));if(!all.length)return'Imported recipe';const ingIndex=all.map(x=>headingKind(x.text)).findIndex(x=>x==='ingredients');const pre=all.slice(0,ingIndex>0?ingIndex:Math.min(all.length,12));const med=all.map(x=>x.height).sort((a,b)=>a-b)[Math.floor(all.length/2)]||20;const candidates=pre.filter(x=>x.text.length>=4&&x.text.length<=70&&!garbage(x.text)&&!/^recipe$/i.test(x.text));if(!candidates.length)return'Imported recipe';const tall=candidates.filter(x=>x.height>=med*1.22);return clean((tall.length?tall:candidates).sort((a,b)=>b.height-a.height||a.y0-b.y0)[0].text);}
+function titleFromOcr(variant){
+  const lines=ocrLineData(variant?.data?.words||[]);
+  const ingIndex=lines.findIndex(x=>headingKind(x.text)==='ingredients');
+  const pre=lines.slice(0,ingIndex>0?ingIndex:Math.min(lines.length,14));
+  const candidates=pre.filter(x=>x.text.length>=5&&x.text.length<=75&&!garbage(x.text)&&!generic.test(x.text)&&!/^course\s*\d+/i.test(x.text));
+  if(!candidates.length)return 'Imported recipe';
+  const uppercase=candidates.filter(x=>/[A-Z]/.test(x.text)&&x.text===x.text.toUpperCase()&&/[A-Z]{3}/.test(x.text));
+  return clean((uppercase.length?uppercase:candidates).sort((x,y)=>y.height-x.height||x.y0-y.y0)[0].text);
+}
+function scoreOcrVariant(variant){
+  const text=String(variant?.data?.text||'').trim();
+  const lines=text.split(/\r?\n/).map(clean).filter(Boolean);
+  const headings=(text.match(/ingredients?|preparation|method|directions?|serves?/ig)||[]).length;
+  const words=(text.match(/[A-Za-z]{2,}/g)||[]).length;
+  const replacement=(text.match(/[�|{}\\]/g)||[]).length;
+  return (Number(variant?.data?.confidence)||0)*0.25+Math.min(words,180)*0.35+Math.min(headings,5)*8+Math.min(lines.length,45)*0.25-replacement*2;
+}
 async function preprocessImage(blob,mode){const bmp=await createImageBitmap(blob);const max=2400,scale=Math.min(3,max/Math.max(bmp.width,bmp.height));const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(bmp.width*scale));canvas.height=Math.max(1,Math.round(bmp.height*scale));const ctx=canvas.getContext('2d',{willReadFrequently:true});ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.drawImage(bmp,0,0,canvas.width,canvas.height);bmp.close();if(mode!=='original'){const im=ctx.getImageData(0,0,canvas.width,canvas.height),d=im.data;for(let i=0;i<d.length;i+=4){const y=.299*d[i]+.587*d[i+1]+.114*d[i+2];let v=(y-128)*(mode==='threshold'?1.9:1.45)+128;if(mode==='threshold')v=v>160?255:0;v=Math.max(0,Math.min(255,v));d[i]=d[i+1]=d[i+2]=v}ctx.putImageData(im,0,0)}return canvas;}
 async function recognizeVariants(worker,blob,status,traceId){
   const variants=[];
@@ -47,14 +79,23 @@ async function readImage(item,status,traceId){
   try{
     const variants=await recognizeVariants(worker,blob,status,traceId);
     const texts=variants.map(v=>String(v.data?.text||''));
-    console.info('[CC image trace]',traceId,'recognition:all-raw-text',{variants:texts.map((text,i)=>({mode:['original','enhanced','threshold'][i],length:text.length,text}))});
-    const parsed=parseLines(texts.join('\n'));
-    parsed.name=titleFromOcr(variants);
-    const sectionTexts=texts.map(parseLines);
-    for(const p of sectionTexts){parsed.ingredients.push(...p.ingredients);parsed.method.push(...p.method)}
-    parsed.ingredients=[...new Set(parsed.ingredients)].slice(0,80);
-    parsed.method=[...new Set(parsed.method)].slice(0,80);
-    console.info('[CC image trace]',traceId,'recipe-structure:result',{name:parsed.name,description:parsed.description||'',ingredientCount:parsed.ingredients.length,ingredients:parsed.ingredients,methodCount:parsed.method.length,method:parsed.method,notes:parsed.notes||''});
+    const ranked=variants.map((v,i)=>({variant:v,mode:['original','enhanced','threshold'][i],score:scoreOcrVariant(v),text:texts[i]})).sort((a,b)=>b.score-a.score);
+    console.info('[CC image trace]',traceId,'recognition:comparison',{variants:ranked.map(v=>({mode:v.mode,score:Math.round(v.score*100)/100,confidence:v.variant.data?.confidence,textLength:v.text.length,rawText:v.text}))});
+    const chosen=ranked[0];
+    const rawText=String(chosen.text||'');
+    console.info('[CC image trace]',traceId,'recognition:selected-raw-text',{mode:chosen.mode,score:chosen.score,rawText});
+    const cleanedText=rawText.replace(/\r/g,'').split('\n').map(line=>clean(line)).filter(Boolean).join('\n');
+    console.info('[CC image trace]',traceId,'recognition:cleaned-text',{mode:chosen.mode,cleanedText});
+    const parsed=parseLines(cleanedText);
+    const ocrTitle=titleFromOcr(chosen.variant);
+    if(ocrTitle&&ocrTitle!=='Imported recipe')parsed.name=ocrTitle;
+    parsed.raw_ocr_text=rawText;
+    parsed.cleaned_ocr_text=cleanedText;
+    parsed.ocr_mode=chosen.mode;
+    parsed.ocr_confidence=chosen.variant.data?.confidence??null;
+    parsed.ingredients=(parsed.ingredients||[]).slice(0,80);
+    parsed.method=(parsed.method||[]).slice(0,80);
+    console.info('[CC image trace]',traceId,'recipe-structure:result',{name:parsed.name,description:parsed.description||'',ingredientCount:parsed.ingredients.length,ingredients:parsed.ingredients,methodCount:parsed.method.length,method:parsed.method,notes:parsed.notes||'',chosenMode:chosen.mode});
     return parsed;
   }finally{await worker.terminate();console.info('[CC image trace]',traceId,'tesseract:worker-terminated')}
 }
