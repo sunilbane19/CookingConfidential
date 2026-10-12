@@ -375,13 +375,13 @@ async function readImage(item,status,traceId){
       recognizedHeadingLines:parserHeadingDiagnostics
     });
     const parsed=parseLines(cleanedText);
-    const ingredientRecovery=await recoverIngredientRegion(worker,blob,{...chosen,mode:chosen.mode},status,traceId);
+    const ingredientRecovery=await recoverIngredientRegion(worker,blob,{...chosen.variant,mode:chosen.mode},status,traceId);
     if(ingredientRecovery){
       const before=parsed.ingredients||[];
       const after=ingredientRecovery.lines;
       const beforeQuantity=before.filter(line=>/^(?:\s*(?:\d+|[½¼¾⅓⅔⅛⅜⅝⅞])\b)/.test(line)).length;
       const afterQuantity=after.filter(line=>/^(?:\s*(?:\d+|[½¼¾⅓⅔⅛⅜⅝⅞])\b)/.test(line)).length;
-      if(after.length>=before.length-2 && (afterQuantity>beforeQuantity || after.some(line=>/\b(?:cups?|tablespoons?|teaspoons?|C|T|t|g|kg|ml|cloves?)\b/i.test(line)))){
+      if(after.length>=before.length-2 && afterQuantity>beforeQuantity){
         parsed.ingredients=after;
         console.info('[CC image trace]',traceId,'recognition:ingredient-region-applied',{beforeCount:before.length,afterCount:after.length,beforeQuantityLines:beforeQuantity,afterQuantityLines:afterQuantity,mode:ingredientRecovery.mode});
       }else{
