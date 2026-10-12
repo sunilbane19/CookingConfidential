@@ -300,7 +300,13 @@ async function recoverIngredientRegion(worker,blob,referenceVariant,status,trace
     const result=await worker.recognize(crop);
     results.push({mode,result});
   }
-  crop.width=1;crop.height=1;
+  // A separate left-column pass targets quantities that full-page OCR often drops.
+  const left=document.createElement('canvas');
+  left.width=Math.max(1,Math.floor(crop.width*.42));left.height=crop.height;
+  left.getContext('2d').drawImage(crop,0,0,left.width,left.height,0,0,left.width,left.height);
+  await worker.setParameters({tessedit_pageseg_mode:'6',preserve_interword_spaces:'1'});
+  const leftResult=await worker.recognize(left);
+  left.width=1;left.height=1;
   const ranked=results.map(item=>{
     const rows=ocrLineData(item.result.data?.words||[]);
     const ingredientHeading=rows.some(row=>headingKind(row.text)==='ingredients');
@@ -311,12 +317,38 @@ async function recoverIngredientRegion(worker,blob,referenceVariant,status,trace
   }).sort((a,b)=>b.score-a.score);
   const best=ranked[0];
   const recovered=recoverIngredientLinesFromCrop(best?.result.data?.text||'');
+  const leftWords=(leftResult.data?.words||[]).filter(w=>w.bbox&&Number(w.confidence)>=45&&/^(?:[0-9]+(?:[.,][0-9]+)?|[½¼¾⅓⅔⅛⅜⅝⅞]|[uUlI|!]|C|T|t|g|kg|ml|l|oz|lb|cloves?|cups?|tablespoons?|teaspoons?)$/i.test(String(w.text||'').trim()));
+  const recoveredRows=ocrLineData(best?.result.data?.words||[]);
+  const quantityTokens=leftWords.map(w=>({text:String(w.text||'').trim(),confidence:Number(w.confidence)||0,y0:w.bbox.y0,y1:w.bbox.y1,cy:(w.bbox.y0+w.bbox.y1)/2}));
+  const ingredientStart=recoveredRows.findIndex(row=>headingKind(row.text)==='ingredients');
+  const methodStart=recoveredRows.findIndex((row,index)=>index>(ingredientStart>=0?ingredientStart:-1)&&headingKind(row.text)==='method');
+  const ingredientRows=recoveredRows.slice(ingredientStart>=0?ingredientStart+1:0,methodStart>=0?methodStart:recoveredRows.length);
+  const quantityAssignments=[];
+  for(const token of quantityTokens){
+    if(!/^(?:[0-9]+(?:[.,][0-9]+)?|[½¼¾⅓⅔⅛⅜⅝⅞]|[uUlI|!])$/i.test(token.text))continue;
+    const row=ingredientRows.filter(r=>!/^\s*(?:ingredients?)\b/i.test(r.text))
+      .map(r=>({...r,cy:(r.y0+r.y1)/2,distance:Math.abs((r.y0+r.y1)/2-token.cy)}))
+      .sort((a,b)=>a.distance-b.distance)[0];
+    if(!row)continue;
+    const tolerance=Math.max(18,Math.min(row.height||24,42)*.85);
+    if(row.distance>tolerance)continue;
+    const idx=recoveredRows.indexOf(row);
+    const targetLine=recovered.find(line=>line.toLowerCase().trim()===row.text.toLowerCase().trim());
+    if(targetLine&&/^\s*(?:[0-9]+(?:[.,][0-9]+)?|[½¼¾⅓⅔⅛⅜⅝⅞])\b/.test(targetLine))continue;
+    if(targetLine){
+      const pos=recovered.indexOf(targetLine);
+      recovered[pos]=token.text+' '+targetLine;
+      quantityAssignments.push({quantity:token.text,y:Math.round(token.cy),ingredient:targetLine,distance:Math.round(row.distance),confidence:Math.round(token.confidence)});
+    }
+  }
+  const deduped=[...new Set(recovered)];
   console.info('[CC image trace]',traceId,'recognition:ingredient-region-recovery',{
-    strategy:'full-width-ingredient-crop-v1',cropY:{top,bottom},referenceMode:referenceVariant?.mode||null,
+    strategy:'ingredient-crop-plus-left-quantity-column-v2',cropY:{top,bottom},leftColumnWidth:leftResult.data?.imageWidth||Math.floor(crop.width*.42),referenceMode:referenceVariant?.mode||null,
     variants:ranked.map(item=>({mode:item.mode,score:Math.round(item.score*100)/100,confidence:item.result.data?.confidence,ingredientHeading:item.ingredientHeading,quantityRows:item.quantityRows,foodRows:item.foodRows,rawText:item.result.data?.text||'',words:(item.result.data?.words||[]).filter(w=>/^(?:[0-9]+(?:[.,][0-9]+)?|[½¼¾⅓⅔⅛⅜⅝⅞]|[uUlI|!]|C|T|t|g|kg|ml|l|oz|lb|cloves?)$/i.test(String(w.text||'').trim())).map(w=>({text:w.text,confidence:w.confidence,bbox:w.bbox}))})),
-    recoveredLines:recovered
+    leftColumn:{rawText:leftResult.data?.text||'',tokens:quantityTokens.map(t=>({text:t.text,confidence:Math.round(t.confidence),y:Math.round(t.cy)}))},
+    quantityAssignments,recoveredLines:deduped
   });
-  return recovered.length>=3?{lines:recovered,mode:best.mode,score:best.score}:null;
+  return deduped.length>=3?{lines:deduped,mode:best.mode,score:best.score,quantityAssignments}:null;
 }
 async function readImage(item,status,traceId){
   const path=item.file_path||item.original_file_path;
