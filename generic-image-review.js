@@ -317,6 +317,46 @@ async function recoverIngredientRegion(worker,blob,referenceVariant,status,trace
   const leftPsm6Diagnostics=summarizeLeftWords(leftResult);
   const leftPsm11Diagnostics=summarizeLeftWords(leftPsm11Result);
   const leftRawWords=(leftResult.data?.words||[]).filter(w=>w&&w.bbox);
+  // Diagnostic-only second experiment: isolate a narrower quantity strip and
+  // enlarge it before OCR. No result from this experiment changes saved fields.
+  const quantityStrip=document.createElement('canvas');
+  const stripSourceWidth=Math.max(1,Math.floor(crop.width*.28));
+  const stripScale=2;
+  quantityStrip.width=stripSourceWidth*stripScale;
+  quantityStrip.height=crop.height*stripScale;
+  const qctx=quantityStrip.getContext('2d',{willReadFrequently:true});
+  qctx.imageSmoothingEnabled=false;
+  qctx.drawImage(crop,0,0,stripSourceWidth,crop.height,0,0,quantityStrip.width,quantityStrip.height);
+  const qimage=qctx.getImageData(0,0,quantityStrip.width,quantityStrip.height);
+  const qdata=qimage.data;
+  for(let qi=0;qi<qdata.length;qi+=4){
+    const gray=.299*qdata[qi]+.587*qdata[qi+1]+.114*qdata[qi+2];
+    const value=Math.max(0,Math.min(255,(gray-128)*1.9+128));
+    qdata[qi]=qdata[qi+1]=qdata[qi+2]=value;
+  }
+  qctx.putImageData(qimage,0,0);
+  const quantityStripResults=[];
+  for(const mode of ['psm6','psm11']){
+    await worker.setParameters({tessedit_pageseg_mode:mode==='psm6'?'6':'11',preserve_interword_spaces:'1'});
+    const result=await worker.recognize(quantityStrip);
+    quantityStripResults.push({
+      mode,
+      confidence:Math.round(Number(result.data?.confidence)||0),
+      text:String(result.data?.text||''),
+      words:(result.data?.words||[]).filter(w=>w&&w.bbox).map(w=>({
+        text:String(w.text||''),
+        confidence:Math.round(Number(w.confidence)||0),
+        bbox:{x0:Math.round(Number(w.bbox.x0)||0),x1:Math.round(Number(w.bbox.x1)||0),y0:Math.round(Number(w.bbox.y0)||0),y1:Math.round(Number(w.bbox.y1)||0)}
+      }))
+    });
+  }
+  console.info('[CC image trace]',traceId,'recognition:ingredient-quantity-strip-upscale-diagnostics',{
+    strategy:'narrow-28pct-upscale-2x-contrast-v1',
+    sourceCrop:{width:stripSourceWidth,height:crop.height},
+    processedCrop:{width:quantityStrip.width,height:quantityStrip.height},
+    variants:quantityStripResults
+  });
+  quantityStrip.width=1;quantityStrip.height=1;
   // Diagnostic-only: retain low-confidence and non-numeric tokens so we can see
   // whether quantities are absent, misread as letters, or placed on unexpected rows.
   console.info('[CC image trace]',traceId,'recognition:ingredient-left-column-word-diagnostics',{
