@@ -306,6 +306,25 @@ async function recoverIngredientRegion(worker,blob,referenceVariant,status,trace
   left.getContext('2d').drawImage(crop,0,0,left.width,left.height,0,0,left.width,left.height);
   await worker.setParameters({tessedit_pageseg_mode:'6',preserve_interword_spaces:'1'});
   const leftResult=await worker.recognize(left);
+  const leftRawWords=(leftResult.data?.words||[]).filter(w=>w&&w.bbox);
+  // Diagnostic-only: retain low-confidence and non-numeric tokens so we can see
+  // whether quantities are absent, misread as letters, or placed on unexpected rows.
+  const leftWordDiagnostics=leftRawWords.map(w=>({
+    text:String(w.text||''),
+    confidence:Math.round(Number(w.confidence)||0),
+    bbox:{
+      x0:Math.round(Number(w.bbox.x0)||0),
+      x1:Math.round(Number(w.bbox.x1)||0),
+      y0:Math.round(Number(w.bbox.y0)||0),
+      y1:Math.round(Number(w.bbox.y1)||0)
+    }
+  }));
+  console.info('[CC image trace]',traceId,'recognition:ingredient-left-column-word-diagnostics',{
+    strategy:'left-column-all-words-v1',
+    crop:{width:left.width,height:left.height},
+    wordCount:leftWordDiagnostics.length,
+    words:leftWordDiagnostics
+  });
   left.width=1;left.height=1;
   const ranked=results.map(item=>{
     const rows=ocrLineData(item.result.data?.words||[]);
