@@ -335,7 +335,7 @@ async function recoverIngredientRegion(worker,blob,referenceVariant,status,trace
   };
   // Recover quantities printed in a separate left column by aligning OCR word boxes
   // with ingredient-row y positions. Rows outside the ingredient section are excluded.
-  const quantityTokenPattern=/^(?:\\d+(?:[.,]\\d+)?(?:\\s*[-/]\\s*\\d+(?:[.,]\\d+)?)?|[½¼¾⅓⅔⅛⅜⅝⅞]|[uUlI|!])$/;
+  const quantityTokenPattern=/^(?:\d+(?:[.,]\d+)?(?:\s*[-/]\s*\d+(?:[.,]\d+)?)?|[½¼¾⅓⅔⅛⅜⅝⅞]|[uUlI|!])$/;
   const ingredientRowBounds=ingredientRows.map(row=>({
     row,
     center:(Number(row.y0)+Number(row.y1))/2,
@@ -353,7 +353,7 @@ async function recoverIngredientRegion(worker,blob,referenceVariant,status,trace
     if(!nearest||nearest.distance>Math.max(14,nearest.height*.8))continue;
     const ingredient=cleanIngredientRow(nearest.row.text);
     if(!ingredient||headingKind(ingredient)||garbage(ingredient))continue;
-    const quantity=token.replace(/\\s+/g,'');
+    const quantity=token.replace(/\s+/g,'');
     if(!quantityAssignments.some(item=>item.quantity===quantity&&item.ingredient===ingredient)){
       quantityAssignments.push({quantity,y:Math.round(center),ingredient,source:'left-column word-box alignment',confidence:Math.round(confidence),verticalDistance:Math.round(nearest.distance)});
     }
