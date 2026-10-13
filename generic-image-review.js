@@ -333,6 +333,31 @@ async function recoverIngredientRegion(worker,blob,referenceVariant,status,trace
     line=line.replace(/^(\d+)\s*(?=(?:cloves?|cups?|tablespoons?|teaspoons?|g|kg|ml|l|oz|lb)\b)/i,'$1 ');
     return line;
   };
+  // Recover quantities printed in a separate left column by aligning OCR word boxes
+  // with ingredient-row y positions. Rows outside the ingredient section are excluded.
+  const quantityTokenPattern=/^(?:\\d+(?:[.,]\\d+)?(?:\\s*[-/]\\s*\\d+(?:[.,]\\d+)?)?|[½¼¾⅓⅔⅛⅜⅝⅞]|[uUlI|!])$/;
+  const ingredientRowBounds=ingredientRows.map(row=>({
+    row,
+    center:(Number(row.y0)+Number(row.y1))/2,
+    height:Math.max(1,Number(row.y1)-Number(row.y0))
+  })).filter(item=>Number.isFinite(item.center));
+  for(const word of leftWords){
+    const token=String(word.text||'').trim();
+    if(!quantityTokenPattern.test(token))continue;
+    const confidence=Number(word.confidence)||0;
+    if(confidence<55)continue;
+    const box=word.bbox||{};
+    const center=(Number(box.y0)+Number(box.y1))/2;
+    if(!Number.isFinite(center))continue;
+    const nearest=ingredientRowBounds.map(item=>({...item,distance:Math.abs(item.center-center)})).sort((a,b)=>a.distance-b.distance)[0];
+    if(!nearest||nearest.distance>Math.max(14,nearest.height*.8))continue;
+    const ingredient=cleanIngredientRow(nearest.row.text);
+    if(!ingredient||headingKind(ingredient)||garbage(ingredient))continue;
+    const quantity=token.replace(/\\s+/g,'');
+    if(!quantityAssignments.some(item=>item.quantity===quantity&&item.ingredient===ingredient)){
+      quantityAssignments.push({quantity,y:Math.round(center),ingredient,source:'left-column word-box alignment',confidence:Math.round(confidence),verticalDistance:Math.round(nearest.distance)});
+    }
+  }
   for(const row of ingredientRows){
     let line=cleanIngredientRow(row.text);
     if(!line||headingKind(line)||garbage(line))continue;
