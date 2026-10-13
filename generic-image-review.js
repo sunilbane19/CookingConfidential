@@ -366,6 +366,40 @@ async function recoverIngredientRegion(worker,blob,referenceVariant,status,trace
     psm11:{wordCount:leftPsm11Diagnostics.length,words:leftPsm11Diagnostics}
   });
   left.width=1;left.height=1;
+  // Diagnostic-only: test thresholding on the FULL ingredient-region crop.
+  // The narrow strip failed, so preserve horizontal context and avoid changing extraction.
+  const fullThreshold=document.createElement('canvas');
+  fullThreshold.width=crop.width;fullThreshold.height=crop.height;
+  const ftctx=fullThreshold.getContext('2d',{willReadFrequently:true});
+  ftctx.drawImage(crop,0,0);
+  const ftimage=ftctx.getImageData(0,0,fullThreshold.width,fullThreshold.height);
+  const ftd=ftimage.data;
+  for(let fi=0;fi<ftd.length;fi+=4){
+    const gray=.299*ftd[fi]+.587*ftd[fi+1]+.114*ftd[fi+2];
+    const value=gray>175?255:0;
+    ftd[fi]=ftd[fi+1]=ftd[fi+2]=value;
+  }
+  ftctx.putImageData(ftimage,0,0);
+  const fullThresholdResults=[];
+  for(const mode of ['psm6','psm11']){
+    await worker.setParameters({tessedit_pageseg_mode:mode==='psm6'?'6':'11',preserve_interword_spaces:'1'});
+    const result=await worker.recognize(fullThreshold);
+    fullThresholdResults.push({
+      mode,
+      confidence:Math.round(Number(result.data?.confidence)||0),
+      text:String(result.data?.text||''),
+      words:(result.data?.words||[]).filter(w=>w&&w.bbox).map(w=>({
+        text:String(w.text||''),confidence:Math.round(Number(w.confidence)||0),
+        bbox:{x0:Math.round(Number(w.bbox.x0)||0),x1:Math.round(Number(w.bbox.x1)||0),y0:Math.round(Number(w.bbox.y0)||0),y1:Math.round(Number(w.bbox.y1)||0)}
+      }))
+    });
+  }
+  console.info('[CC image trace]',traceId,'recognition:ingredient-full-crop-threshold-diagnostics',{
+    strategy:'full-width-fixed-threshold-175-v1',
+    crop:{width:fullThreshold.width,height:fullThreshold.height},
+    variants:fullThresholdResults
+  });
+  fullThreshold.width=1;fullThreshold.height=1;
   const ranked=results.map(item=>{
     const rows=ocrLineData(item.result.data?.words||[]);
     const ingredientHeading=rows.some(row=>headingKind(row.text)==='ingredients');
