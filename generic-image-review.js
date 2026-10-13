@@ -351,7 +351,7 @@ async function recoverIngredientRegion(worker,blob,referenceVariant,status,trace
   console.info('[CC image trace]',traceId,'recognition:ingredient-region-recovery',{
     strategy:'ingredient-crop-plus-left-quantity-column-v2',cropY:{top,bottom},leftColumnWidth:leftResult.data?.imageWidth||Math.floor(crop.width*.42),referenceMode:referenceVariant?.mode||null,
     variants:ranked.map(item=>({mode:item.mode,score:Math.round(item.score*100)/100,confidence:item.result.data?.confidence,ingredientHeading:item.ingredientHeading,quantityRows:item.quantityRows,foodRows:item.foodRows,rawText:item.result.data?.text||'',words:(item.result.data?.words||[]).filter(w=>/^(?:[0-9]+(?:[.,][0-9]+)?|[½¼¾⅓⅔⅛⅜⅝⅞]|[uUlI|!]|C|T|t|g|kg|ml|l|oz|lb|cloves?)$/i.test(String(w.text||'').trim())).map(w=>({text:w.text,confidence:w.confidence,bbox:w.bbox}))})),
-    leftColumn:{rawText:leftResult.data?.text||'',tokens:quantityTokens.map(t=>({text:t.text,confidence:Math.round(t.confidence),y:Math.round(t.cy)}))},
+    leftColumn:{rawText:leftResult.data?.text||'',tokens:leftWords.map(w=>({text:String(w.text||'').trim(),confidence:Math.round(Number(w.confidence)||0),bbox:w.bbox}))},
     quantityAssignments,recoveredLines:deduped
   });
   return deduped.length>=3?{lines:deduped,mode:best.mode,score:best.score,quantityAssignments}:null;
