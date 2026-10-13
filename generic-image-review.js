@@ -317,31 +317,37 @@ async function recoverIngredientRegion(worker,blob,referenceVariant,status,trace
   }).sort((a,b)=>b.score-a.score);
   const best=ranked[0];
   const recovered=recoverIngredientLinesFromCrop(best?.result.data?.text||'');
-  const leftWords=(leftResult.data?.words||[]).filter(w=>w.bbox&&Number(w.confidence)>=45&&/^(?:[0-9]+(?:[.,][0-9]+)?|[½¼¾⅓⅔⅛⅜⅝⅞]|[uUlI|!]|C|T|t|g|kg|ml|l|oz|lb|cloves?|cups?|tablespoons?|teaspoons?)$/i.test(String(w.text||'').trim()));
+  const leftWords=(leftResult.data?.words||[]).filter(w=>w.bbox&&Number(w.confidence)>=35);
   const recoveredRows=ocrLineData(best?.result.data?.words||[]);
-  const quantityTokens=leftWords.map(w=>({text:String(w.text||'').trim(),confidence:Number(w.confidence)||0,y0:w.bbox.y0,y1:w.bbox.y1,cy:(w.bbox.y0+w.bbox.y1)/2}));
   const ingredientStart=recoveredRows.findIndex(row=>headingKind(row.text)==='ingredients');
   const methodStart=recoveredRows.findIndex((row,index)=>index>(ingredientStart>=0?ingredientStart:-1)&&headingKind(row.text)==='method');
   const ingredientRows=recoveredRows.slice(ingredientStart>=0?ingredientStart+1:0,methodStart>=0?methodStart:recoveredRows.length);
   const quantityAssignments=[];
-  for(const token of quantityTokens){
-    if(!/^(?:[0-9]+(?:[.,][0-9]+)?|[½¼¾⅓⅔⅛⅜⅝⅞]|[uUlI|!])$/i.test(token.text))continue;
-    const row=ingredientRows.filter(r=>!/^\s*(?:ingredients?)\b/i.test(r.text))
-      .map(r=>({...r,cy:(r.y0+r.y1)/2,distance:Math.abs((r.y0+r.y1)/2-token.cy)}))
-      .sort((a,b)=>a.distance-b.distance)[0];
-    if(!row)continue;
-    const tolerance=Math.max(18,Math.min(row.height||24,42)*.85);
-    if(row.distance>tolerance)continue;
-    const idx=recoveredRows.indexOf(row);
-    const targetLine=recovered.find(line=>line.toLowerCase().trim()===row.text.toLowerCase().trim());
-    if(targetLine&&/^\s*(?:[0-9]+(?:[.,][0-9]+)?|[½¼¾⅓⅔⅛⅜⅝⅞])\b/.test(targetLine))continue;
-    if(targetLine){
-      const pos=recovered.indexOf(targetLine);
-      recovered[pos]=token.text+' '+targetLine;
-      quantityAssignments.push({quantity:token.text,y:Math.round(token.cy),ingredient:targetLine,distance:Math.round(row.distance),confidence:Math.round(token.confidence)});
+  const normalizedRows=[];
+  const quantityPattern=/^\s*([0-9]+(?:[.,][0-9]+)?\s*(?:[-/]\s*[0-9]+(?:[.,][0-9]+)?)?|[½¼¾⅓⅔⅛⅜⅝⅞])\s*(.*)$/;
+  const cleanIngredientRow=(raw)=>{
+    let line=String(raw||'').replace(/[|~_=]+/g,' ').replace(/\s+/g,' ').trim();
+    line=line.replace(/^[%‰]+\s*/,'').replace(/^[uUlI!|]\s+(?=[A-Z])/,'');
+    line=line.replace(/\s+[LYmY'’s]+$/,'').replace(/\s+(?:Coop|\"|\\\\)+$/i,'').trim();
+    line=line.replace(/^(\d+\s*[-/]\s*\d+)\s*(?=[A-Za-z])/,'$1 ');
+    line=line.replace(/^(\d+)\s*(?=(?:cloves?|cups?|tablespoons?|teaspoons?|g|kg|ml|l|oz|lb)\b)/i,'$1 ');
+    return line;
+  };
+  for(const row of ingredientRows){
+    let line=cleanIngredientRow(row.text);
+    if(!line||headingKind(line)||garbage(line))continue;
+    const quantityMatch=line.match(quantityPattern);
+    if(quantityMatch){
+      const quantity=quantityMatch[1].replace(/\s+/g,' ').trim();
+      const rest=cleanIngredientRow(quantityMatch[2]);
+      if(rest&&/[A-Za-z]{2,}/.test(rest)){
+        line=quantity+' '+rest;
+        quantityAssignments.push({quantity,y:Math.round((row.y0+row.y1)/2),ingredient:rest,source:'same-row OCR',confidence:'row-level'});
+      }
     }
+    normalizedRows.push(line);
   }
-  const deduped=[...new Set(recovered)];
+  const deduped=[...new Set(normalizedRows.length>=3?normalizedRows:recovered)];
   console.info('[CC image trace]',traceId,'recognition:ingredient-region-recovery',{
     strategy:'ingredient-crop-plus-left-quantity-column-v2',cropY:{top,bottom},leftColumnWidth:leftResult.data?.imageWidth||Math.floor(crop.width*.42),referenceMode:referenceVariant?.mode||null,
     variants:ranked.map(item=>({mode:item.mode,score:Math.round(item.score*100)/100,confidence:item.result.data?.confidence,ingredientHeading:item.ingredientHeading,quantityRows:item.quantityRows,foodRows:item.foodRows,rawText:item.result.data?.text||'',words:(item.result.data?.words||[]).filter(w=>/^(?:[0-9]+(?:[.,][0-9]+)?|[½¼¾⅓⅔⅛⅜⅝⅞]|[uUlI|!]|C|T|t|g|kg|ml|l|oz|lb|cloves?)$/i.test(String(w.text||'').trim())).map(w=>({text:w.text,confidence:w.confidence,bbox:w.bbox}))})),
