@@ -415,16 +415,56 @@ async function readImage(item,status,traceId){
     const parsed=parseLines(cleanedText);
     const ingredientRecovery=await recoverIngredientRegion(worker,blob,{...chosen.variant,mode:chosen.mode},status,traceId);
     if(ingredientRecovery){
-      const before=parsed.ingredients||[];
-      const after=ingredientRecovery.lines;
-      const beforeQuantity=before.filter(line=>/^(?:\s*(?:\d+|[½¼¾⅓⅔⅛⅜⅝⅞])\b)/.test(line)).length;
-      const afterQuantity=after.filter(line=>/^(?:\s*(?:\d+|[½¼¾⅓⅔⅛⅜⅝⅞])\b)/.test(line)).length;
-      if(after.length>=before.length-2 && afterQuantity>beforeQuantity){
-        parsed.ingredients=after;
-        console.info('[CC image trace]',traceId,'recognition:ingredient-region-applied',{beforeCount:before.length,afterCount:after.length,beforeQuantityLines:beforeQuantity,afterQuantityLines:afterQuantity,mode:ingredientRecovery.mode});
-      }else{
-        console.info('[CC image trace]',traceId,'recognition:ingredient-region-not-applied',{reason:'crop result did not improve quantity/coverage safely',beforeCount:before.length,afterCount:after.length,beforeQuantityLines:beforeQuantity,afterQuantityLines:afterQuantity});
+      const before=(parsed.ingredients||[]).map(line=>String(line||'').trim()).filter(Boolean);
+      const merged=[...before];
+      const quantityPrefix=/^\s*(?:\d+(?:[.,]\d+)?(?:\s*[-/]\s*\d+(?:[.,]\d+)?)?|[½¼¾⅓⅔⅛⅜⅝⅞])\b/;
+      const normalizeIngredient=(value)=>String(value||'')
+        .toLowerCase()
+        .replace(/^\s*(?:\d+(?:[.,]\d+)?(?:\s*[-/]\s*\d+(?:[.,]\d+)?)?|[½¼¾⅓⅔⅛⅜⅝⅞])\s*/,'')
+        .replace(/\b(?:cups?|tablespoons?|teaspoons?|tbsp|tsp|grams?|g|kg|ml|litres?|liters?|oz|lb|cloves?)\b/g,' ')
+        .replace(/[^a-z]+/g,' ')
+        .replace(/\s+/g,' ').trim();
+      const tokens=(value)=>normalizeIngredient(value).split(' ').filter(word=>word.length>2&&!['and','with','fresh','sliced','chopped'].includes(word));
+      const matchScore=(a,b)=>{
+        const aa=tokens(a),bb=tokens(b);
+        if(!aa.length||!bb.length)return 0;
+        const overlap=aa.filter(word=>bb.includes(word)).length;
+        return overlap/Math.max(aa.length,bb.length);
+      };
+      const applied=[],skipped=[];
+      for(const candidate of ingredientRecovery.quantityAssignments||[]){
+        const quantity=String(candidate.quantity||'').trim();
+        const candidateName=String(candidate.ingredient||'').trim();
+        if(!quantity||!candidateName){skipped.push({candidate,reason:'missing quantity or ingredient'});continue;}
+        const ranked=merged.map((line,index)=>({line,index,score:matchScore(candidateName,line)})).sort((a,b)=>b.score-a.score);
+        const bestMatch=ranked[0];
+        if(!bestMatch||bestMatch.score<0.6){
+          skipped.push({quantity,candidateName,reason:'no sufficiently similar existing ingredient row',bestMatch:bestMatch?{line:bestMatch.line,score:bestMatch.score}:null});
+          continue;
+        }
+        if(quantityPrefix.test(bestMatch.line)){
+          skipped.push({quantity,candidateName,matchedLine:bestMatch.line,reason:'existing row already has a quantity'});
+          continue;
+        }
+        if(bestMatch.score<0.8){
+          skipped.push({quantity,candidateName,matchedLine:bestMatch.line,score:bestMatch.score,reason:'match not strong enough to alter ingredient'});
+          continue;
+        }
+        merged[bestMatch.index]=quantity+' '+bestMatch.line;
+        applied.push({quantity,candidateName,matchedLine:bestMatch.line,score:bestMatch.score});
       }
+      parsed.ingredients=merged;
+      console.info('[CC image trace]',traceId,'recognition:ingredient-quantity-merge',{
+        strategy:'conservative-baseline-row-merge-v1',
+        baselineCount:before.length,
+        baselineQuantityLines:before.filter(line=>quantityPrefix.test(line)).length,
+        cropLineCount:ingredientRecovery.lines.length,
+        cropQuantityAssignments:(ingredientRecovery.quantityAssignments||[]).length,
+        applied,
+        skipped,
+        finalCount:merged.length,
+        finalQuantityLines:merged.filter(line=>quantityPrefix.test(line)).length
+      });
     }
     parsed.ingredients=cleanImageRecipeSection(parsed.ingredients,'ingredients');
     parsed.method=cleanImageRecipeSection(parsed.method,'method');
