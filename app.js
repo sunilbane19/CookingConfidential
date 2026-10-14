@@ -346,7 +346,10 @@ async function boot(sessionOverride=null){
     bootedUserId=null;
     currentMember=null;
     loginPanel.hidden=false;
+    loginPanel.style.display='';
     appPanel.hidden=true;
+    appPanel.style.display='none';
+    ccAuthDiag('panel-switch-login',{reason:'no-session',loginDisplay:getComputedStyle(loginPanel).display,appDisplay:getComputedStyle(appPanel).display});
     const adminLink=document.querySelector('#adminLink');if(adminLink){adminLink.hidden=true;adminLink.style.display='none'}
     return
   }
@@ -368,8 +371,13 @@ async function boot(sessionOverride=null){
   currentMember=member;
   window.ccCurrentMember=member;
   window.ccCurrentUserId=session.user.id;
+  // Explicit display styles protect panel switching if a stylesheet overrides the
+  // browser's default [hidden] rule (also useful when CSS only partly loads).
   loginPanel.hidden=true;
+  loginPanel.style.display='none';
   appPanel.hidden=false;
+  appPanel.style.display='block';
+  ccAuthDiag('panel-switch-authenticated',{loginHidden:loginPanel.hidden,loginDisplay:getComputedStyle(loginPanel).display,appHidden:appPanel.hidden,appDisplay:getComputedStyle(appPanel).display});
   userBadge.textContent=member.display_name||session.user.email||'Signed in';
   userBadge.hidden=false;
   const adminLink=document.querySelector('#adminLink');
@@ -383,7 +391,8 @@ supabase.auth.onAuthStateChange((event,session)=>{
   // Null session events can occur during restoration. Confirm storage before showing login;
   // explicit SIGNED_OUT still returns to login immediately.
   if(event==='SIGNED_OUT'){
-    bootedUserId=null;currentMember=null;loginPanel.hidden=false;appPanel.hidden=true;
+    bootedUserId=null;currentMember=null;loginPanel.hidden=false;loginPanel.style.display='';appPanel.hidden=true;appPanel.style.display='none';
+    ccAuthDiag('panel-switch-login',{reason:'signed-out',loginDisplay:getComputedStyle(loginPanel).display,appDisplay:getComputedStyle(appPanel).display});
     const adminLink=document.querySelector('#adminLink');if(adminLink){adminLink.hidden=true;adminLink.style.display='none'}
     return;
   }
