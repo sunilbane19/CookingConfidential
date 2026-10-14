@@ -39,6 +39,7 @@ function showUiError(message,title='Something went wrong',onClose=null){
  errorDialog.querySelector('.close').onclick=close;
  errorDialog.querySelector('#uiErrorClose').onclick=close;
  if(!errorDialog.open)errorDialog.showModal();
+ return true;
 }
 window.ccShowError=showUiError;
 const cleanSearchTerm=value=>String(value||'').trim().replace(/\s+/g,' ').slice(0,80);
