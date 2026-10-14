@@ -5,7 +5,7 @@ import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
 import { createGenericEditor, editorValue, sanitizeRichHtml } from './generic-editor.js?v=1.3.5';
 import { checkRecipeQuality } from './recipe-quality.js?v=1.0.4';
 import { readSourceTextWithVision } from './vision-text-reader.js?v=1.0.0';
-import { parseDocx } from './docx-parser.js?v=1.0.5';
+import { parseDocx } from './docx-parser.js?v=1.0.6';
 
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
@@ -172,7 +172,7 @@ async function reviewImageImport(id){
     const q=checkRecipeQuality(recipe,{mode:'single'});
     await imageReviewDiag(id,'quality_result',{good:q.good,score:q.score,reasons:q.reasons,metrics:q.metrics});
     if(q.good){
-      const mod=await import('./import-review-fix.js?v=1.4.58');
+      const mod=await import('./import-review-fix.js?v=1.4.59');
       await imageReviewDiag(id,'normal_review');
       return mod.reviewImportFixed(id);
     }
