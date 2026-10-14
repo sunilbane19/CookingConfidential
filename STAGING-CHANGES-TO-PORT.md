@@ -53,3 +53,11 @@ Status: **Core implementation deployed to Staging; compact window sizing confirm
 - [x] **Reduce confirmation dialog width:** compact, centred branded confirmation window with a maximum width of approximately 440 px and responsive sizing on mobile; cache version refreshed for the main app and Admin.
 - [x] User confirmed the compact confirmation window change is done.
 - [ ] Continue broader regression testing of success, error and confirmation messages across Admin, recipe editing/deletion, upload and import flows before considering the full message-window work ready for Live.
+
+
+### Multi-recipe DOCX — inline Note paragraphs (14 October 2026)
+- [x] Added conservative handling for paragraphs beginning `Note:`, `Notes:`, `Tip:`, or `Tips:` inside the Method section: move the text after the label into Notes and stop appending it to Method.
+- [ ] Verify the supplied “Meatballs and 2 more” DOCX on Staging: both Thai-meal notes should appear under Notes / differences, while all three recipe titles, ingredients and method steps remain intact.
+- [ ] Confirm single-recipe DOCX regression is unchanged before considering the fix for Live.
+
+Status: **Implemented on the Staging source branch; deployment #471 is running; browser regression test pending.**
