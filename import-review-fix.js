@@ -4,7 +4,7 @@ import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
 import { checkRecipeQuality } from './recipe-quality.js?v=1.0.8';
 import { readSourceTextWithVision } from './vision-text-reader.js?v=1.0.0';
 import { createGenericEditor, editorValue, sanitizeRichHtml as sanitizeGenericRichHtml } from './generic-editor.js?v=1.3.10';
-import { parseDocx } from './docx-parser.js?v=1.0.4';
+import { parseDocx } from './docx-parser.js?v=1.0.5';
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 async function extractionDiag(itemId,stage,details={}){try{const p=supabase.from('cc_extraction_diagnostics').insert({import_item_id:Number(itemId),stage,details});await Promise.race([p,new Promise((_,reject)=>setTimeout(()=>reject(new Error('diagnostic timeout')),5000))])}catch(e){console.warn('CC extraction diagnostic write failed',e)}}
 
@@ -337,4 +337,4 @@ if(!quality.good){await extractionDiag(id,'quality_gate_failed',{quality});
   try{const rescue=await import('./rescue-ocr.js?v=1.1.1');return rescue.rescueImport(id)}catch(e){console.warn('Cooking Confidential universal rescue:',e)}
 }
 await extractionDiag(id,'before_show_review',{name:parsedForQuality?.name||null,ingredient_count:Array.isArray(parsedForQuality?.ingredients)?parsedForQuality.ingredients.length:0});window.ccImportReviewActive=false;await showReview(x,id);await extractionDiag(id,'show_review_returned',{});}
-document.addEventListener('click',async event=>{const button=event.target.closest('.review-btn');if(!button)return;event.preventDefault();event.stopImmediatePropagation();const id=Number(button.dataset.id);if(button.dataset.multi==='1'){try{const mod=await import('./multi-recipe-import.js?v=1.3.6');if(typeof mod.ccMultiReview==='function')return mod.ccMultiReview(id);if(typeof window.ccMultiReview==='function')return window.ccMultiReview(id);throw Error('Multi-recipe reviewer could not be loaded.')}catch(e){return window.ccShowError(e?.message||'Could not open multi-recipe review.','Multi-recipe review failed')}}reviewImportFixed(id)},true);
+document.addEventListener('click',async event=>{const button=event.target.closest('.review-btn');if(!button)return;event.preventDefault();event.stopImmediatePropagation();const id=Number(button.dataset.id);if(button.dataset.multi==='1'){try{const mod=await import('./multi-recipe-import.js?v=1.3.19');if(typeof mod.ccMultiReview==='function')return mod.ccMultiReview(id);if(typeof window.ccMultiReview==='function')return window.ccMultiReview(id);throw Error('Multi-recipe reviewer could not be loaded.')}catch(e){return window.ccShowError(e?.message||'Could not open multi-recipe review.','Multi-recipe review failed')}}reviewImportFixed(id)},true);
