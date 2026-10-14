@@ -150,6 +150,19 @@ export function parseDocx(html,fileName='Imported document'){
       if(SECTION.notes.test(t)){current='notes';continue;}
       if(isGarbage(t))continue;
 
+      // Inline Note:/Notes:/Tip: paragraphs commonly occur at the end of a
+      // recipe without a separate Notes heading. Move them out of Method.
+      const inlineNote=t.match(/^(?:note|notes|tip|tips)\\s*:\\s*(.+)$/i);
+      if(inlineNote&&(current==='method'||current==='notes')){
+        const noteText=cleanRecipeText(inlineNote[1]);
+        current='notes';
+        if(noteText){
+          r.notes.push(noteText);
+          rich.notes.push({...n,text:noteText,html:escHtml(noteText),tag:'p'});
+        }
+        continue;
+      }
+
       if(current==='ingredients'){
         if(COMPONENT.test(t)){r.ingredients.push(t);rich.ingredients.push(n);continue;}
         if(!STEP.test(t)){r.ingredients.push(t);rich.ingredients.push(n);}
