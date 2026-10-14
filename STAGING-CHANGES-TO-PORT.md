@@ -61,3 +61,10 @@ Status: **Core implementation deployed to Staging; compact window sizing confirm
 - [ ] Confirm single-recipe DOCX regression is unchanged before considering the fix for Live.
 
 Status: **Implemented on the Staging source branch; deployment #471 is running; browser regression test pending.**
+
+
+#### Follow-up: DOCX merged-paragraph Note boundary (14 October 2026)
+- [x] Root cause from user retest: the DOCX conversion can merge a serving line and trailing note into one paragraph, e.g. `Serves: 1–2 Note: With all Thai meals...`; matching only paragraphs that begin with `Note:` misses this case.
+- [x] Parser updated to preserve the prefix (such as `Serves: 1–2`) in Method and move only the text after `Note:` into Notes / differences.
+- [ ] Staging deployment #473 and browser regression test pending. Re-import the multi-recipe DOCX and verify Pineapple Fried Rice and Stir-Fried Chicken with Cashews; also regression-test a single-recipe DOCX.
+- PDF parser remains explicitly out of scope for this change. Live remains untouched.
