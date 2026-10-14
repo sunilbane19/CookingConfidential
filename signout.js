@@ -64,6 +64,8 @@ if (loginForm) {
       }
       console.info('[Cooking Confidential auth diagnostic] signInWithOtp succeeded');
       loginMessage.textContent = 'Check your email for the sign-in link.';
+      button.disabled = false;
+      button.textContent = 'Send me a sign-in link';
     } catch (e) {
       console.error('[Cooking Confidential auth diagnostic] unexpected error', e);
       loginMessage.textContent = `unexpected=${e?.name || 'Error'} · ${e?.message || String(e)}`;
