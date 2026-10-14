@@ -35,13 +35,15 @@ async function loadMembers(){
   }).join('')}</tbody></table></div>`;
   list.querySelectorAll('[data-toggle]').forEach(btn=>btn.onclick=async()=>{
     const id=Number(btn.dataset.toggle),active=btn.dataset.active!=='1';
+    const memberName=btn.closest('tr')?.querySelector('td strong')?.textContent||'this member';
+    if(!await window.ccConfirm((active?'Activate ':'Deactivate ')+memberName+'?',active?'Activate member':'Deactivate member',{confirmLabel:active?'Activate':'Deactivate',danger:!active}))return;
     const{error}=await supabase.from('cc_members').update({active}).eq('id',id);
-    if(error)alert(error.message);else loadMembers();
+    if(error)window.ccShowError(error.message,'Could not update member');else{await loadMembers();window.ccShowMessage(active?'Member activated.':'Member deactivated.','Member updated','success')}
   });
   list.querySelectorAll('[data-invite]').forEach(btn=>btn.onclick=async()=>{
     btn.disabled=true;btn.textContent='Sending…';
     const{error}=await supabase.auth.signInWithOtp({email:btn.dataset.email,options:{emailRedirectTo:baseUrl,shouldCreateUser:true}});
-    if(error)alert(error.message);else alert('Sign-in link sent to '+btn.dataset.email);
+    if(error)window.ccShowError(error.message,'Could not send sign-in link');else window.ccShowMessage('Sign-in link sent to '+btn.dataset.email,'Sign-in link sent','success');
     btn.disabled=false;btn.textContent='Send sign-in link';
     loadMembers();
   });
@@ -52,8 +54,8 @@ form.onsubmit=async e=>{
   const name=document.querySelector('#newName').value.trim();
   const email=document.querySelector('#newEmail').value.trim().toLowerCase();
   const{error}=await supabase.from('cc_members').insert({email,display_name:name,role:'member',active:true,auth_user_id:null});
-  if(error){alert(error.message);return}
-  form.reset();await loadMembers();
+  if(error){window.ccShowError(error.message,'Could not add user');return}
+  form.reset();await loadMembers();window.ccShowMessage('The member has been added and can sign in using their email address.','User added','success');
 };
 
 document.querySelector('#adminSignOut').onclick=async()=>{await supabase.auth.signOut();location.href=baseUrl};
