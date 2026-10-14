@@ -106,22 +106,36 @@ async function parseDocxRawMulti(arrayBuffer,file){
     return {text,bold,style};
   }).filter(p=>p.text);
   if(!paras.length)return[];
-  const isList=p=>/listparagraph/i.test(p.style);
+  // Prefer explicit recipe-title structure in DOCX collections. Cover titles and
+  // bold/heading section labels must not become recipes merely because they are styled.
+  const isList=p=>/(?:listparagraph|listbullet|listnumber|listcontinue)/i.test(p.style);
+  const isStrongRecipeTitle=p=>{
+    if(!p.text||GENERIC.test(p.text)||looksLikeIngredientTitle(p.text))return false;
+    const style=String(p.style||'').toLowerCase();
+    return /^(?:heading1|title|subtitle1)$/.test(style)
+      || /^\d+[.)]\s+/.test(p.text);
+  };
+  const strongTi=paras.map((p,i)=>isStrongRecipeTitle(p)?i:-1).filter(i=>i>=0);
   const isTitle=(p,i)=>{
     if(!p.text||GENERIC.test(p.text)||looksLikeIngredientTitle(p.text))return false;
     if(p.bold)return true;
     return !isList(p)&&!!paras[i+1]&&isList(paras[i+1])&&titleCaseScore(p.text);
   };
-  const ti=paras.map((p,i)=>isTitle(p,i)?i:-1).filter(i=>i>=0);
+  // If the document has two or more explicit recipe-title candidates, ignore
+  // heuristic bold/title-case candidates such as the document cover heading.
+  const ti=strongTi.length>=2?strongTi:paras.map((p,i)=>isTitle(p,i)?i:-1).filter(i=>i>=0);
   if(ti.length<2)return[];
   const recipes=[];
   for(let k=0;k<ti.length;k++){
     const si=ti[k],ei=k+1<ti.length?ti[k+1]:paras.length,body=paras.slice(si+1,ei).map(p=>p.text),r=makeRecipe(paras[si].text);
-    const ih=body.findIndex(x=>/^ingredients?(?:\s+list)?$/i.test(x)),mh=body.findIndex(x=>/^(method|directions?|instructions?|preparation|preparations|steps?|cooking steps|recipe steps|cooking instructions|preparation steps|recipe method|cooking method|procedure)$/i.test(x)),nh=body.findIndex(x=>/^notes?$/i.test(x));
-    if(ih>=0){const e=[mh,nh].filter(n=>n>ih).sort((a,b)=>a-b)[0]??body.length;r.ingredients=cleanIngredientLines(body.slice(ih+1,e));}
-    else{const e=mh>=0?mh:(nh>=0?nh:body.length);r.ingredients=cleanIngredientLines(body.slice(0,e));}
-    if(mh>=0){const e=nh>mh?nh:body.length;r.method=body.slice(mh+1,e).filter(x=>!isOcrGarbage(x));}
-    if(nh>=0)r.notes=body.slice(nh+1).filter(x=>!isOcrGarbage(x));
+    const ih=body.findIndex(x=>/^ingredients?(?:\s+list)?$/i.test(x)),mh=body.findIndex(x=>/^(method|directions?|instructions?|preparation|preparations|steps?|cooking steps|recipe steps|cooking instructions|preparation steps|recipe method|cooking method|procedure)$/i.test(x)),nh=body.findIndex(x=>/^notes?(?:\s*:|$)/i.test(x)||/^note\s*:/i.test(x));
+    const servingIndex=body.findIndex(x=>/^(?:serves?|servings?)\s*:/i.test(x));
+    const noteBoundary=[nh,servingIndex].filter(n=>n>=0).sort((a,b)=>a-b)[0]??body.length;
+    if(ih>=0){const e=[mh,nh,servingIndex].filter(n=>n>ih).sort((a,b)=>a-b)[0]??body.length;r.ingredients=cleanIngredientLines(body.slice(ih+1,e));}
+    else{const e=mh>=0?mh:noteBoundary;r.ingredients=cleanIngredientLines(body.slice(0,e));}
+    if(mh>=0){const e=[nh,servingIndex].filter(n=>n>mh).sort((a,b)=>a-b)[0]??body.length;r.method=body.slice(mh+1,e).filter(x=>!isOcrGarbage(x));}
+    if(nh>=0)r.notes=body.slice(nh+1,servingIndex>nh?servingIndex:body.length).map(x=>clean(x.replace(/^note\s*:\s*/i,''))).filter(x=>!isOcrGarbage(x));
+    if(servingIndex>=0)r.servings=clean(body[servingIndex].replace(/^(?:serves?|servings?)\s*:\s*/i,''));
     if(r.name&&r.ingredients.length)recipes.push(r);
   }
   return recipes.length>=2?recipes:[];
