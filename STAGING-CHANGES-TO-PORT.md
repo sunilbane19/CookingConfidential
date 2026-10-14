@@ -8,6 +8,15 @@ Purpose: running checklist of changes made and tested on Staging that should be 
 - [x] **Unsupported image file message:** when an image file is selected, Staging displays a clear message that image files are not catered for in this upload workflow and advises using PDF, DOCX or TXT. Image files are not added to the upload queue; supported files selected alongside them can still be queued.
 - [x] **Remove Recipe URL field:** removed the Recipe URL field and Add URL control from the upload screen, and removed the corresponding Add URL event handler.
 
+## Confirmed and tested — additional Staging changes (14 October 2026)
+
+### Multi-recipe import
+- [x] **Multi-recipe DOCX separation:** split document content into recipe blocks and pass each block through the existing single-recipe `parseDocx` parser; if splitting is unreliable, fall back to parsing the full document.
+- [x] **Regression test:** user confirmed the Chutney (5 recipes), Khichdi (6 recipes), and Fish curries (4 recipes) multi-recipe DOCX documents all worked.
+- [x] **Single-recipe DOCX regression:** user confirmed an ordinary single-recipe DOCX still worked.
+- [x] **Multi-recipe image path:** use local Tesseract OCR rather than calling the chargeable Vision model first.
+- [x] **Dietary / suitability multi-select:** corrected nested label markup and then gave each checkbox an explicit unique ID and associated label; user confirmed the selector now behaves correctly when toggling an item off.
+
 ## Before carrying these changes to Live
 - [ ] Review the relevant code diff against the Live version before porting.
 - [ ] Confirm the intended Live upload workflow should not accept image files or recipe URLs.
