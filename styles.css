@@ -224,3 +224,12 @@ dialog .dialog-card{box-sizing:border-box;max-width:100%;min-width:0;overflow-x:
 #detailContent .cc-created-by label{display:grid;gap:6px;font-size:13px;font-weight:600;}
 #detailContent .cc-created-by select{width:100%;box-sizing:border-box;min-height:49px;padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;font:15px Arial;color:var(--ink);}
 #detailContent .cc-created-by .cc-created-label{display:block;font-size:13px;font-weight:600;margin-bottom:6px;}
+
+/* Compact creator selector beside recipe name in Add; keep Edit selector narrow. */
+#detailContent .cc-created-by{flex:0 1 220px;min-width:0;max-width:240px;margin:0;}
+#detailContent .cc-created-by label{margin:0;display:block;}
+#detailContent .cc-created-by select{min-height:42px;padding:9px 10px;}
+#detailContent .cc-generic-editor-form .two-col:has(.cc-created-by){grid-template-columns:minmax(0,2fr) minmax(180px,1fr);align-items:end;gap:14px;}
+#detailContent .cc-generic-editor-form .two-col:has(.cc-created-by) label{margin-bottom:0;}
+#detailContent .cc-source-creator-row .cc-created-by{flex:0 1 220px;}
+@media(max-width:600px){#detailContent .cc-generic-editor-form .two-col:has(.cc-created-by){grid-template-columns:minmax(0,1fr) minmax(140px,.8fr);gap:10px;}#detailContent .cc-created-by select{font-size:14px;}}
