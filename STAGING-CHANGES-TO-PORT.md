@@ -46,4 +46,10 @@ Purpose: running checklist of changes made and tested on Staging that should be 
 - [ ] Regression-test admin user management (send sign-in link, activate/deactivate), recipe add/edit/save, upload/import, and other flows that currently show confirmation or error messages. Confirm there are no unexpected native browser dialogs.
 - [ ] Deploy to Staging and obtain user confirmation before marking this item tested or considering it for Live.
 
-Status: **Implemented on the Staging source branch; awaiting deployed browser test.** Added a shared branded message/confirmation component, wired it into the main app and Admin, routed browser alert calls through the styled message window, replaced recipe-delete native confirmation, and added styled confirmations for member activation/deactivation. Browser regression testing is still required.
+Status: **Core implementation deployed to Staging; compact window sizing confirmed by user.** Added a shared branded message/confirmation component, wired it into the main app and Admin, routed browser alert calls through the styled message window, replaced recipe-delete native confirmation, and added styled confirmations for member activation/deactivation. Broader browser regression testing is still required before this entire item is considered ready for Live.
+
+
+### Compact confirmation window sizing — confirmed by user (14 October 2026)
+- [x] **Reduce confirmation dialog width:** compact, centred branded confirmation window with a maximum width of approximately 440 px and responsive sizing on mobile; cache version refreshed for the main app and Admin.
+- [x] User confirmed the compact confirmation window change is done.
+- [ ] Continue broader regression testing of success, error and confirmation messages across Admin, recipe editing/deletion, upload and import flows before considering the full message-window work ready for Live.
