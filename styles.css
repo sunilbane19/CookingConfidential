@@ -216,3 +216,11 @@ dialog .dialog-card{box-sizing:border-box;max-width:100%;min-width:0;overflow-x:
 
 /* Keep the multiselect field label styled like other editor fields without nesting labels. */
 #detailContent .cc-multi-field-label{display:block;font-size:13px;font-weight:600;line-height:1.3;}
+
+/* Creator selector beside the original-file picker in the recipe editor. */
+#detailContent .cc-source-creator-row{display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap;margin:12px 0 18px;}
+#detailContent .cc-source-creator-row>p{flex:1 1 320px;margin:0;}
+#detailContent .cc-created-by{flex:0 1 280px;min-width:220px;}
+#detailContent .cc-created-by label{display:grid;gap:6px;font-size:13px;font-weight:600;}
+#detailContent .cc-created-by select{width:100%;box-sizing:border-box;min-height:49px;padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;font:15px Arial;color:var(--ink);}
+#detailContent .cc-created-by .cc-created-label{display:block;font-size:13px;font-weight:600;margin-bottom:6px;}
