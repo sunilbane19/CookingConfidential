@@ -3,7 +3,7 @@ const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlpd210ZmJxYnluaW1xdnd4b3N1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc1ODI3MDYsImV4cCI6MjEwMzE1ODcwNn0.pwfoCI_ajYfrON8kxIV9XWMo9k2GvzCWqwcpsMxI1As';
 const CC_SITE_BASE=(window.location.hostname.endsWith('github.io')?('/'+(window.location.pathname.split('/').filter(Boolean)[0]||'')+'/'):'/');
 const APP_URL=`${window.location.origin}${CC_SITE_BASE}`;
-const supabase=createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+const supabase=createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
 const content=document.querySelector('#content'),search=document.querySelector('#searchInput'),loginPanel=document.querySelector('#loginPanel'),appPanel=document.querySelector('#appPanel'),userBadge=document.querySelector('#userBadge'),loginForm=document.querySelector('#loginForm'),loginMessage=document.querySelector('#loginMessage'),recipeDialog=document.querySelector('#recipeDialog'),menuDialog=document.querySelector('#menuDialog'),detailDialog=document.querySelector('#detailDialog'),importDialog=document.querySelector('#importDialog'),importQueue=document.querySelector('#importQueue');
 let importItems=[],recipes=[],menus=[],view='all';
 const RECIPE_PAGE_SIZE=12;
@@ -288,21 +288,39 @@ document.querySelectorAll('.tab').forEach(t=>t.onclick=async()=>{
   }
   loadRecipePage({offset:0,refreshCount:true}).catch(e=>showUiError(e.message,'Could not load recipes'));
 });
-// Temporary Staging-only login persistence diagnostics. Logs metadata only: never tokens, email, or user IDs.
+// Temporary Staging-only login persistence diagnostics. Metadata only; never log tokens, email, or user IDs.
 const ccAuthDiagnostics=[];
+let ccDiagPanel=null;
 function ccAuthDiag(event,details={}){
   const entry={at:new Date().toISOString(),event,...details};
   ccAuthDiagnostics.push(entry);
-  if(ccAuthDiagnostics.length>100)ccAuthDiagnostics.shift();
+  if(ccAuthDiagnostics.length>60)ccAuthDiagnostics.shift();
   window.ccAuthDiagnostics=ccAuthDiagnostics;
   console.info('[CC auth diagnostic]',entry);
+  if(window.location.hostname.endsWith('github.io')){
+    if(!ccDiagPanel){
+      ccDiagPanel=document.createElement('details');
+      ccDiagPanel.id='ccAuthDiagnosticPanel';
+      ccDiagPanel.open=false;
+      ccDiagPanel.style.cssText='position:fixed;z-index:99999;bottom:8px;left:8px;right:8px;max-height:38vh;overflow:auto;background:#fff8d8;color:#222;border:2px solid #765;padding:8px;font:12px/1.35 monospace;box-shadow:0 2px 12px #0003';
+      const summary=document.createElement('summary');summary.textContent='Staging login diagnostics (tap to expand)';
+      const copy=document.createElement('button');copy.type='button';copy.textContent='Copy diagnostic log';copy.style.cssText='margin:6px;padding:5px';
+      copy.onclick=async()=>{const out=ccAuthDiagnostics.map(x=>JSON.stringify(x)).join('\n');try{await navigator.clipboard.writeText(out);copy.textContent='Copied'}catch{const ta=document.createElement('textarea');ta.value=out;ccDiagPanel.appendChild(ta);ta.select();copy.textContent='Select and copy text below'}};
+      const body=document.createElement('pre');body.id='ccAuthDiagnosticText';body.style.cssText='white-space:pre-wrap;overflow-wrap:anywhere;margin:6px 0';
+      ccDiagPanel.append(summary,copy,body);document.body.appendChild(ccDiagPanel);
+    }
+    const body=ccDiagPanel.querySelector('#ccAuthDiagnosticText');
+    if(body)body.textContent=ccAuthDiagnostics.slice(-12).map(x=>{const{at,event,...d}=x;return at.slice(11,19)+' '+event+' '+JSON.stringify(d)}).join('\n');
+  }
 }
 async function ccCheckSession(reason){
   try{
     const{data,error}=await supabase.auth.getSession();
     ccAuthDiag('session-check',{reason,sessionPresent:!!data?.session,error:!!error,errorName:error?.name||null});
+    return data?.session||null;
   }catch(error){
     ccAuthDiag('session-check-failed',{reason,errorName:error?.name||'Error'});
+    return null;
   }
 }
 window.addEventListener('pageshow',event=>{ccAuthDiag('pageshow',{persisted:!!event.persisted,visibility:document.visibilityState});ccCheckSession('pageshow')});
@@ -360,7 +378,14 @@ async function boot(sessionOverride=null){
 }
 supabase.auth.onAuthStateChange((event,session)=>{
   ccAuthDiag('auth-state-change',{event,sessionPresent:!!session});
-  if(session)setTimeout(()=>boot(session),0);
-  else{bootedUserId=null;currentMember=null;loginPanel.hidden=false;appPanel.hidden=true;const adminLink=document.querySelector('#adminLink');if(adminLink){adminLink.hidden=true;adminLink.style.display='none'}}
+  if(session){setTimeout(()=>boot(session),0);return}
+  // Null session events can occur during restoration. Confirm storage before showing login;
+  // explicit SIGNED_OUT still returns to login immediately.
+  if(event==='SIGNED_OUT'){
+    bootedUserId=null;currentMember=null;loginPanel.hidden=false;appPanel.hidden=true;
+    const adminLink=document.querySelector('#adminLink');if(adminLink){adminLink.hidden=true;adminLink.style.display='none'}
+    return;
+  }
+  setTimeout(()=>boot(),250);
 });
 boot();
