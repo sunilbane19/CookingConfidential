@@ -211,7 +211,7 @@ async function extract(id,show=true){if(show){dialog.querySelector('#detailConte
   const notes=(Array.isArray(r.notes)?r.notes:lines(r.notes)).map(clean).filter(x=>!isOcrGarbage(x));
   const kept=[];
   for(const line of method){
-    const match=line.match(/(?:^|\\s)(?:note|notes|tip|tips)\\s*:\\s*(.+)$/i);
+    const match=line.match(/(?:^|\s)(?:note|notes|tip|tips)\s*:\s*(.+)$/i);
     if(!match){kept.push(line);continue;}
     const at=match.index??0,prefix=clean(line.slice(0,at)),note=clean(match[1]);
     if(prefix)kept.push(prefix);
