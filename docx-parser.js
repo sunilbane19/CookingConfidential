@@ -152,7 +152,7 @@ export function parseDocx(html,fileName='Imported document'){
 
       // Inline Note:/Notes:/Tip: paragraphs commonly occur at the end of a
       // recipe without a separate Notes heading. Move them out of Method.
-      const inlineNote=t.match(/^(?:note|notes|tip|tips)\\s*:\\s*(.+)$/i);
+      const inlineNote=t.match(/^(?:note|notes|tip|tips)\s*:\s*(.+)$/i);
       if(inlineNote&&(current==='method'||current==='notes')){
         const noteText=cleanRecipeText(inlineNote[1]);
         current='notes';
