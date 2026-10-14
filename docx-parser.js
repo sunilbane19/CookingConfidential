@@ -152,9 +152,22 @@ export function parseDocx(html,fileName='Imported document'){
 
       // Inline Note:/Notes:/Tip: paragraphs commonly occur at the end of a
       // recipe without a separate Notes heading. Move them out of Method.
-      const inlineNote=t.match(/^(?:note|notes|tip|tips)\s*:\s*(.+)$/i);
+      // Mammoth can collapse a serving line and its trailing Note into one
+      // paragraph (e.g. "Serves: 1–2 Note: ..."). Split at the inline label,
+      // preserve any text before it in the current section, and route the note
+      // text to Notes. Do not require Note: to be the first text in the node.
+      const inlineNote=t.match(/(?:^|\s)(?:note|notes|tip|tips)\s*:\s*(.+)$/i);
       if(inlineNote&&(current==='method'||current==='notes')){
+        const markerIndex=inlineNote.index??0;
+        const prefix=cleanRecipeText(t.slice(0,markerIndex));
         const noteText=cleanRecipeText(inlineNote[1]);
+        if(prefix&&current==='method'){
+          r.method.push(prefix);
+          rich.method.push({...n,text:prefix,html:escHtml(prefix),tag:'p'});
+        }else if(prefix&&current==='notes'){
+          r.notes.push(prefix);
+          rich.notes.push({...n,text:prefix,html:escHtml(prefix),tag:'p'});
+        }
         current='notes';
         if(noteText){
           r.notes.push(noteText);
