@@ -229,7 +229,47 @@ async function showRecipe(id){
   };
 }
 async function copyMenu(id){const m=menus.find(x=>x.id===id);if(!m)return;const{data:{user}}=await supabase.auth.getUser();if(!user)return showUiError('Please sign in again.','Sign-in required');const{data,error}=await supabase.from('cc_menus').insert({name:m.name+' — Copy',menu_date:null,occasion:m.occasion,guest_count:m.guest_count,notes:m.notes,visibility:'private',created_by:user.id}).select().single();if(error)return showUiError(error.message,'Could not copy menu');const items=await supabase.from('cc_menu_items').select('*').eq('menu_id',m.id).order('sort_order');if(items.error)return showUiError(items.error.message,'Could not copy menu items');if(items.data?.length){const rows=items.data.map(x=>({menu_id:data.id,recipe_id:x.recipe_id,section:x.section,sort_order:x.sort_order,custom_label:x.custom_label}));const ins=await supabase.from('cc_menu_items').insert(rows);if(ins.error)return showUiError(ins.error.message,'Could not copy menu items')}await loadData()}
-loginForm.onsubmit=async e=>{e.preventDefault();const button=loginForm.querySelector('button');if(!button||button.disabled)return;const email=document.querySelector('#emailInput').value.trim();button.disabled=true;button.textContent='Sending…';loginMessage.textContent='Sending sign-in link…';const{error}=await supabase.auth.signInWithOtp({email,options:{emailRedirectTo:APP_URL}});if(error){const message=String(error.message||'').toLowerCase();loginMessage.textContent=message.includes('rate limit')?'Please wait about 60 seconds before requesting another sign-in link.':'We could not send the sign-in link right now. Please try again in a moment.';button.disabled=false;button.textContent='Send me a sign-in link'}else loginMessage.textContent='Check your email for the sign-in link.'};
+let ccOtpStep='email';
+loginForm.onsubmit=async e=>{
+ e.preventDefault();
+ const button=loginForm.querySelector('button');
+ const emailInput=document.querySelector('#emailInput');
+ let otpInput=document.querySelector('#ccOtpInput');
+ if(!button||button.disabled)return;
+ const email=emailInput.value.trim();
+ if(!email){loginMessage.textContent='Please enter your email address.';return}
+ button.disabled=true;
+ try{
+  if(ccOtpStep==='email'){
+   button.textContent='Sending code…';
+   loginMessage.textContent='Sending a one-time code to your email…';
+   const {error}=await supabase.auth.signInWithOtp({email,options:{shouldCreateUser:false}});
+   if(error)throw error;
+   ccOtpStep='code';
+   otpInput=document.createElement('input');
+   otpInput.id='ccOtpInput';otpInput.type='text';otpInput.inputMode='numeric';otpInput.autocomplete='one-time-code';otpInput.maxLength=8;otpInput.pattern='[0-9]*';otpInput.required=true;otpInput.placeholder='Enter the email code';otpInput.setAttribute('aria-label','Email verification code');
+   otpInput.style.marginTop='12px';
+   emailInput.insertAdjacentElement('afterend',otpInput);
+   emailInput.readOnly=true;
+   button.textContent='Verify code';
+   loginMessage.textContent='Check your email for the one-time code, then enter it above.';
+   otpInput.focus();
+  }else{
+   const token=otpInput?.value.trim()||'';
+   if(!token){loginMessage.textContent='Please enter the code from your email.';button.disabled=false;button.textContent='Verify code';return}
+   button.textContent='Verifying…';
+   loginMessage.textContent='Verifying your code…';
+   const {error}=await supabase.auth.verifyOtp({email,token,type:'email'});
+   if(error)throw error;
+   loginMessage.textContent='Verified. Opening your recipe library…';
+  }
+ }catch(error){
+  console.error('[Cooking Confidential OTP diagnostic]',error);
+  const message=String(error?.message||'').toLowerCase();
+  loginMessage.textContent=message.includes('rate limit')?'Please wait before requesting another code.':ccOtpStep==='code'?'That code could not be verified. Check it and try again.':'We could not send the code. Please try again in a moment.';
+  button.textContent=ccOtpStep==='code'?'Verify code':'Send me a code';
+ }finally{button.disabled=false}
+};
 document.querySelector('#recipeForm').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target),{data:{user}}=await supabase.auth.getUser();if(!user)return showUiError('Please sign in again.','Sign-in required');const ingredients=String(f.get('ingredients')).split('\n').map(x=>x.trim()).filter(Boolean);const{error}=await supabase.from('cc_recipes').insert({name:f.get('name'),cuisine:f.get('cuisine')||null,course:f.get('course')||null,ingredients,method:f.get('method')||null,personal_notes:f.get('notes')||null,created_by:user.id,visibility:'private'});if(error)return showUiError(error.message,'Could not save recipe');recipeDialog.close();e.target.reset();await loadData()};
 document.querySelector('#menuForm').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target),{data:{user}}=await supabase.auth.getUser();if(!user)return showUiError('Please sign in again.','Sign-in required');const{error}=await supabase.from('cc_menus').insert({name:f.get('name'),menu_date:f.get('date')||null,guest_count:f.get('guests')?Number(f.get('guests')):null,occasion:f.get('occasion')||null,notes:f.get('notes')||null,visibility:'private',created_by:user.id});if(error)return showUiError(error.message,'Could not create menu');menuDialog.close();e.target.reset();await loadData();view='menus'};
 document.querySelector('#addRecipeBtn').onclick=()=>recipeDialog.showModal();const closeRecipeDialog=()=>{recipeDialog.close();document.querySelector('#recipeForm').reset()};document.querySelector('#recipeForm .close').onclick=e=>{e.preventDefault();closeRecipeDialog()};document.querySelector('#recipeForm .dialog-actions button[value="cancel"]').onclick=e=>{e.preventDefault();closeRecipeDialog()};document.querySelector('#importBtn').onclick=()=>{importDialog.showModal();if(typeof window.ccOpenImportInbox==='function')window.ccOpenImportInbox();};document.querySelector('#closeImport').onclick=()=>importDialog.close();document.querySelector('#fileInput').onchange=e=>queueFiles([...e.target.files]);function importAlreadyQueued(item){
