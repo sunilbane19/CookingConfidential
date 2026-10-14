@@ -46,4 +46,4 @@ Purpose: running checklist of changes made and tested on Staging that should be 
 - [ ] Regression-test admin user management (send sign-in link, activate/deactivate), recipe add/edit/save, upload/import, and other flows that currently show confirmation or error messages. Confirm there are no unexpected native browser dialogs.
 - [ ] Deploy to Staging and obtain user confirmation before marking this item tested or considering it for Live.
 
-Status: **Requested; not implemented or tested yet.** The screenshot from 14 October 2026 shows the browser-native “Sign-in link sent to sunetrabane@gmail.com” alert, which should be replaced by the app's established styled message window.
+Status: **Implemented on the Staging source branch; awaiting deployed browser test.** Added a shared branded message/confirmation component, wired it into the main app and Admin, routed browser alert calls through the styled message window, replaced recipe-delete native confirmation, and added styled confirmations for member activation/deactivation. Browser regression testing is still required.
