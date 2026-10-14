@@ -20,3 +20,9 @@ Purpose: running checklist of changes made and tested on Staging that should be 
 - Staging site: https://sunilbane19.github.io/CookingConfidential-staging/
 - These changes were confirmed tested by the user on 14 October 2026.
 - This checklist does not certify that other Staging-only changes have been reviewed or are ready for Live.
+
+### Multi-recipe DOCX parser reuse — awaiting regression test
+- [ ] Multi-recipe DOCX import now separates document blocks and passes each candidate to the existing single-recipe `parseDocx` routine; if separation is not reliable, it falls back to that same parser on the whole document.
+- [ ] Regression-test the three working multi-recipe documents (chutneys, khichdis and fish curries) and verify recipe counts, titles, ingredients and methods.
+- [ ] Confirm single-recipe DOCX remains unchanged; no single-recipe DOCX parser or PDF parser code was modified.
+- [ ] Confirm multi-image extraction uses the local Tesseract path rather than a paid vision-first call; no OCR/model calls have been run as part of this code change.
