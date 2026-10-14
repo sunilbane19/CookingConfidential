@@ -207,9 +207,9 @@ dialog .dialog-card{box-sizing:border-box;max-width:100%;min-width:0;overflow-x:
 
 /* Compact dietary/suitability options: halve the rendered row height, overriding generic form-label spacing. */
 #detailContent .cc-multi-panel{padding:2px!important;}
-#detailContent .cc-multi-panel label.cc-multi-option{box-sizing:border-box!important;display:flex!important;align-items:center!important;gap:7px!important;padding:0 6px!important;margin:0!important;height:25px!important;min-height:25px!important;line-height:1!important;}
+#detailContent .cc-multi-panel .cc-multi-option{box-sizing:border-box!important;display:flex!important;align-items:center!important;gap:7px!important;padding:0 6px!important;margin:0!important;height:25px!important;min-height:25px!important;line-height:1!important;}
 #detailContent .cc-multi-option input{display:inline-block!important;flex:0 0 13px!important;width:13px!important;height:13px!important;padding:0!important;margin:0!important;accent-color:var(--accent);}
-#detailContent .cc-multi-option span{display:inline-block!important;line-height:1!important;padding:0!important;margin:0!important;}
+#detailContent .cc-multi-option label span{display:inline-block!important;line-height:1!important;padding:0!important;margin:0!important;}
 .cc-all-section{margin-bottom:30px;}
 .cc-all-section .section-head h2{font-size:28px;}
 @media(max-width:760px){.cc-all-section .cc-menu-library-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:10px!important}.cc-all-section .menu-card{padding:12px!important}}
