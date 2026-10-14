@@ -2,7 +2,7 @@
 (function(){
   if(window.ccShowMessage)return;
   const css=`
-  #ccGlobalMessageDialog{border:0;border-radius:18px;padding:0;background:transparent;max-width:min(480px,92vw);width:100%;box-shadow:0 18px 60px rgba(30,20,10,.22)}
+  #ccGlobalMessageDialog{border:0;border-radius:18px;padding:0;background:transparent;max-width:min(440px,calc(100vw - 32px));width:440px;box-shadow:0 18px 60px rgba(30,20,10,.22)}
   #ccGlobalMessageDialog::backdrop{background:rgba(20,18,14,.48)}
   #ccGlobalMessageDialog .dialog-card{padding:28px 30px;border:1px solid var(--line,#ddd6ca);border-radius:18px;background:var(--card,#fffdf9);color:var(--ink,#24231f)}
   #ccGlobalMessageDialog .cc-message-icon{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;margin:0 0 14px;background:var(--paper,#f6f1e8);color:var(--accent,#9b3f2f);font:700 20px Arial}
