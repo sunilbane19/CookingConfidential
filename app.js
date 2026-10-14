@@ -288,14 +288,42 @@ document.querySelectorAll('.tab').forEach(t=>t.onclick=async()=>{
   }
   loadRecipePage({offset:0,refreshCount:true}).catch(e=>showUiError(e.message,'Could not load recipes'));
 });
+// Temporary Staging-only login persistence diagnostics. Logs metadata only: never tokens, email, or user IDs.
+const ccAuthDiagnostics=[];
+function ccAuthDiag(event,details={}){
+  const entry={at:new Date().toISOString(),event,...details};
+  ccAuthDiagnostics.push(entry);
+  if(ccAuthDiagnostics.length>100)ccAuthDiagnostics.shift();
+  window.ccAuthDiagnostics=ccAuthDiagnostics;
+  console.info('[CC auth diagnostic]',entry);
+}
+async function ccCheckSession(reason){
+  try{
+    const{data,error}=await supabase.auth.getSession();
+    ccAuthDiag('session-check',{reason,sessionPresent:!!data?.session,error:!!error,errorName:error?.name||null});
+  }catch(error){
+    ccAuthDiag('session-check-failed',{reason,errorName:error?.name||'Error'});
+  }
+}
+window.addEventListener('pageshow',event=>{ccAuthDiag('pageshow',{persisted:!!event.persisted,visibility:document.visibilityState});ccCheckSession('pageshow')});
+window.addEventListener('pagehide',event=>ccAuthDiag('pagehide',{persisted:!!event.persisted,visibility:document.visibilityState}));
+document.addEventListener('visibilitychange',()=>{ccAuthDiag('visibilitychange',{visibility:document.visibilityState});if(document.visibilityState==='visible')ccCheckSession('visible')});
 let bootedUserId=null,currentMember=null;
 async function boot(sessionOverride=null){
+  ccAuthDiag('boot-start',{sessionOverrideProvided:!!sessionOverride});
   let session=sessionOverride;
   if(!session){
-    const{data:{session:currentSession}}=await supabase.auth.getSession();
-    session=currentSession
-  }
+    try{
+      const{data,error}=await supabase.auth.getSession();
+      session=data?.session||null;
+      ccAuthDiag('boot-session-read',{sessionPresent:!!session,error:!!error,errorName:error?.name||null});
+    }catch(error){
+      ccAuthDiag('boot-session-read-failed',{errorName:error?.name||'Error'});
+      session=null;
+    }
+  }else ccAuthDiag('boot-session-override',{sessionPresent:true});
   if(!session){
+    ccAuthDiag('boot-no-session',{action:'show-login'});
     bootedUserId=null;
     currentMember=null;
     loginPanel.hidden=false;
@@ -303,10 +331,12 @@ async function boot(sessionOverride=null){
     const adminLink=document.querySelector('#adminLink');if(adminLink){adminLink.hidden=true;adminLink.style.display='none'}
     return
   }
-  if(bootedUserId===session.user.id)return;
+  if(bootedUserId===session.user.id){ccAuthDiag('boot-skipped-already-booted');return}
   bootedUserId=session.user.id;
   const{data:member,error:memberError}=await supabase.from('cc_members').select('id,email,display_name,role,active').eq('auth_user_id',session.user.id).maybeSingle();
+  ccAuthDiag('member-check',{queryError:!!memberError,memberFound:!!member,memberActive:!!member?.active,errorName:memberError?.name||null});
   if(memberError||!member||!member.active){
+    ccAuthDiag('member-check-rejected',{action:'sign-out'});
     bootedUserId=null;
     currentMember=null;
     appPanel.hidden=true;
@@ -325,6 +355,12 @@ async function boot(sessionOverride=null){
   userBadge.hidden=false;
   const adminLink=document.querySelector('#adminLink');
   if(adminLink){adminLink.hidden=member.role!=='owner';adminLink.style.display=member.role==='owner'?'inline-flex':'none'}
-  try{await loadData()}catch(e){content.innerHTML='<div class="empty">'+esc(e.message)+'</div>'}
+  ccAuthDiag('boot-authenticated',{memberActive:true});
+  try{await loadData()}catch(e){ccAuthDiag('load-data-failed',{errorName:e?.name||'Error'});content.innerHTML='<div class="empty">'+esc(e.message)+'</div>'}
 }
-supabase.auth.onAuthStateChange((_event,session)=>{if(session)setTimeout(()=>boot(session),0);else{bootedUserId=null;currentMember=null;loginPanel.hidden=false;appPanel.hidden=true;const adminLink=document.querySelector('#adminLink');if(adminLink){adminLink.hidden=true;adminLink.style.display='none'}}});boot();
+supabase.auth.onAuthStateChange((event,session)=>{
+  ccAuthDiag('auth-state-change',{event,sessionPresent:!!session});
+  if(session)setTimeout(()=>boot(session),0);
+  else{bootedUserId=null;currentMember=null;loginPanel.hidden=false;appPanel.hidden=true;const adminLink=document.querySelector('#adminLink');if(adminLink){adminLink.hidden=true;adminLink.style.display='none'}}
+});
+boot();
