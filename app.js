@@ -3,7 +3,7 @@ const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlpd210ZmJxYnluaW1xdnd4b3N1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc1ODI3MDYsImV4cCI6MjEwMzE1ODcwNn0.pwfoCI_ajYfrON8kxIV9XWMo9k2GvzCWqwcpsMxI1As';
 const CC_SITE_BASE=(window.location.hostname.endsWith('github.io')?('/'+(window.location.pathname.split('/').filter(Boolean)[0]||'')+'/'):'/');
 const APP_URL=`${window.location.origin}${CC_SITE_BASE}`;
-const supabase=createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+const supabase=createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
 const content=document.querySelector('#content'),search=document.querySelector('#searchInput'),loginPanel=document.querySelector('#loginPanel'),appPanel=document.querySelector('#appPanel'),userBadge=document.querySelector('#userBadge'),loginForm=document.querySelector('#loginForm'),loginMessage=document.querySelector('#loginMessage'),recipeDialog=document.querySelector('#recipeDialog'),menuDialog=document.querySelector('#menuDialog'),detailDialog=document.querySelector('#detailDialog'),importDialog=document.querySelector('#importDialog'),importQueue=document.querySelector('#importQueue');
 let importItems=[],recipes=[],menus=[],view='all';
 const RECIPE_PAGE_SIZE=12;
@@ -286,16 +286,29 @@ let bootedUserId=null,currentMember=null;
 async function boot(sessionOverride=null){
   let session=sessionOverride;
   if(!session){
-    const{data:{session:currentSession}}=await supabase.auth.getSession();
-    session=currentSession
+    try{
+      const{data,error}=await supabase.auth.getSession();
+      if(error)console.warn('Cooking Confidential session restore:',error.message);
+      session=data?.session||null;
+    }catch(error){
+      console.warn('Cooking Confidential session restore failed:',error?.name||'Error');
+      // Do not force an already-authenticated app back to login on a transient read failure.
+      if(appPanel.hidden)return;
+      session=null;
+    }
   }
   if(!session){
+    // On initial load, show login. If the app was already open, a temporary null
+    // session read during browser/PWA resume must not masquerade as a sign-out.
+    if(!appPanel.hidden)return;
     bootedUserId=null;
     currentMember=null;
     loginPanel.hidden=false;
+    loginPanel.style.display='';
     appPanel.hidden=true;
+    appPanel.style.display='none';
     const adminLink=document.querySelector('#adminLink');if(adminLink){adminLink.hidden=true;adminLink.style.display='none'}
-    return
+    return;
   }
   if(bootedUserId===session.user.id)return;
   bootedUserId=session.user.id;
@@ -304,21 +317,50 @@ async function boot(sessionOverride=null){
     bootedUserId=null;
     currentMember=null;
     appPanel.hidden=true;
+    appPanel.style.display='none';
     loginPanel.hidden=false;
+    loginPanel.style.display='';
     loginMessage.textContent='This email is not currently enabled for Cooking Confidential.';
     const adminLink=document.querySelector('#adminLink');if(adminLink){adminLink.hidden=true;adminLink.style.display='none'}
     await supabase.auth.signOut();
-    return
+    return;
   }
   currentMember=member;
   window.ccCurrentMember=member;
   window.ccCurrentUserId=session.user.id;
   loginPanel.hidden=true;
+  loginPanel.style.display='none';
   appPanel.hidden=false;
+  appPanel.style.display='block';
   userBadge.textContent=member.display_name||session.user.email||'Signed in';
   userBadge.hidden=false;
   const adminLink=document.querySelector('#adminLink');
   if(adminLink){adminLink.hidden=member.role!=='owner';adminLink.style.display=member.role==='owner'?'inline-flex':'none'}
   try{await loadData()}catch(e){content.innerHTML='<div class="empty">'+esc(e.message)+'</div>'}
 }
-supabase.auth.onAuthStateChange((_event,session)=>{if(session)setTimeout(()=>boot(session),0);else{bootedUserId=null;currentMember=null;loginPanel.hidden=false;appPanel.hidden=true;const adminLink=document.querySelector('#adminLink');if(adminLink){adminLink.hidden=true;adminLink.style.display='none'}}});boot();
+async function ccRestoreSession(reason){
+  try{
+    const{data,error}=await supabase.auth.getSession();
+    if(error)console.warn('Cooking Confidential session check ('+reason+'):',error.message);
+    if(data?.session)await boot(data.session);
+    // No session on resume is not by itself proof of an explicit sign-out.
+  }catch(error){
+    console.warn('Cooking Confidential session check failed ('+reason+'):',error?.name||'Error');
+  }
+}
+window.addEventListener('pageshow',()=>{ccRestoreSession('pageshow')});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')ccRestoreSession('visible')});
+supabase.auth.onAuthStateChange((event,session)=>{
+  if(session){setTimeout(()=>boot(session),0);return}
+  if(event==='SIGNED_OUT'){
+    bootedUserId=null;currentMember=null;
+    loginPanel.hidden=false;loginPanel.style.display='';
+    appPanel.hidden=true;appPanel.style.display='none';
+    const adminLink=document.querySelector('#adminLink');if(adminLink){adminLink.hidden=true;adminLink.style.display='none'}
+    return;
+  }
+  // Other null-session events may occur while the SDK restores persisted auth.
+  // Re-read persisted state before changing the visible screen.
+  setTimeout(()=>ccRestoreSession('auth-'+event),250);
+});
+boot();
