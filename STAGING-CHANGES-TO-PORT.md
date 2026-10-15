@@ -68,3 +68,16 @@ Status: **Implemented on the Staging source branch; deployment #471 is running; 
 - [x] Parser updated to preserve the prefix (such as `Serves: 1–2`) in Method and move only the text after `Note:` into Notes / differences.
 - [ ] Staging deployment #473 and browser regression test pending. Re-import the multi-recipe DOCX and verify Pineapple Fried Rice and Stir-Fried Chicken with Cashews; also regression-test a single-recipe DOCX.
 - PDF parser remains explicitly out of scope for this change. Live remains untouched.
+
+
+## Confirmed and tested — review field layout (15 October 2026)
+
+- [x] **Single-recipe DOCX review — Dietary / suitability alignment:** user confirmed the field alignment is now correct.
+- [x] **Multi-recipe review — Cuisine and Dietary / suitability layout:** user confirmed the fields are correctly laid out together and the multi-select behaves as expected.
+- [x] **Staging deployment:** deployment #479 completed successfully on 15 October 2026.
+- [x] **Scope preserved:** changes are on the Staging development branch only. Live was not changed; the frozen rich-text editor was not modified.
+
+## Staging freeze — 15 October 2026
+
+The current Staging version is frozen at the user-confirmed state after deployment #479. Do not make further code changes or trigger another Staging deployment unless the user explicitly asks to unfreeze Staging or authorizes a specific follow-up change. Live remains unchanged.
+
