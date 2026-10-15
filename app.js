@@ -1,4 +1,4 @@
-import { supabase, APP_URL } from './auth-client.js?v=1.0.1';
+import { supabase, APP_URL } from './auth-client.js?v=1.0.2';
 const content=document.querySelector('#content'),search=document.querySelector('#searchInput'),loginPanel=document.querySelector('#loginPanel'),appPanel=document.querySelector('#appPanel'),userBadge=document.querySelector('#userBadge'),loginForm=document.querySelector('#loginForm'),loginMessage=document.querySelector('#loginMessage'),recipeDialog=document.querySelector('#recipeDialog'),menuDialog=document.querySelector('#menuDialog'),detailDialog=document.querySelector('#detailDialog'),importDialog=document.querySelector('#importDialog'),importQueue=document.querySelector('#importQueue');
 let importItems=[],recipes=[],menus=[],view='all';
 const RECIPE_PAGE_SIZE=12;
