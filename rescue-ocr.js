@@ -11,7 +11,23 @@ const generic=/^(?:ingredients?|general ingredients?|method|directions?|instruct
 const lines=t=>String(t||'').replace(/\r/g,'').split('\n').map(clean).filter(Boolean);
 async function item(id){const{data,error}=await sb.from('cc_import_items').select('*').eq('id',id).single();if(error||!data)throw Error(error?.message||'Import item not found.');return data}
 async function blob(x){const p=x.file_path||x.original_file_path;if(!p)throw Error('Original file is unavailable.');const u=await getCachedSignedUrl(sb,'cooking-confidential',p),r=await fetch(u);if(!r.ok)throw Error('Could not load the original upload.');return r.blob()}
-async function ocr(b,name,status){const T=await import('https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'),w=await T.createWorker('eng');let out=[];try{if(b.type==='application/pdf'||/\.pdf$/i.test(name)){const p=await import('https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs');p.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs';const pdf=await p.getDocument({data:new Uint8Array(await b.arrayBuffer())}).promise;for(let i=1;i<=pdf.numPages;i++){status('Reading page '+i+' of '+pdf.numPages+'…');const pg=await pdf.getPage(i),v=pg.getViewport({scale:2.5}),c=document.createElement('canvas');c.width=Math.ceil(v.width);c.height=Math.ceil(v.height);await pg.render({canvasContext:c.getContext('2d'),viewport:v}).promise;out.push((await w.recognize(c)).data.text||'');c.width=1;c.height=1}}else{status('Reading image…');out.push((await w.recognize(b)).data.text||'')} }finally{await w.terminate()}return out.join('\n')}
+async function ocr(b,name,status,traceId){
+  const started=performance.now(),out=[];
+  console.info('[CC image trace]',traceId,'rescue:ocr:start',{name,blobType:b.type,blobBytes:b.size,reader:'tesseract-esm-v2'});
+  const {createWorker}=await import('https://esm.sh/tesseract.js@5');
+  if(typeof createWorker!=='function')throw Error('Tesseract createWorker export is unavailable.');
+  const w=await createWorker('eng');
+  try{
+    if(b.type==='application/pdf'||/\.pdf$/i.test(name)){
+      const p=await import('https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs');p.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs';
+      const pdf=await p.getDocument({data:new Uint8Array(await b.arrayBuffer())}).promise;
+      console.info('[CC image trace]',traceId,'rescue:pdf-pages',{pages:pdf.numPages});
+      for(let i=1;i<=pdf.numPages;i++){status('Reading page '+i+' of '+pdf.numPages+'…');const pg=await pdf.getPage(i),v=pg.getViewport({scale:2.5}),c=document.createElement('canvas');c.width=Math.ceil(v.width);c.height=Math.ceil(v.height);await pg.render({canvasContext:c.getContext('2d'),viewport:v}).promise;const result=await w.recognize(c);out.push(result.data.text||'');console.info('[CC image trace]',traceId,'rescue:ocr-page',{page:i,confidence:result.data?.confidence,text:result.data?.text||''});c.width=1;c.height=1}
+    }else{status('Reading image…');const result=await w.recognize(b);out.push(result.data.text||'');console.info('[CC image trace]',traceId,'rescue:ocr-image-result',{confidence:result.data?.confidence,text:result.data?.text||''})}
+  }finally{await w.terminate()}
+  console.info('[CC image trace]',traceId,'rescue:ocr:done',{durationMs:Math.round(performance.now()-started),outputLength:out.join('\n').length});
+  return out.join('\n')
+}
 function parse(raw){
   const structured=parseLabeledRecipeText(raw);
   if(structured){
@@ -52,7 +68,8 @@ async function sourceText(x,status){
     return await b.text();
   }
   if(b.type==='application/pdf'||/\.pdf$/i.test(name)||String(x.mime_type||'').startsWith('image/')){
-    return await ocr(b,x.file_name||'',status);
+    console.info('[CC image trace]',status.traceId||'CCIMG-unknown','rescue:source-text:ocr-selected',{file_name:x.file_name,blobType:b.type,mime_type:x.mime_type});
+    return await ocr(b,x.file_name||'',status,status.traceId);
   }
   return '';
 }
@@ -81,4 +98,7 @@ function render(id,x,s){
    window.ccShowError?.('The New Recipe Editor could not be opened.','Could not continue');
  });
 }
-export async function rescueImport(id){const x=await item(id);dialog.querySelector('#detailContent').innerHTML='<div class="dialog-card"><p class="eyebrow">RESCUE EXTRACTION</p><h2>Making a best-effort recovery…</h2><p class="small-note" id="ccRescueStatus">Trying the original extracted text first.</p></div>';dialog.showModal();const st=t=>{const e=document.querySelector('#ccRescueStatus');if(e)e.textContent=t};let raw='';try{raw=await sourceText(x,st)}catch(e){console.warn('Cooking Confidential universal rescue source read:',e)}if(!raw.trim())raw=String(x.file_name||'Imported recipe').replace(/\.[^.]+$/,'').replace(/[_-]+/g,' ');const rs=parse(raw).map(norm);const title=rs[0]?.name||String(x.file_name||'Imported recipe').replace(/\.[^.]+$/,'').replace(/[_-]+/g,' ');render(id,x,{title,raw})}
+export async function rescueImport(id){const traceId='CCIMG-'+id+'-'+Date.now().toString(36);console.warn('[CC image trace]',traceId,'rescueImport:start',{id,at:new Date().toISOString()});const x=await item(id);console.info('[CC image trace]',traceId,'rescueImport:item-loaded',{id:x.id,file_name:x.file_name,mime_type:x.mime_type,file_path:x.file_path,original_file_path:x.original_file_path,extractedTextLength:String(x.extracted_text||'').length});dialog.querySelector('#detailContent').innerHTML='<div class="dialog-card"><p class="eyebrow">RESCUE EXTRACTION</p><h2>Making a best-effort recovery…</h2><p class="small-note" id="ccRescueStatus">Trying the original extracted text first.</p></div>';dialog.showModal();const st=t=>{const e=document.querySelector('#ccRescueStatus');if(e)e.textContent=t};st.traceId=traceId;let raw='';try{raw=await sourceText(x,st)}catch(e){console.warn('Cooking Confidential universal rescue source read:',e)}console.info('[CC image trace]',traceId,'rescue:raw-text-before-parse',{length:raw.length,text:raw});
+if(!raw.trim())raw=String(x.file_name||'Imported recipe').replace(/\.[^.]+$/,'').replace(/[_-]+/g,' ');
+const rs=parse(raw).map(norm);
+console.info('[CC image trace]',traceId,'rescue:parsed-structure',{recipes:rs});const title=rs[0]?.name||String(x.file_name||'Imported recipe').replace(/\.[^.]+$/,'').replace(/[_-]+/g,' ');render(id,x,{title,raw})}

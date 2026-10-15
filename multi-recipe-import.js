@@ -1,11 +1,11 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { createWorker } from 'https://esm.sh/tesseract.js@5';
 import * as mammoth from 'https://esm.sh/mammoth@1.6.0';
-import JSZip from 'https://esm.sh/jszip@3.10.1';
 import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
-import { createGenericEditor, editorValue, sanitizeRichHtml } from './generic-editor.js?v=1.3.17';
+import { createGenericEditor, editorValue, sanitizeRichHtml } from './generic-editor.js?v=1.3.5';
 import { checkRecipeQuality } from './recipe-quality.js?v=1.0.4';
 import { readSourceTextWithVision } from './vision-text-reader.js?v=1.0.0';
+import { parseDocx } from './docx-parser.js?v=1.0.7';
 
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
@@ -35,6 +35,7 @@ function clean(s){
 const lines=s=>String(s??'').replace(/\r/g,'').split('\n').map(clean).filter(Boolean);
 const courses=['Breakfast','Brunch','Starter','Soup','Salad','Main','Side','Snack','Dessert','Bread','Beverage','Ingredient'];
 const types=['Dish','Dip','Dressing','Sauce','Chutney','Marinade','Rub','Paste','Spice Blend','Stock / Broth','Pickle','Condiment'];
+const dietaryOptions=['Vegetarian','Vegan','Pescatarian','Non-Veg','Gluten-Free','Dairy-Free','Egg-Free','Nut-Free','Low-Carb','Keto'];
 const SECTION=/^(ingredients?|ingredient list|method|directions?|instructions?|preparation|steps?|servings?|notes?|tips?|storage|serving suggestions?|recipe|for the .+|for .+):?$/i;
 const GENERIC=/^(recipe|recipes|ingredients?|method|directions?|instructions?|preparation|steps?|contents?|index|introduction|notes?|tips?|storage|serving suggestions?|long-term preservation methods?|for the .+|for .+)[:.]?$/i;
 
@@ -70,18 +71,13 @@ function titleCaseScore(s){
   return normalTitle||titleCase;
 }
 function makeRecipe(name){return {name:clean(name)||'Imported recipe',description:'',cuisine:'',course:'',recipe_type:'Dish',servings:'',ingredients:[],method:[],notes:[]};}
-function parseIngredientRows(rows){return cleanIngredientLines(rows.slice(1).map(r=>{const a=r.map(clean).filter(Boolean);if(a.length>=3)return `${a[0]} — ${a[2]}${a[1]&&a[1]!==a[0]?' — '+a[1]:''}`;return a.join(' — ');}));}
-function htmlTables(doc){return [...doc.querySelectorAll('table')].map(t=>[...t.rows].map(r=>[...r.cells].map(c=>clean(c.textContent)))).filter(x=>x.length);}
-function htmlBlocks(doc){return [...doc.querySelectorAll('h1,h2,h3,h4,h5,h6,p,li')].map(e=>clean(e.textContent)).filter(Boolean);}
-function tableKind(rows){const h=(rows[0]||[]).join(' ').toLowerCase();if(/ingredient|quantity|amount|ratio|purpose/.test(h))return'ingredients';if(/method|step|direction|instruction/.test(h)&&!/shelf life|best used|storage/.test(h))return'method';if(/temperature|shelf life|best used|storage/.test(h))return'notes';return'';}
 function docxRecipeBlocks(doc){
-  const ps=[...doc.querySelectorAll('p')];
   const blocks=[]; let current=[];
   const push=()=>{if(current.length){blocks.push(current);current=[];}};
-  for(const p of ps){
-    const text=clean(p.textContent);
-    if(!text){push();continue;}
-    current.push({text,bold:!!p.querySelector('strong,b')});
+  for(const el of [...doc.querySelectorAll('h1,h2,h3,h4,h5,h6,p,li')]){
+    const text=clean(el.textContent);
+    if(!text){if(el.tagName==='P')push();continue;}
+    current.push({text,bold:/^H[1-6]$/.test(el.tagName)||!!el.querySelector('strong,b'),tag:el.tagName.toLowerCase()});
   }
   push();
   return blocks;
@@ -93,86 +89,29 @@ function looksLikeIngredientTitle(s){
   if(/^(?:half|quarter|one|two|three|four|five)\s+(?:tsp|tbsp|cup|cloves?|sprigs?|oz|lb|lbs)\b/i.test(x))return true;
   return false;
 }
-async function parseDocxRawMulti(arrayBuffer,file){
-  const zip=await JSZip.loadAsync(arrayBuffer);
-  const xml=await zip.file('word/document.xml')?.async('text');
-  if(!xml)return[];
-  const doc=new DOMParser().parseFromString(xml,'application/xml');
-  const W='http://schemas.openxmlformats.org/wordprocessingml/2006/main';
-  const paras=[...doc.getElementsByTagNameNS(W,'p')].map(p=>{
-    const text=clean([...p.getElementsByTagNameNS(W,'t')].map(t=>t.textContent||'').join(' '));
-    const bold=[...p.getElementsByTagNameNS(W,'r')].some(r=>[...r.getElementsByTagNameNS(W,'b')].some(b=>{const v=b.getAttributeNS(W,'val');return v===null||v==='1'||v==='true'||v==='on'}));
-    const style=[...p.getElementsByTagNameNS(W,'pStyle')].map(s=>s.getAttributeNS(W,'val')||'')[0]||'';
-    return {text,bold,style};
-  }).filter(p=>p.text);
-  if(!paras.length)return[];
-  const isList=p=>/listparagraph/i.test(p.style);
-  const isTitle=(p,i)=>{
-    if(!p.text||GENERIC.test(p.text)||looksLikeIngredientTitle(p.text))return false;
-    if(p.bold)return true;
-    return !isList(p)&&!!paras[i+1]&&isList(paras[i+1])&&titleCaseScore(p.text);
-  };
-  const ti=paras.map((p,i)=>isTitle(p,i)?i:-1).filter(i=>i>=0);
-  if(ti.length<2)return[];
-  const recipes=[];
-  for(let k=0;k<ti.length;k++){
-    const si=ti[k],ei=k+1<ti.length?ti[k+1]:paras.length,body=paras.slice(si+1,ei).map(p=>p.text),r=makeRecipe(paras[si].text);
-    const ih=body.findIndex(x=>/^ingredients?(?:\s+list)?$/i.test(x)),mh=body.findIndex(x=>/^(method|directions?|instructions?|preparation|preparations|steps?|cooking steps|recipe steps|cooking instructions|preparation steps|recipe method|cooking method|procedure)$/i.test(x)),nh=body.findIndex(x=>/^notes?$/i.test(x));
-    if(ih>=0){const e=[mh,nh].filter(n=>n>ih).sort((a,b)=>a-b)[0]??body.length;r.ingredients=cleanIngredientLines(body.slice(ih+1,e));}
-    else{const e=mh>=0?mh:(nh>=0?nh:body.length);r.ingredients=cleanIngredientLines(body.slice(0,e));}
-    if(mh>=0){const e=nh>mh?nh:body.length;r.method=body.slice(mh+1,e).filter(x=>!isOcrGarbage(x));}
-    if(nh>=0)r.notes=body.slice(nh+1).filter(x=>!isOcrGarbage(x));
-    if(r.name&&r.ingredients.length)recipes.push(r);
-  }
-  return recipes.length>=2?recipes:[];
-}
-function parseDocxMulti(html,file){
+
+// Multi-recipe DOCX handling is limited to separation. Each separated block
+// is parsed by the existing single-recipe DOCX parser. If the structural split
+// is not reliable, pass the complete document to that same established parser.
+function parseDocxMulti(html,file,expectedCount=0){
   const doc=new DOMParser().parseFromString(html,'text/html');
-  const tables=htmlTables(doc),blocks=htmlBlocks(doc);
-
-  // DOCX recipe collections often use a blank paragraph between recipes.
-  // Use that structural boundary before any title-case heuristic. This prevents
-  // ingredient lines such as "Half tsp pepper" and "Salt" from becoming titles.
-  const separated=docxRecipeBlocks(doc);
-  const boundaryRecipes=separated.filter(b=>b.length>=3 && !looksLikeIngredientTitle(b[0].text));
-  if(boundaryRecipes.length>=2){
-    return boundaryRecipes.map(b=>{
-      const r=makeRecipe(b[0].text);
-      const body=b.slice(1).map(x=>x.text);
-      const ih=body.findIndex(x=>/^ingredients?(?:\s+list)?$/i.test(x));
-      const mh=body.findIndex(x=>/^(method|directions?|instructions?|preparation|preparations|steps?|cooking steps|recipe steps|cooking instructions|preparation steps|recipe method|cooking method|procedure)$/i.test(x));
-      const nh=body.findIndex(x=>/^notes?$/i.test(x));
-      if(ih>=0){
-        const end=[mh,nh].filter(n=>n>ih).sort((a,b)=>a-b)[0]??body.length;
-        r.ingredients=cleanIngredientLines(body.slice(ih+1,end));
-      }else{
-        r.ingredients=cleanIngredientLines((mh>=0?body.slice(0,mh):body.slice(0,)).filter(x=>!/^lay on a bed of$/i.test(x)));
-      }
-      if(mh>=0){
-        const end=nh>mh?nh:body.length;
-        r.method=body.slice(mh+1,end).filter(x=>!isOcrGarbage(x));
-      }
-      if(nh>=0)r.notes=body.slice(nh+1).filter(x=>!isOcrGarbage(x));
-      return r;
-    }).filter(r=>r.name&&r.ingredients.length>=1);
+  const blocks=docxRecipeBlocks(doc);
+  const candidates=blocks.filter(b=>b.length>=3&&!looksLikeIngredientTitle(b[0].text));
+  const separated=[];
+  if(candidates.length>=2){
+    for(const block of candidates){
+      const chunk=block.map(item=>{
+        const tag=/^h[1-6]$/.test(item.tag)?item.tag:'p';
+        const text=esc(item.text);
+        return '<'+tag+'>'+(item.bold&&tag==='p'?'<strong>'+text+'</strong>':text)+'</'+tag+'>';
+      }).join('');
+      const parsed=parseDocx(chunk,file+' — '+block[0].text);
+      const recipe=parsed.find(r=>(r.ingredients?.length||0)>0||(r.method?.length||0)>0);
+      if(recipe)separated.push(recipe);
+    }
   }
-
-  const heads=blocks.filter(titleCaseScore);
-  if(heads.length<=1){
-    const r=makeRecipe(blocks[0]||file.replace(/\.[^.]+$/,'')),it=tables.find(t=>tableKind(t)==='ingredients'),mt=tables.find(t=>tableKind(t)==='method'),nt=tables.filter(t=>tableKind(t)==='notes');
-    r.ingredients=it?parseIngredientRows(it):[];
-    r.method=mt?mt.slice(1).map(a=>a.filter(Boolean).join(' — ')).filter(Boolean):blocks.filter(x=>/^step\s*\d+/i.test(x));
-    r.notes=nt.flatMap(t=>t.slice(1).map(a=>a.filter(Boolean).join(' — '))).filter(Boolean);
-    return[r];
-  }
-  const out=[];
-  for(let i=0;i<heads.length;i++){
-    const name=heads[i],start=blocks.indexOf(name),end=i+1<heads.length?blocks.indexOf(heads[i+1]):blocks.length,section=blocks.slice(start+1,end),r=makeRecipe(name),ih=section.findIndex(x=>/^ingredients?$/i.test(x)),mh=section.findIndex(x=>/^(method|directions?|instructions?|preparation|preparations|steps?|cooking steps|recipe steps|cooking instructions|preparation steps|recipe method|cooking method|procedure)$/i.test(x));
-    if(ih>=0)r.ingredients=cleanIngredientLines(section.slice(ih+1,mh>ih?mh:section.length));
-    if(mh>=0)r.method=section.slice(mh+1).filter(x=>!/^notes?|storage|serving suggestions?/i.test(x)).filter(x=>!isOcrGarbage(x));
-    out.push(r);
-  }
-  return out.length?out:[makeRecipe(file.replace(/\.[^.]+$/,''))];
+  if(separated.length>=2&&separated.length===candidates.length&&(!expectedCount||separated.length===expectedCount))return separated;
+  return parseDocx(html,file);
 }
 function ocrLines(words){const valid=words.filter(w=>w.text?.trim()&&Number(w.confidence||0)>=25);if(!valid.length)return[];const medH=valid.map(w=>w.bbox.y1-w.bbox.y0).sort((a,b)=>a-b)[Math.floor(valid.length/2)]||20,rows=[];for(const w of [...valid].sort((a,b)=>a.bbox.y0-b.bbox.y0||a.bbox.x0-b.bbox.x0)){const cy=(w.bbox.y0+w.bbox.y1)/2;let row=rows.find(r=>Math.abs(r.cy-cy)<Math.max(8,medH*.55));if(!row){row={cy,words:[]};rows.push(row);}row.words.push(w);}return rows.map(r=>{r.words.sort((a,b)=>a.bbox.x0-b.bbox.x0);return {text:clean(r.words.map(w=>w.text).join(' ')),x0:Math.min(...r.words.map(w=>w.bbox.x0)),x1:Math.max(...r.words.map(w=>w.bbox.x1)),y0:Math.min(...r.words.map(w=>w.bbox.y0)),y1:Math.max(...r.words.map(w=>w.bbox.y1)),height:Math.max(...r.words.map(w=>w.bbox.y1-w.bbox.y0))};}).filter(r=>r.text.length>1);}
 function titleCandidate(l,medH){const t=clean(l.text);if(l.height<medH*1.25||t.length>55||titleCaseScore(t)===false)return false;return(t.match(/[A-Za-z]/g)||[]).length>=3;}
@@ -234,7 +173,7 @@ async function reviewImageImport(id){
     const q=checkRecipeQuality(recipe,{mode:'single'});
     await imageReviewDiag(id,'quality_result',{good:q.good,score:q.score,reasons:q.reasons,metrics:q.metrics});
     if(q.good){
-      const mod=await import('./import-review-fix.js?v=1.4.56');
+      const mod=await import('./import-review-fix.js?v=1.4.59');
       await imageReviewDiag(id,'normal_review');
       return mod.reviewImportFixed(id);
     }
@@ -256,7 +195,7 @@ async function reviewImageImport(id){
         // Keep existing image OCR as a fallback only; normal review remains available.
         const item=await getItem(id);
         await sb.from('cc_import_items').update({extracted_text:JSON.stringify({recipe:r,raw_text:(r.ingredients||[]).join('\n')+'\n'+(r.method||[]).join('\n')}),extraction_status:'ready',review_status:'pending'}).eq('id',id);
-        const mod=await import('./import-review-fix.js?v=1.4.56'); return mod.reviewImportFixed(id);
+        const mod=await import('./import-review-fix.js?v=1.4.58'); return mod.reviewImportFixed(id);
       }
       await imageReviewDiag(id,'ocr_fallback_rescue',{reason:'quality_gate_failed'});
       const rescue=await import('./rescue-ocr.js?v=1.1.1'); return rescue.rescueImport(id);
@@ -266,22 +205,21 @@ async function reviewImageImport(id){
     }
   }
 }
-async function extract(id,show=true){if(show){dialog.querySelector('#detailContent').innerHTML='<div class="dialog-card"><p class="eyebrow">EXTRACTING</p><h2>Preparing recipes…</h2><p class="small-note" id="multiStatus">Reading the original file.</p></div>';dialog.showModal();}const status=t=>{const e=document.querySelector('#multiStatus');if(e)e.textContent=t;};const{data:x,error}=await sb.from('cc_import_items').select('*').eq('id',id).single();if(error||!x)return fail(error?.message||'Import item not found.');const expected=Number(window.ccExpectedRecipeCount||JSON.parse(localStorage.getItem('ccMultiImport:'+id)||'{}').expectedCount||0);try{const cached=typeof x.extracted_text==='string'?JSON.parse(x.extracted_text||'{}'):x.extracted_text;if(x.extraction_status==='ready'&&cached?.multiple&&Array.isArray(cached.recipes)&&cached.recipes.length&&( !expected||cached.recipes.length===expected)){render(id,x,cached.recipes);return;}}catch(e){console.warn('Cooking Confidential cached multi-recipe result:',e)}dialog.querySelector('#detailContent').innerHTML='<div class="dialog-card"><p class="eyebrow">EXTRACTING</p><h2>Preparing recipes…</h2><p class="small-note" id="multiStatus">Reading the original file.</p></div>';dialog.showModal();try{const blob=await loadOriginal(x);let recipes=[];if(/\.(png|jpe?g|webp)$/i.test(x.file_name||'')||String(x.mime_type||'').startsWith('image/')){
-  try{
-    status('Reading image text…');
-    const visionText=await readSourceTextWithVision(id);
-    recipes=parseTextMulti(visionText,x.file_name||'Imported image');
-    recipes=recipes.map(r=>({...r,ingredients:cleanIngredientLines(r.ingredients),method:Array.isArray(r.method)?r.method.map(clean):lines(r.method),notes:r.notes.map(clean)}));
-    const checks=recipes.map(r=>checkRecipeQuality(r,{mode:'multiple'}));
-    if(!recipes.length||!checks.every(q=>q.good)){
-      await sb.from('cc_import_items').update({extracted_text:JSON.stringify({version:7,multiple:true,reader:'vision-text',raw_text:visionText,recipes}),extraction_status:'ready',review_status:'pending'}).eq('id',id);
-      const rescue=await import('./rescue-ocr.js?v=1.1.1'); return rescue.rescueImport(id);
-    }
-  }catch(e){
-    console.warn('Vision multi-image reader failed; falling back to existing OCR:',e);
-    recipes=await ocrImage(blob,status);
+async function extract(id,show=true){if(show){dialog.querySelector('#detailContent').innerHTML='<div class="dialog-card"><p class="eyebrow">EXTRACTING</p><h2>Preparing recipes…</h2><p class="small-note" id="multiStatus">Reading the original file.</p></div>';dialog.showModal();}const status=t=>{const e=document.querySelector('#multiStatus');if(e)e.textContent=t;};const{data:x,error}=await sb.from('cc_import_items').select('*').eq('id',id).single();if(error||!x)return fail(error?.message||'Import item not found.');const expected=Number(window.ccExpectedRecipeCount||JSON.parse(localStorage.getItem('ccMultiImport:'+id)||'{}').expectedCount||0);try{const cached=typeof x.extracted_text==='string'?JSON.parse(x.extracted_text||'{}'):x.extracted_text;if(!/\.docx$/i.test(x.file_name||'')&&x.extraction_status==='ready'&&cached?.multiple&&Array.isArray(cached.recipes)&&cached.recipes.length&&(!expected||cached.recipes.length===expected)){render(id,x,cached.recipes);return;}}catch(e){console.warn('Cooking Confidential cached multi-recipe result:',e)}dialog.querySelector('#detailContent').innerHTML='<div class="dialog-card"><p class="eyebrow">EXTRACTING</p><h2>Preparing recipes…</h2><p class="small-note" id="multiStatus">Reading the original file.</p></div>';dialog.showModal();try{const blob=await loadOriginal(x);let recipes=[];if(/\.(png|jpe?g|webp)$/i.test(x.file_name||'')||String(x.mime_type||'').startsWith('image/')){
+  // No paid vision-model call: keep multi-image extraction on local Tesseract OCR.
+  recipes=await ocrImage(blob,status);}else if(/\.docx$/i.test(x.file_name||'')){status('Separating recipes, then using the standard DOCX parser…');const arrayBuffer=await blob.arrayBuffer();const html=(await mammoth.convertToHtml({arrayBuffer},{ignoreEmptyParagraphs:false})).value||'';recipes=parseDocxMulti(html,x.file_name||'Imported document',expected);}else if((x.mime_type||'').startsWith('text/')){recipes=parseTextMulti(await blob.text(),x.file_name||'Imported document');if(!recipes.length){const r=makeRecipe(x.file_name||'Imported recipe');r.ingredients=cleanIngredientLines(await blob.text());recipes=[r];}}else throw Error('This multi-recipe importer currently supports images, DOCX and text documents.');if(!recipes.length)throw Error('No recipes could be detected.');recipes=recipes.map(r=>{
+  const method=(Array.isArray(r.method)?r.method:lines(r.method)).map(clean).filter(x=>!isOcrGarbage(x));
+  const notes=(Array.isArray(r.notes)?r.notes:lines(r.notes)).map(clean).filter(x=>!isOcrGarbage(x));
+  const kept=[];
+  for(const line of method){
+    const match=line.match(/(?:^|\s)(?:note|notes|tip|tips)\s*:\s*(.+)$/i);
+    if(!match){kept.push(line);continue;}
+    const at=match.index??0,prefix=clean(line.slice(0,at)),note=clean(match[1]);
+    if(prefix)kept.push(prefix);
+    if(note)notes.push(note);
   }
-}else if(/\.docx$/i.test(x.file_name||'')){status('Reading document structure…');const arrayBuffer=await blob.arrayBuffer();recipes=await parseDocxRawMulti(arrayBuffer,x.file_name||'Imported document');if(!recipes.length){const html=(await mammoth.convertToHtml({arrayBuffer},{ignoreEmptyParagraphs:false})).value||'';recipes=parseDocxMulti(html,x.file_name||'Imported document');}}else if((x.mime_type||'').startsWith('text/')){recipes=parseTextMulti(await blob.text(),x.file_name||'Imported document');if(!recipes.length){const r=makeRecipe(x.file_name||'Imported recipe');r.ingredients=cleanIngredientLines(await blob.text());recipes=[r];}}else throw Error('This multi-recipe importer currently supports images, DOCX and text documents.');if(!recipes.length)throw Error('No recipes could be detected.');recipes=recipes.map(r=>({...r,ingredients:cleanIngredientLines(r.ingredients),method:Array.isArray(r.method)?r.method.map(clean).filter(x=>!isOcrGarbage(x)):lines(r.method),notes:r.notes.map(clean).filter(x=>!isOcrGarbage(x))}));await sb.from('cc_import_items').update({extracted_text:JSON.stringify({version:6,multiple:true,recipes}),source_title:recipes[0]?.name||x.file_name,extraction_status:'ready',review_status:'pending',error_message:null}).eq('id',id);if(show)render(id,x,recipes);return {item:x,recipes};}catch(e){if(show)fail(e?.message||String(e));throw e;}}
+  return {...r,ingredients:cleanIngredientLines(r.ingredients),method:kept,notes};
+});await sb.from('cc_import_items').update({extracted_text:JSON.stringify({version:6,multiple:true,recipes}),source_title:recipes[0]?.name||x.file_name,extraction_status:'ready',review_status:'pending',error_message:null}).eq('id',id);if(show)render(id,x,recipes);return {item:x,recipes};}catch(e){if(show)fail(e?.message||String(e));throw e;}}
 function fail(msg){dialog.querySelector('#detailContent').innerHTML=`<button class="close" type="button">×</button><p class="eyebrow">IMPORT ERROR</p><h2>Recipe extraction failed</h2><p class="small-note">${esc(msg)}</p>`;dialog.querySelector('.close').onclick=()=>dialog.close();}
 function render(id,x,recipes){const cards=recipes.map((r,i)=>{const reviewed=!!r._reviewed;return `<article class="multi-recipe-card"><label class="multi-select"><input type="checkbox" data-r="${i}" ${reviewed?'checked':''}><span><strong>${esc(r.name)}</strong></span></label><button type="button" class="secondary multi-edit ${reviewed?'reviewed':''}" data-r="${i}">${reviewed?'✓ Reviewed':'Review'}</button></article>`}).join('');dialog.querySelector('#detailContent').innerHTML=`<button class="close" type="button">×</button><p class="eyebrow">MULTI-RECIPE IMPORT</p><h2>${recipes.length} recipes</h2><p class="small-note">Review the recipes below and select the ones you want to save.</p><div class="multi-list">${cards}</div><div class="detail-actions multi-list-actions"><button class="secondary multi-cancel" id="multiCancel">Cancel</button><button class="primary multi-save" id="multiSave">Save selected</button></div>`;dialog.querySelector('.close').onclick=()=>dialog.close();dialog.querySelector('#multiCancel').onclick=()=>dialog.close();
  dialog.querySelectorAll('.multi-edit').forEach(b=>b.onclick=()=>editOne(id,x,recipes,Number(b.dataset.r)));dialog.querySelector('#multiSave').onclick=async()=>{const selected=[...dialog.querySelectorAll('input[data-r]:checked')].map(e=>Number(e.dataset.r));await saveMany(id,x,recipes.filter((_,i)=>selected.includes(i)));};}
@@ -302,7 +240,10 @@ function editOne(id,x,recipes,i){
         {label:'Course',name:'course',value:r.course||'',type:'select',options:['',...courses]},
         {label:'Recipe type',name:'recipe_type',value:r.recipe_type||'Dish',type:'select',options:types}
       ]},
-      {label:'Cuisine',name:'cuisine',value:r.cuisine||''},
+      {group:[
+        {label:'Cuisine',name:'cuisine',value:r.cuisine||''},
+        {label:'Dietary / suitability',name:'dietary_tags',value:Array.isArray(r.dietary_tags)?r.dietary_tags:[],type:'multiselect',options:dietaryOptions}
+      ]},
       {label:'Servings',name:'servings',value:r.servings||''},
       {label:'Ingredients',name:'ingredients',value:richValue(r.ingredients),type:'richtext'},
       {label:'Method / process',name:'method',value:richValue(r.method),type:'richtext'},
@@ -320,6 +261,7 @@ function editOne(id,x,recipes,i){
         course:clean(editorValue(formData,'course')),
         recipe_type:clean(editorValue(formData,'recipe_type'))||'Dish',
         cuisine:clean(editorValue(formData,'cuisine')),
+        dietary_tags:formData.getAll('dietary_tags').map(v=>String(v).trim()).filter(Boolean),
         servings:clean(editorValue(formData,'servings')),
         ingredients:sanitizeRichHtml(formData.get('ingredients')||''),
         method:sanitizeRichHtml(formData.get('method')||''),
