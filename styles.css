@@ -116,11 +116,12 @@ html,body{overscroll-behavior-y:none;overflow-x:hidden}
 /* Force complete recipe-card images even if another image rule sets cover. */
 .card-image img.cc-recipe-image{width:auto!important;height:auto!important;max-width:100%!important;max-height:100%!important;display:block!important;object-fit:contain!important;object-position:center!important;position:static!important;margin:0 auto!important}
 
-/* Recipe dietary multi-select: align trigger directly under its label like native select fields. */
+/* Recipe dietary multi-select: use a non-nested field wrapper so its trigger aligns with adjacent native fields. */
+.cc-multi-field{display:grid;grid-template-rows:auto auto;gap:6px;margin:16px 0;min-width:0;align-self:start}
 .cc-multi-select{position:relative;display:block;width:100%;margin:0;min-width:0}
 .cc-multi-field-label{display:block;margin:0 0 6px;line-height:1.3;font:12px Arial,sans-serif;color:var(--muted)}
 /* Match the outer spacing of native label fields inside the review grid. */
-#detailContent .two-col>div:has(>.cc-multi-select),#ccGenericEditorForm .two-col>div:has(>.cc-multi-select){margin:16px 0;min-width:0;align-self:start}
+#detailContent .two-col>.cc-multi-field,#ccGenericEditorForm .two-col>.cc-multi-field{margin:16px 0;min-width:0;align-self:start}
 #detailContent .cc-multi-select,#ccGenericEditorForm .cc-multi-select{width:100%;align-self:start}
 #detailContent .cc-multi-trigger{display:block;margin:0;width:100%;min-height:42px;text-align:left;}
 .cc-multi-trigger{width:100%;min-height:49px;box-sizing:border-box;text-align:left;padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;font:15px Arial;color:var(--ink);cursor:pointer;line-height:1.2}
@@ -220,7 +221,7 @@ dialog .dialog-card{box-sizing:border-box;max-width:100%;min-width:0;overflow-x:
 @media(max-width:760px){.cc-all-section .cc-menu-library-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:10px!important}.cc-all-section .menu-card{padding:12px!important}}
 
 /* Keep the multiselect field label styled like other editor fields without nesting labels. */
-#detailContent .cc-multi-field-label{display:block;font-size:13px;font-weight:600;line-height:1.3;}
+#detailContent .cc-multi-field-label,#ccGenericEditorForm .cc-multi-field-label{display:block;font-size:12px;font-weight:400;line-height:1.3;margin:0;color:var(--muted);font-family:Arial,sans-serif;}
 
 /* Creator selector beside the original-file picker in the recipe editor. */
 #detailContent .cc-source-creator-row{display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap;margin:12px 0 18px;}
