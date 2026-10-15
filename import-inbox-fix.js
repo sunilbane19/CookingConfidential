@@ -44,18 +44,13 @@ async function review(id,isImage,isMulti=false){try{
     return window.ccMultiReview(id,true);
   }
   if(isImage){
-    try{
-      const mod=await import('./multi-recipe-import.js?v=1.3.16');
-      if(typeof mod.reviewImageImport==='function')return mod.reviewImageImport(id);
-      if(typeof window.ccMultiReview==='function')return window.ccMultiReview(id,true);
-    }catch(imageError){
-      console.warn('Generic image review failed; using universal rescue:',imageError);
-      const rescue=await import('./rescue-ocr.js?v=1.2.2');
-      return rescue.rescueImport(id);
-    }
-    throw Error('Image reviewer could not be loaded.');
+    // Single-image Review is deliberately isolated from Vision and multi-recipe workflows.
+    console.info('[CC image trace] inbox:direct-single-image-review',{id,handler:'generic-image-review.js'});
+    const mod=await import('./generic-image-review.js?v=1.21.0');
+    if(typeof mod.reviewImage!=='function')throw Error('Generic single-image reader could not be loaded.');
+    return mod.reviewImage(id);
   }
-  const mod=await import('./import-review-fix.js?v=1.4.104');
+  const mod=await import('./import-review-fix.js?v=1.4.107');
   if(typeof mod.reviewImportFixed!=='function')throw Error('Review module could not be loaded.');
   return mod.reviewImportFixed(id);
 }catch(e){console.error('Cooking Confidential review:',e);return window.ccShowError?.(e?.message||'Could not open review.','Review could not be opened')||alert(e?.message||'Could not open review.')}}

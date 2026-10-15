@@ -116,8 +116,13 @@ html,body{overscroll-behavior-y:none;overflow-x:hidden}
 /* Force complete recipe-card images even if another image rule sets cover. */
 .card-image img.cc-recipe-image{width:auto!important;height:auto!important;max-width:100%!important;max-height:100%!important;display:block!important;object-fit:contain!important;object-position:center!important;position:static!important;margin:0 auto!important}
 
-/* Recipe dietary multi-select: match adjacent select height and top alignment */
-.cc-multi-select{position:relative;width:100%;margin-top:7px}
+/* Recipe dietary multi-select: align trigger directly under its label like native select fields. */
+.cc-multi-select{position:relative;display:block;width:100%;margin:0;min-width:0}
+.cc-multi-field-label{display:block;margin:0 0 6px;line-height:1.3;font:12px Arial,sans-serif;color:var(--muted)}
+/* Match the outer spacing of native label fields inside the review grid. */
+#detailContent .two-col>div:has(>.cc-multi-select),#ccGenericEditorForm .two-col>div:has(>.cc-multi-select){margin:16px 0;min-width:0;align-self:start}
+#detailContent .cc-multi-select,#ccGenericEditorForm .cc-multi-select{width:100%;align-self:start}
+#detailContent .cc-multi-trigger{display:block;margin:0;width:100%;min-height:42px;text-align:left;}
 .cc-multi-trigger{width:100%;min-height:49px;box-sizing:border-box;text-align:left;padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;font:15px Arial;color:var(--ink);cursor:pointer;line-height:1.2}
 .cc-multi-trigger::after{content:'▾';float:right;color:var(--muted);margin-left:8px}
 .cc-multi-panel{position:absolute;left:0;right:0;top:calc(100% + 5px);z-index:30;background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 25px rgba(0,0,0,.14);padding:7px;max-height:240px;overflow:auto}
@@ -207,9 +212,33 @@ dialog .dialog-card{box-sizing:border-box;max-width:100%;min-width:0;overflow-x:
 
 /* Compact dietary/suitability options: halve the rendered row height, overriding generic form-label spacing. */
 #detailContent .cc-multi-panel{padding:2px!important;}
-#detailContent .cc-multi-panel label.cc-multi-option{box-sizing:border-box!important;display:flex!important;align-items:center!important;gap:7px!important;padding:0 6px!important;margin:0!important;height:25px!important;min-height:25px!important;line-height:1!important;}
+#detailContent .cc-multi-panel .cc-multi-option{box-sizing:border-box!important;display:flex!important;align-items:center!important;gap:7px!important;padding:0 6px!important;margin:0!important;height:25px!important;min-height:25px!important;line-height:1!important;}
 #detailContent .cc-multi-option input{display:inline-block!important;flex:0 0 13px!important;width:13px!important;height:13px!important;padding:0!important;margin:0!important;accent-color:var(--accent);}
-#detailContent .cc-multi-option span{display:inline-block!important;line-height:1!important;padding:0!important;margin:0!important;}
+#detailContent .cc-multi-option label span{display:inline-block!important;line-height:1!important;padding:0!important;margin:0!important;}
 .cc-all-section{margin-bottom:30px;}
 .cc-all-section .section-head h2{font-size:28px;}
 @media(max-width:760px){.cc-all-section .cc-menu-library-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:10px!important}.cc-all-section .menu-card{padding:12px!important}}
+
+/* Keep the multiselect field label styled like other editor fields without nesting labels. */
+#detailContent .cc-multi-field-label{display:block;font-size:13px;font-weight:600;line-height:1.3;}
+
+/* Creator selector beside the original-file picker in the recipe editor. */
+#detailContent .cc-source-creator-row{display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap;margin:12px 0 18px;}
+#detailContent .cc-source-creator-row>p{flex:1 1 320px;margin:0;}
+#detailContent .cc-created-by{flex:0 1 280px;min-width:220px;}
+#detailContent .cc-created-by label{display:grid;gap:6px;font-size:13px;font-weight:600;}
+#detailContent .cc-created-by select{width:100%;box-sizing:border-box;min-height:49px;padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;font:15px Arial;color:var(--ink);}
+#detailContent .cc-created-by .cc-created-label{display:block;font-size:13px;font-weight:600;margin-bottom:6px;}
+
+/* Compact creator selector beside recipe name in Add; keep Edit selector narrow. */
+#detailContent .cc-created-by{flex:0 1 220px;min-width:0;max-width:240px;margin:0;}
+#detailContent .cc-created-by label{margin:0;display:block;}
+#detailContent .cc-created-by select{min-height:42px;padding:9px 10px;}
+#detailContent #ccGenericEditorForm .two-col:has(.cc-created-by){grid-template-columns:minmax(0,2fr) minmax(180px,1fr);align-items:end;gap:14px;}
+#detailContent #ccGenericEditorForm .two-col:has(.cc-created-by) label{margin-bottom:0;}
+#detailContent .cc-source-creator-row .cc-created-by{flex:0 1 220px;}
+@media(max-width:600px){#detailContent .cc-generic-editor-form .two-col:has(.cc-created-by){grid-template-columns:minmax(0,1fr) minmax(140px,.8fr);gap:10px;}#detailContent .cc-created-by select{font-size:14px;}}
+
+/* Align Edit creator label/input with Add original file control. */
+#detailContent .cc-source-creator-row>p label{margin:0;}
+#detailContent .cc-source-creator-row{align-items:end;}
