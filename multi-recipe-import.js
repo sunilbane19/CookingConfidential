@@ -35,6 +35,7 @@ function clean(s){
 const lines=s=>String(s??'').replace(/\r/g,'').split('\n').map(clean).filter(Boolean);
 const courses=['Breakfast','Brunch','Starter','Soup','Salad','Main','Side','Snack','Dessert','Bread','Beverage','Ingredient'];
 const types=['Dish','Dip','Dressing','Sauce','Chutney','Marinade','Rub','Paste','Spice Blend','Stock / Broth','Pickle','Condiment'];
+const dietaryOptions=['Vegetarian','Vegan','Pescatarian','Non-Veg','Gluten-Free','Dairy-Free','Egg-Free','Nut-Free','Low-Carb','Keto'];
 const SECTION=/^(ingredients?|ingredient list|method|directions?|instructions?|preparation|steps?|servings?|notes?|tips?|storage|serving suggestions?|recipe|for the .+|for .+):?$/i;
 const GENERIC=/^(recipe|recipes|ingredients?|method|directions?|instructions?|preparation|steps?|contents?|index|introduction|notes?|tips?|storage|serving suggestions?|long-term preservation methods?|for the .+|for .+)[:.]?$/i;
 
@@ -240,6 +241,7 @@ function editOne(id,x,recipes,i){
         {label:'Recipe type',name:'recipe_type',value:r.recipe_type||'Dish',type:'select',options:types}
       ]},
       {label:'Cuisine',name:'cuisine',value:r.cuisine||''},
+      {label:'Dietary / suitability',name:'dietary_tags',value:Array.isArray(r.dietary_tags)?r.dietary_tags:[],type:'multiselect',options:dietaryOptions},
       {label:'Servings',name:'servings',value:r.servings||''},
       {label:'Ingredients',name:'ingredients',value:richValue(r.ingredients),type:'richtext'},
       {label:'Method / process',name:'method',value:richValue(r.method),type:'richtext'},
@@ -257,6 +259,7 @@ function editOne(id,x,recipes,i){
         course:clean(editorValue(formData,'course')),
         recipe_type:clean(editorValue(formData,'recipe_type'))||'Dish',
         cuisine:clean(editorValue(formData,'cuisine')),
+        dietary_tags:formData.getAll('dietary_tags').map(v=>String(v).trim()).filter(Boolean),
         servings:clean(editorValue(formData,'servings')),
         ingredients:sanitizeRichHtml(formData.get('ingredients')||''),
         method:sanitizeRichHtml(formData.get('method')||''),
