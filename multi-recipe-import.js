@@ -240,8 +240,10 @@ function editOne(id,x,recipes,i){
         {label:'Course',name:'course',value:r.course||'',type:'select',options:['',...courses]},
         {label:'Recipe type',name:'recipe_type',value:r.recipe_type||'Dish',type:'select',options:types}
       ]},
-      {label:'Cuisine',name:'cuisine',value:r.cuisine||''},
-      {label:'Dietary / suitability',name:'dietary_tags',value:Array.isArray(r.dietary_tags)?r.dietary_tags:[],type:'multiselect',options:dietaryOptions},
+      {group:[
+        {label:'Cuisine',name:'cuisine',value:r.cuisine||''},
+        {label:'Dietary / suitability',name:'dietary_tags',value:Array.isArray(r.dietary_tags)?r.dietary_tags:[],type:'multiselect',options:dietaryOptions}
+      ]},
       {label:'Servings',name:'servings',value:r.servings||''},
       {label:'Ingredients',name:'ingredients',value:richValue(r.ingredients),type:'richtext'},
       {label:'Method / process',name:'method',value:richValue(r.method),type:'richtext'},
