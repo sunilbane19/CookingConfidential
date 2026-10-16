@@ -3,7 +3,9 @@ const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlpd210ZmJxYnluaW1xdnd4b3N1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc1ODI3MDYsImV4cCI6MjEwMzE1ODcwNn0.pwfoCI_ajYfrON8kxIV9XWMo9k2GvzCWqwcpsMxI1As';
 const CC_SITE_BASE=(window.location.hostname.endsWith('github.io')?('/'+(window.location.pathname.split('/').filter(Boolean)[0]||'')+'/'):'/');
 const APP_URL=`${window.location.origin}${CC_SITE_BASE}`;
-const supabase=createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
+const supabase=createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true,storage:window.localStorage}});
+// One Supabase client per page: signout.js and other UI modules reuse this instance.
+window.ccSupabase=supabase;
 const content=document.querySelector('#content'),search=document.querySelector('#searchInput'),loginPanel=document.querySelector('#loginPanel'),appPanel=document.querySelector('#appPanel'),userBadge=document.querySelector('#userBadge'),loginForm=document.querySelector('#loginForm'),loginMessage=document.querySelector('#loginMessage'),recipeDialog=document.querySelector('#recipeDialog'),menuDialog=document.querySelector('#menuDialog'),detailDialog=document.querySelector('#detailDialog'),importDialog=document.querySelector('#importDialog'),importQueue=document.querySelector('#importQueue');
 let importItems=[],recipes=[],menus=[],view='all';
 const RECIPE_PAGE_SIZE=12;
@@ -229,7 +231,42 @@ async function showRecipe(id){
   };
 }
 async function copyMenu(id){const m=menus.find(x=>x.id===id);if(!m)return;const{data:{user}}=await supabase.auth.getUser();if(!user)return showUiError('Please sign in again.','Sign-in required');const{data,error}=await supabase.from('cc_menus').insert({name:m.name+' — Copy',menu_date:null,occasion:m.occasion,guest_count:m.guest_count,notes:m.notes,visibility:'private',created_by:user.id}).select().single();if(error)return showUiError(error.message,'Could not copy menu');const items=await supabase.from('cc_menu_items').select('*').eq('menu_id',m.id).order('sort_order');if(items.error)return showUiError(items.error.message,'Could not copy menu items');if(items.data?.length){const rows=items.data.map(x=>({menu_id:data.id,recipe_id:x.recipe_id,section:x.section,sort_order:x.sort_order,custom_label:x.custom_label}));const ins=await supabase.from('cc_menu_items').insert(rows);if(ins.error)return showUiError(ins.error.message,'Could not copy menu items')}await loadData()}
-loginForm.onsubmit=async e=>{e.preventDefault();const button=loginForm.querySelector('button');if(!button||button.disabled)return;const email=document.querySelector('#emailInput').value.trim();button.disabled=true;button.textContent='Sending…';loginMessage.textContent='Sending sign-in link…';const{error}=await supabase.auth.signInWithOtp({email,options:{emailRedirectTo:APP_URL}});if(error){const message=String(error.message||'').toLowerCase();loginMessage.textContent=message.includes('rate limit')?'Please wait about 60 seconds before requesting another sign-in link.':'We could not send the sign-in link right now. Please try again in a moment.';button.disabled=false;button.textContent='Send me a sign-in link'}else {loginMessage.textContent='Check your email for the sign-in link.';button.disabled=false;button.textContent='Send me a sign-in link'}};
+let ccOtpEmail='';
+loginForm.onsubmit=async e=>{
+  e.preventDefault();
+  const button=loginForm.querySelector('button');
+  if(!button||button.disabled)return;
+  if(loginForm.dataset.ccOtpStep==='verify'){
+    const token=String(loginForm.querySelector('#ccEmailOtp')?.value||'').replace(/\s+/g,'');
+    if(!/^\d{6}$/.test(token)){loginMessage.textContent='Enter the 6-digit code from your email.';return}
+    button.disabled=true;button.textContent='Verifying…';loginMessage.textContent='Verifying your code…';
+    try{
+      const{error}=await supabase.auth.verifyOtp({email:ccOtpEmail,token,type:'email'});
+      if(error){loginMessage.textContent=String(error.message||'').toLowerCase().includes('expired')?'That code has expired. Please request a new one.':'That code could not be verified. Check it and try again.';button.disabled=false;button.textContent='Verify code';return}
+      loginMessage.textContent='Signed in. Loading your library…';
+    }catch(error){loginMessage.textContent='We could not verify the code right now. Please try again.';button.disabled=false;button.textContent='Verify code'}
+    return;
+  }
+  const email=document.querySelector('#emailInput').value.trim();
+  button.disabled=true;button.textContent='Sending…';loginMessage.textContent='Sending your sign-in code…';
+  try{
+    const{error}=await supabase.auth.signInWithOtp({email,options:{shouldCreateUser:false}});
+    if(error){
+      const message=String(error.message||'').toLowerCase();
+      loginMessage.textContent=message.includes('rate limit')?'Please wait about 60 seconds before requesting another sign-in code.':'We could not send the sign-in code right now. Please try again in a moment.';
+      button.disabled=false;button.textContent='Email me a sign-in code';return;
+    }
+    ccOtpEmail=email;
+    loginForm.dataset.ccOtpStep='verify';
+    const emailInput=loginForm.querySelector('#emailInput');
+    emailInput.readOnly=true;
+    emailInput.insertAdjacentHTML('afterend','<input id="ccEmailOtp" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" placeholder="6-digit email code" aria-label="6-digit email code" required>');
+    button.disabled=false;button.textContent='Verify code';
+    loginMessage.textContent='Check your email for the 6-digit code, then enter it here. If your email contains only a sign-in link, the Supabase email template still needs to be configured to include the code.';
+    let back=loginForm.querySelector('#ccOtpBack');
+    if(!back){back=document.createElement('button');back.type='button';back.id='ccOtpBack';back.className='secondary';back.textContent='Use a different email';button.insertAdjacentElement('afterend',back);back.addEventListener('click',()=>{delete loginForm.dataset.ccOtpStep;ccOtpEmail='';loginForm.querySelector('#ccEmailOtp')?.remove();emailInput.readOnly=false;button.textContent='Email me a sign-in code';loginMessage.textContent='';back.remove()})}
+  }catch(error){loginMessage.textContent='We could not send the sign-in code right now. Please try again.';button.disabled=false;button.textContent='Email me a sign-in code'}
+};
 document.querySelector('#recipeForm').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target),{data:{user}}=await supabase.auth.getUser();if(!user)return showUiError('Please sign in again.','Sign-in required');const ingredients=String(f.get('ingredients')).split('\n').map(x=>x.trim()).filter(Boolean);const{error}=await supabase.from('cc_recipes').insert({name:f.get('name'),cuisine:f.get('cuisine')||null,course:f.get('course')||null,ingredients,method:f.get('method')||null,personal_notes:f.get('notes')||null,created_by:user.id,visibility:'private'});if(error)return showUiError(error.message,'Could not save recipe');recipeDialog.close();e.target.reset();await loadData()};
 document.querySelector('#menuForm').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target),{data:{user}}=await supabase.auth.getUser();if(!user)return showUiError('Please sign in again.','Sign-in required');const{error}=await supabase.from('cc_menus').insert({name:f.get('name'),menu_date:f.get('date')||null,guest_count:f.get('guests')?Number(f.get('guests')):null,occasion:f.get('occasion')||null,notes:f.get('notes')||null,visibility:'private',created_by:user.id});if(error)return showUiError(error.message,'Could not create menu');menuDialog.close();e.target.reset();await loadData();view='menus'};
 document.querySelector('#addRecipeBtn').onclick=()=>recipeDialog.showModal();const closeRecipeDialog=()=>{recipeDialog.close();document.querySelector('#recipeForm').reset()};document.querySelector('#recipeForm .close').onclick=e=>{e.preventDefault();closeRecipeDialog()};document.querySelector('#recipeForm .dialog-actions button[value="cancel"]').onclick=e=>{e.preventDefault();closeRecipeDialog()};document.querySelector('#importBtn').onclick=()=>{importDialog.showModal();if(typeof window.ccOpenImportInbox==='function')window.ccOpenImportInbox();};document.querySelector('#closeImport').onclick=()=>importDialog.close();document.querySelector('#fileInput').onchange=e=>queueFiles([...e.target.files]);function importAlreadyQueued(item){
@@ -314,6 +351,18 @@ function ccAuthDiag(event,details={}){
     if(body)body.textContent=ccAuthDiagnostics.slice(-12).map(x=>{const{at,event,...d}=x;return at.slice(11,19)+' '+event+' '+JSON.stringify(d)}).join('\n');
   }
 }
+function ccStorageDiag(reason){
+  let localStorageAvailable=false,sessionKeyPresent=false,parsedSessionPresent=false,sessionParseError=false;
+  const key='sb-yiwmtfbqbynimqvwxosu-auth-token';
+  try{
+    const storage=window.localStorage,probe='__cc_storage_probe__';
+    storage.setItem(probe,'1');storage.removeItem(probe);localStorageAvailable=true;
+    const raw=storage.getItem(key);sessionKeyPresent=raw!==null;
+    if(raw){try{const parsed=JSON.parse(raw);parsedSessionPresent=!!(parsed&&parsed.access_token&&parsed.refresh_token)}catch{sessionParseError=true}}
+  }catch(error){sessionParseError=true}
+  ccAuthDiag('storage-diagnostic',{reason,localStorageAvailable,sessionKeyPresent,parsedSessionPresent,sessionParseError,persistSession:true,storageKey:key});
+}
+window.addEventListener('storage',event=>{if(!event.key||event.key==='sb-yiwmtfbqbynimqvwxosu-auth-token')ccStorageDiag('storage-event')});
 async function ccCheckSession(reason){
   try{
     const{data,error}=await supabase.auth.getSession();
@@ -329,7 +378,7 @@ window.addEventListener('pagehide',event=>ccAuthDiag('pagehide',{persisted:!!eve
 document.addEventListener('visibilitychange',()=>{ccAuthDiag('visibilitychange',{visibility:document.visibilityState});if(document.visibilityState==='visible')ccCheckSession('visible')});
 let bootedUserId=null,currentMember=null;
 async function boot(sessionOverride=null){
-  ccAuthDiag('boot-start',{sessionOverrideProvided:!!sessionOverride});
+  ccAuthDiag('boot-start',{sessionOverrideProvided:!!sessionOverride});ccStorageDiag('boot-start');
   let session=sessionOverride;
   if(!session){
     try{
@@ -386,7 +435,7 @@ async function boot(sessionOverride=null){
   try{await loadData()}catch(e){ccAuthDiag('load-data-failed',{errorName:e?.name||'Error'});content.innerHTML='<div class="empty">'+esc(e.message)+'</div>'}
 }
 supabase.auth.onAuthStateChange((event,session)=>{
-  ccAuthDiag('auth-state-change',{event,sessionPresent:!!session});
+  ccAuthDiag('auth-state-change',{event,sessionPresent:!!session});if(event==='SIGNED_IN'||event==='TOKEN_REFRESHED'||event==='INITIAL_SESSION')ccStorageDiag('auth-'+event.toLowerCase());
   if(session){setTimeout(()=>boot(session),0);return}
   // Null session events can occur during restoration. Confirm storage before showing login;
   // explicit SIGNED_OUT still returns to login immediately.
