@@ -238,7 +238,7 @@ loginForm.onsubmit=async e=>{
   if(!button||button.disabled)return;
   if(loginForm.dataset.ccOtpStep==='verify'){
     const token=String(loginForm.querySelector('#ccEmailOtp')?.value||'').replace(/\s+/g,'');
-    if(!/^\d{6}$/.test(token)){loginMessage.textContent='Enter the 6-digit code from your email.';return}
+    if(!/^\d{8}$/.test(token)){loginMessage.textContent='Enter the 8-digit code from your email.';return}
     button.disabled=true;button.textContent='Verifying…';loginMessage.textContent='Verifying your code…';
     try{
       const{error}=await supabase.auth.verifyOtp({email:ccOtpEmail,token,type:'email'});
@@ -260,9 +260,9 @@ loginForm.onsubmit=async e=>{
     loginForm.dataset.ccOtpStep='verify';
     const emailInput=loginForm.querySelector('#emailInput');
     emailInput.readOnly=true;
-    emailInput.insertAdjacentHTML('afterend','<input id="ccEmailOtp" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" placeholder="6-digit email code" aria-label="6-digit email code" required>');
+    emailInput.insertAdjacentHTML('afterend','<input id="ccEmailOtp" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{8}" maxlength="8" placeholder="8-digit email code" aria-label="8-digit email code" required>');
     button.disabled=false;button.textContent='Verify code';
-    loginMessage.textContent='Check your email for the 6-digit code, then enter it here. If your email contains only a sign-in link, the Supabase email template still needs to be configured to include the code.';
+    loginMessage.textContent='Check your email for the 8-digit code, then enter all 8 digits here. You can also use the sign-in link in the email.';
     let back=loginForm.querySelector('#ccOtpBack');
     if(!back){back=document.createElement('button');back.type='button';back.id='ccOtpBack';back.className='secondary';back.textContent='Use a different email';button.insertAdjacentElement('afterend',back);back.addEventListener('click',()=>{delete loginForm.dataset.ccOtpStep;ccOtpEmail='';loginForm.querySelector('#ccEmailOtp')?.remove();emailInput.readOnly=false;button.textContent='Email me a sign-in code';loginMessage.textContent='';back.remove()})}
   }catch(error){loginMessage.textContent='We could not send the sign-in code right now. Please try again.';button.disabled=false;button.textContent='Email me a sign-in code'}
