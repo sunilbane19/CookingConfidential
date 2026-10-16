@@ -377,6 +377,17 @@ window.addEventListener('pageshow',event=>{ccAuthDiag('pageshow',{persisted:!!ev
 window.addEventListener('pagehide',event=>ccAuthDiag('pagehide',{persisted:!!event.persisted,visibility:document.visibilityState}));
 document.addEventListener('visibilitychange',()=>{ccAuthDiag('visibilitychange',{visibility:document.visibilityState});if(document.visibilityState==='visible')ccCheckSession('visible')});
 let bootedUserId=null,currentMember=null;
+function updateAuthControls(session,member=null){
+  document.querySelectorAll('.auth-only').forEach(el=>{
+    const visible=!!session&&(el.id!=='adminLink'||member?.role==='owner');
+    el.hidden=!visible;
+    el.style.display=visible?'':'none';
+  });
+  if(userBadge){
+    userBadge.hidden=!session;
+    if(session)userBadge.textContent=member?.display_name||session.user.email||'Signed in';
+  }
+}
 async function boot(sessionOverride=null){
   ccAuthDiag('boot-start',{sessionOverrideProvided:!!sessionOverride});ccStorageDiag('boot-start');
   let session=sessionOverride;
@@ -391,7 +402,7 @@ async function boot(sessionOverride=null){
     }
   }else ccAuthDiag('boot-session-override',{sessionPresent:true});
   if(!session){
-    ccAuthDiag('boot-no-session',{action:'show-login'});
+    ccAuthDiag('boot-no-session',{action:'show-login'});updateAuthControls(null);
     bootedUserId=null;
     currentMember=null;
     loginPanel.hidden=false;
@@ -407,7 +418,7 @@ async function boot(sessionOverride=null){
   const{data:member,error:memberError}=await supabase.from('cc_members').select('id,email,display_name,role,active').eq('auth_user_id',session.user.id).maybeSingle();
   ccAuthDiag('member-check',{queryError:!!memberError,memberFound:!!member,memberActive:!!member?.active,errorName:memberError?.name||null});
   if(memberError||!member||!member.active){
-    ccAuthDiag('member-check-rejected',{action:'sign-out'});
+    ccAuthDiag('member-check-rejected',{action:'sign-out'});updateAuthControls(null);
     bootedUserId=null;
     currentMember=null;
     appPanel.hidden=true;
@@ -418,6 +429,7 @@ async function boot(sessionOverride=null){
     return
   }
   currentMember=member;
+  updateAuthControls(session,member);
   window.ccCurrentMember=member;
   window.ccCurrentUserId=session.user.id;
   // Explicit display styles protect panel switching if a stylesheet overrides the
@@ -440,6 +452,7 @@ supabase.auth.onAuthStateChange((event,session)=>{
   // Null session events can occur during restoration. Confirm storage before showing login;
   // explicit SIGNED_OUT still returns to login immediately.
   if(event==='SIGNED_OUT'){
+    updateAuthControls(null);
     bootedUserId=null;currentMember=null;loginPanel.hidden=false;loginPanel.style.display='';appPanel.hidden=true;appPanel.style.display='none';
     ccAuthDiag('panel-switch-login',{reason:'signed-out',loginDisplay:getComputedStyle(loginPanel).display,appDisplay:getComputedStyle(appPanel).display});
     const adminLink=document.querySelector('#adminLink');if(adminLink){adminLink.hidden=true;adminLink.style.display='none'}
