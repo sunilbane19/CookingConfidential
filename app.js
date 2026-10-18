@@ -335,21 +335,7 @@ function ccAuthDiag(event,details={}){
   if(ccAuthDiagnostics.length>60)ccAuthDiagnostics.shift();
   window.ccAuthDiagnostics=ccAuthDiagnostics;
   console.info('[CC auth diagnostic]',entry);
-  if(window.location.hostname.endsWith('github.io')){
-    if(!ccDiagPanel){
-      ccDiagPanel=document.createElement('details');
-      ccDiagPanel.id='ccAuthDiagnosticPanel';
-      ccDiagPanel.open=false;
-      ccDiagPanel.style.cssText='position:fixed;z-index:99999;bottom:8px;left:8px;right:8px;max-height:38vh;overflow:auto;background:#fff8d8;color:#222;border:2px solid #765;padding:8px;font:12px/1.35 monospace;box-shadow:0 2px 12px #0003';
-      const summary=document.createElement('summary');summary.textContent='Staging login diagnostics (tap to expand)';
-      const copy=document.createElement('button');copy.type='button';copy.textContent='Copy diagnostic log';copy.style.cssText='margin:6px;padding:5px';
-      copy.onclick=async()=>{const out=ccAuthDiagnostics.map(x=>JSON.stringify(x)).join('\n');try{await navigator.clipboard.writeText(out);copy.textContent='Copied'}catch{const ta=document.createElement('textarea');ta.value=out;ccDiagPanel.appendChild(ta);ta.select();copy.textContent='Select and copy text below'}};
-      const body=document.createElement('pre');body.id='ccAuthDiagnosticText';body.style.cssText='white-space:pre-wrap;overflow-wrap:anywhere;margin:6px 0';
-      ccDiagPanel.append(summary,copy,body);document.body.appendChild(ccDiagPanel);
-    }
-    const body=ccDiagPanel.querySelector('#ccAuthDiagnosticText');
-    if(body)body.textContent=ccAuthDiagnostics.slice(-12).map(x=>{const{at,event,...d}=x;return at.slice(11,19)+' '+event+' '+JSON.stringify(d)}).join('\n');
-  }
+  // Diagnostics remain available in the browser console during any future investigation; no visible panel is injected.
 }
 function ccStorageDiag(reason){
   let localStorageAvailable=false,sessionKeyPresent=false,parsedSessionPresent=false,sessionParseError=false;
