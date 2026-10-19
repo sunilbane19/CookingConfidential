@@ -262,7 +262,7 @@ async function printMenuDocument(contentOrMenu){
  const clone=doc.cloneNode(true);clone.removeAttribute('contenteditable');clone.classList.add('cc-print-document');clone.querySelectorAll('.cc-block-controls,[contenteditable="false"]').forEach(x=>{if(x.classList.contains('cc-block-controls'))x.remove()});
  const header=document.createElement('header');header.className='cc-menu-print-header';
  header.innerHTML='<div class="cc-menu-print-brand"><span class="cc-menu-print-logo">CC</span><span>Cooking Confidential</span><span class="cc-menu-print-rule"></span><span class="cc-menu-print-label">MENU</span></div><h1>'+title+'</h1>'+(occasion?'<p class="cc-menu-print-occasion">'+occasion+'</p>':'')+(date?'<p class="cc-menu-print-date">'+date+'</p>':'');
- const footer=document.createElement('footer');footer.className='cc-menu-print-footer';footer.innerHTML='<span>Cooking Confidential</span><span>Good Food Well Remembered</span>';
+ const footer=document.createElement('footer');footer.className='cc-menu-print-footer';footer.innerHTML='<span>Cooking Confidential</span><span class="cc-menu-print-separator">|</span><span>Good Food Well Remembered</span>';
  page.appendChild(header);page.appendChild(clone);page.appendChild(footer);sheet.appendChild(page);document.body.appendChild(sheet);document.body.classList.add('cc-menu-printing');
  const cleanup=()=>{document.body.classList.remove('cc-menu-printing');sheet.remove()};window.addEventListener('afterprint',cleanup,{once:true});setTimeout(()=>window.print(),100);setTimeout(()=>{if(document.body.contains(sheet))cleanup()},15000);
 }
