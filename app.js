@@ -250,7 +250,7 @@ loginForm.onsubmit=async e=>{
   const email=document.querySelector('#emailInput').value.trim();
   button.disabled=true;button.textContent='Sending…';loginMessage.textContent='Sending your sign-in code…';
   try{
-    const{error}=await supabase.auth.signInWithOtp({email,options:{shouldCreateUser:false}});
+    const{error}=await supabase.auth.signInWithOtp({email,options:{shouldCreateUser:false,emailRedirectTo:APP_URL}});
     if(error){
       const message=String(error.message||'').toLowerCase();
       loginMessage.textContent=message.includes('rate limit')?'Please wait about 60 seconds before requesting another sign-in code.':'We could not send the sign-in code right now. Please try again in a moment.';
