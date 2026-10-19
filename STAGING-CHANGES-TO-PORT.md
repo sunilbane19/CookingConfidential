@@ -70,6 +70,19 @@ Status: **Implemented on the Staging source branch; deployment #471 is running; 
 - PDF parser remains explicitly out of scope for this change. Live remains untouched.
 
 
+
+## Confirmed and tested — multi-recipe PDF import (19 October 2026)
+
+- [x] **PDF format support:** multi-recipe importer accepts PDF files as well as DOCX, text documents and supported images.
+- [x] **Text-based PDF extraction:** reads selectable PDF text, groups lines by page/layout, and identifies recipes using Ingredients and Method/Preparation sections.
+- [x] **Scanned PDF fallback:** when no complete recipes can be found from the PDF text layer, renders PDF pages and uses OCR to attempt extraction.
+- [x] **Fresh extraction for PDFs:** bypasses cached multi-recipe extraction results for PDF files so the original PDF is re-read.
+- [x] **Cache bust:** multi-recipe importer version updated to `1.3.24`.
+- [x] **Regression test:** user confirmed `Test Multi recipe PDF.pdf` — a Word document converted to PDF — imports successfully through the multi-recipe flow.
+- [x] **Staging deployment:** deployment #486 completed successfully on 19 October 2026.
+- [x] **Scope preserved:** deployed to Staging only; Live production was not changed.
+
+
 ## Confirmed and tested — review field layout (15 October 2026)
 
 - [x] **Single-recipe DOCX review — Dietary / suitability alignment:** user confirmed the field alignment is now correct.
