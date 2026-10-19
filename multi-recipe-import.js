@@ -205,9 +205,104 @@ async function reviewImageImport(id){
     }
   }
 }
-async function extract(id,show=true){if(show){dialog.querySelector('#detailContent').innerHTML='<div class="dialog-card"><p class="eyebrow">EXTRACTING</p><h2>Preparing recipes…</h2><p class="small-note" id="multiStatus">Reading the original file.</p></div>';dialog.showModal();}const status=t=>{const e=document.querySelector('#multiStatus');if(e)e.textContent=t;};const{data:x,error}=await sb.from('cc_import_items').select('*').eq('id',id).single();if(error||!x)return fail(error?.message||'Import item not found.');const expected=Number(window.ccExpectedRecipeCount||JSON.parse(localStorage.getItem('ccMultiImport:'+id)||'{}').expectedCount||0);try{const cached=typeof x.extracted_text==='string'?JSON.parse(x.extracted_text||'{}'):x.extracted_text;if(!/\.docx$/i.test(x.file_name||'')&&x.extraction_status==='ready'&&cached?.multiple&&Array.isArray(cached.recipes)&&cached.recipes.length&&(!expected||cached.recipes.length===expected)){render(id,x,cached.recipes);return;}}catch(e){console.warn('Cooking Confidential cached multi-recipe result:',e)}dialog.querySelector('#detailContent').innerHTML='<div class="dialog-card"><p class="eyebrow">EXTRACTING</p><h2>Preparing recipes…</h2><p class="small-note" id="multiStatus">Reading the original file.</p></div>';dialog.showModal();try{const blob=await loadOriginal(x);let recipes=[];if(/\.(png|jpe?g|webp)$/i.test(x.file_name||'')||String(x.mime_type||'').startsWith('image/')){
+
+function pdfLinesFromTextContent(content){
+  const rows=[];
+  for(const item of (content.items||[])){
+    const value=clean(item.str||'');
+    if(!value)continue;
+    const x=Number(item.transform?.[4]||0), y=Number(item.transform?.[5]||0);
+    let row=rows.find(r=>Math.abs(r.y-y)<2.5);
+    if(!row){row={y,items:[]};rows.push(row);}
+    row.items.push({x,value});
+  }
+  return rows.sort((a,b)=>b.y-a.y).map(row=>row.items.sort((a,b)=>a.x-b.x).map(x=>x.value).join(' ').replace(/\s+/g,' ').trim()).filter(Boolean);
+}
+function parsePdfRecipeSegment(sourceLines,fileName){
+  const ls=sourceLines.map(clean).filter(Boolean).filter(s=>!/^Three Recipes\s*[•·-]\s*Transcribed from supplied PDF$/i.test(s)&&!/^---\s*Page\s+\d+\s*---$/i.test(s));
+  const ing=ls.findIndex(s=>/^(?:ingredients?|ingredient list|what you need)\s*:?\s*$/i.test(s));
+  const prep=ls.findIndex((s,i)=>i>(ing<0?-1:ing)&&/^(?:preparation|method|directions?|instructions?|steps?)\s*:?\s*$/i.test(s));
+  if(ing<0||prep<0||prep<=ing)return null;
+  const titleLines=ls.slice(0,ing).filter(s=>!/^recipe by\b/i.test(s)&&!/^recipe\s*$/i.test(s)&&!/^page\s+\d+$/i.test(s));
+  let title=(titleLines.find(s=>/^\s*\d+[.)]\s+\S/.test(s))||titleLines.find(s=>s.length>=4))||fileName||'Imported recipe';
+  title=clean(title.replace(/^\s*\d+[.)]\s*/,''));
+  if(!title||/^(?:ingredients?|preparation|method|directions?)$/i.test(title))title=fileName||'Imported recipe';
+  const recipe=makeRecipe(title);
+  recipe.ingredients=cleanIngredientLines(ls.slice(ing+1,prep).filter(s=>!/^for\s+.+:?\s*$/i.test(s)));
+  const methodLines=ls.slice(prep+1);
+  for(const line of methodLines){
+    if(/^serves?\s*:/i.test(line)){recipe.servings=clean(line.replace(/^serves?\s*:\s*/i,''));continue;}
+    const note=line.match(/(?:^|\s)(?:note|notes|tip|tips)\s*:\s*(.+)$/i);
+    if(note){const prefix=clean(line.slice(0,note.index||0));if(prefix)recipe.method.push(prefix);recipe.notes.push(clean(note[1]));continue;}
+    if(/^(?:nutrition|calories|source|recipe by)\b/i.test(line))continue;
+    recipe.method.push(line);
+  }
+  recipe.method=recipe.method.filter(x=>!isOcrGarbage(x));
+  recipe.notes=recipe.notes.filter(x=>!isOcrGarbage(x));
+  return recipe.ingredients.length>=2&&recipe.method.length>=1?recipe:null;
+}
+function parsePdfTextPages(pageLines,fileName){
+  const recipes=[];
+  for(let p=0;p<pageLines.length;p++){
+    const ls=pageLines[p];
+    // A page may contain more than one numbered recipe; split at numbered title lines.
+    const starts=[];
+    ls.forEach((line,i)=>{if(/^\s*\d+[.)]\s+\S/.test(line)&&!/^step\s+\d+/i.test(line))starts.push(i);});
+    const segments=starts.length>1?starts.map((start,i)=>ls.slice(start,starts[i+1]??ls.length)):[ls];
+    for(let s=0;s<segments.length;s++){
+      const recipe=parsePdfRecipeSegment(segments[s],fileName);
+      if(recipe)recipes.push(recipe);
+    }
+  }
+  return dedupeRecipes(recipes);
+}
+async function extractPdfMulti(blob,fileName,status){
+  status('Reading PDF pages…');
+  let pdf;
+  try{
+    pdf=await import('https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs');
+    pdf.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs';
+  }catch(error){throw new Error('Could not load the PDF reader. Please try again, or save the PDF as DOCX.');}
+  const data=new Uint8Array(await blob.arrayBuffer());
+  const doc=await pdf.getDocument({data}).promise;
+  const textPages=[];
+  let selectableChars=0;
+  for(let n=1;n<=doc.numPages;n++){
+    status('Reading PDF page '+n+' of '+doc.numPages+'…');
+    const page=await doc.getPage(n);
+    const content=await page.getTextContent();
+    const linesOnPage=pdfLinesFromTextContent(content);
+    selectableChars+=linesOnPage.join(' ').length;
+    textPages.push(linesOnPage);
+  }
+  let recipes=parsePdfTextPages(textPages,fileName);
+  if(recipes.length){
+    status('Found '+recipes.length+' recipe'+(recipes.length===1?'':'s')+' in PDF text…');
+    return recipes;
+  }
+  // Scanned/image-only PDFs have no usable text layer. Render each page and OCR it.
+  status(selectableChars>30?'Reading PDF layout with OCR…':'Scanned PDF detected; reading pages with OCR…');
+  const worker=await createWorker('eng',1,{logger:m=>{if(m.status==='recognizing text')status('Reading scanned PDF… '+Math.round((m.progress||0)*100)+'%');}});
+  try{
+    const ocrPages=[];
+    for(let n=1;n<=doc.numPages;n++){
+      status('Reading scanned PDF page '+n+' of '+doc.numPages+'…');
+      const page=await doc.getPage(n),viewport=page.getViewport({scale:2.25});
+      const canvas=document.createElement('canvas');canvas.width=Math.ceil(viewport.width);canvas.height=Math.ceil(viewport.height);
+      await page.render({canvasContext:canvas.getContext('2d'),viewport}).promise;
+      const result=await worker.recognize(canvas);
+      ocrPages.push(String(result.data.text||'').split(/\r?\n/).map(clean).filter(Boolean));
+      canvas.width=1;canvas.height=1;
+    }
+    recipes=parsePdfTextPages(ocrPages,fileName);
+    if(!recipes.length)throw new Error('No complete recipes could be detected in this PDF. Check that each recipe has an Ingredients section and a Method/Preparation section, or try a clearer scan.');
+    return recipes;
+  }finally{await worker.terminate();doc.destroy?.();}
+}
+
+async function extract(id,show=true){if(show){dialog.querySelector('#detailContent').innerHTML='<div class="dialog-card"><p class="eyebrow">EXTRACTING</p><h2>Preparing recipes…</h2><p class="small-note" id="multiStatus">Reading the original file.</p></div>';dialog.showModal();}const status=t=>{const e=document.querySelector('#multiStatus');if(e)e.textContent=t;};const{data:x,error}=await sb.from('cc_import_items').select('*').eq('id',id).single();if(error||!x)return fail(error?.message||'Import item not found.');const expected=Number(window.ccExpectedRecipeCount||JSON.parse(localStorage.getItem('ccMultiImport:'+id)||'{}').expectedCount||0);try{const cached=typeof x.extracted_text==='string'?JSON.parse(x.extracted_text||'{}'):x.extracted_text;if(!/\.(?:docx|pdf)$/i.test(x.file_name||'')&&x.extraction_status==='ready'&&cached?.multiple&&Array.isArray(cached.recipes)&&cached.recipes.length&&(!expected||cached.recipes.length===expected)){render(id,x,cached.recipes);return;}}catch(e){console.warn('Cooking Confidential cached multi-recipe result:',e)}dialog.querySelector('#detailContent').innerHTML='<div class="dialog-card"><p class="eyebrow">EXTRACTING</p><h2>Preparing recipes…</h2><p class="small-note" id="multiStatus">Reading the original file.</p></div>';dialog.showModal();try{const blob=await loadOriginal(x);let recipes=[];if(/\.(png|jpe?g|webp)$/i.test(x.file_name||'')||String(x.mime_type||'').startsWith('image/')){
   // No paid vision-model call: keep multi-image extraction on local Tesseract OCR.
-  recipes=await ocrImage(blob,status);}else if(/\.docx$/i.test(x.file_name||'')){status('Separating recipes, then using the standard DOCX parser…');const arrayBuffer=await blob.arrayBuffer();const html=(await mammoth.convertToHtml({arrayBuffer},{ignoreEmptyParagraphs:false})).value||'';recipes=parseDocxMulti(html,x.file_name||'Imported document',expected);}else if((x.mime_type||'').startsWith('text/')){recipes=parseTextMulti(await blob.text(),x.file_name||'Imported document');if(!recipes.length){const r=makeRecipe(x.file_name||'Imported recipe');r.ingredients=cleanIngredientLines(await blob.text());recipes=[r];}}else throw Error('This multi-recipe importer currently supports images, DOCX and text documents.');if(!recipes.length)throw Error('No recipes could be detected.');recipes=recipes.map(r=>{
+  recipes=await ocrImage(blob,status);}else if(/\.docx$/i.test(x.file_name||'')){status('Separating recipes, then using the standard DOCX parser…');const arrayBuffer=await blob.arrayBuffer();const html=(await mammoth.convertToHtml({arrayBuffer},{ignoreEmptyParagraphs:false})).value||'';recipes=parseDocxMulti(html,x.file_name||'Imported document',expected);}else if(/\.pdf$/i.test(x.file_name||'')||String(x.mime_type||'').toLowerCase().includes('application/pdf')){recipes=await extractPdfMulti(blob,x.file_name||'Imported PDF',status);}else if((x.mime_type||'').startsWith('text/')){recipes=parseTextMulti(await blob.text(),x.file_name||'Imported document');if(!recipes.length){const r=makeRecipe(x.file_name||'Imported recipe');r.ingredients=cleanIngredientLines(await blob.text());recipes=[r];}}else throw Error('This multi-recipe importer currently supports images, DOCX and text documents.');if(!recipes.length)throw Error('No recipes could be detected.');recipes=recipes.map(r=>{
   const method=(Array.isArray(r.method)?r.method:lines(r.method)).map(clean).filter(x=>!isOcrGarbage(x));
   const notes=(Array.isArray(r.notes)?r.notes:lines(r.notes)).map(clean).filter(x=>!isOcrGarbage(x));
   const kept=[];
@@ -219,7 +314,7 @@ async function extract(id,show=true){if(show){dialog.querySelector('#detailConte
     if(note)notes.push(note);
   }
   return {...r,ingredients:cleanIngredientLines(r.ingredients),method:kept,notes};
-});await sb.from('cc_import_items').update({extracted_text:JSON.stringify({version:6,multiple:true,recipes}),source_title:recipes[0]?.name||x.file_name,extraction_status:'ready',review_status:'pending',error_message:null}).eq('id',id);if(show)render(id,x,recipes);return {item:x,recipes};}catch(e){if(show)fail(e?.message||String(e));throw e;}}
+});await sb.from('cc_import_items').update({extracted_text:JSON.stringify({version:7,multiple:true,recipes}),source_title:recipes[0]?.name||x.file_name,extraction_status:'ready',review_status:'pending',error_message:null}).eq('id',id);if(show)render(id,x,recipes);return {item:x,recipes};}catch(e){if(show)fail(e?.message||String(e));throw e;}}
 function fail(msg){dialog.querySelector('#detailContent').innerHTML=`<button class="close" type="button">×</button><p class="eyebrow">IMPORT ERROR</p><h2>Recipe extraction failed</h2><p class="small-note">${esc(msg)}</p>`;dialog.querySelector('.close').onclick=()=>dialog.close();}
 function render(id,x,recipes){const cards=recipes.map((r,i)=>{const reviewed=!!r._reviewed;return `<article class="multi-recipe-card"><label class="multi-select"><input type="checkbox" data-r="${i}" ${reviewed?'checked':''}><span><strong>${esc(r.name)}</strong></span></label><button type="button" class="secondary multi-edit ${reviewed?'reviewed':''}" data-r="${i}">${reviewed?'✓ Reviewed':'Review'}</button></article>`}).join('');dialog.querySelector('#detailContent').innerHTML=`<button class="close" type="button">×</button><p class="eyebrow">MULTI-RECIPE IMPORT</p><h2>${recipes.length} recipes</h2><p class="small-note">Review the recipes below and select the ones you want to save.</p><div class="multi-list">${cards}</div><div class="detail-actions multi-list-actions"><button class="secondary multi-cancel" id="multiCancel">Cancel</button><button class="primary multi-save" id="multiSave">Save selected</button></div>`;dialog.querySelector('.close').onclick=()=>dialog.close();dialog.querySelector('#multiCancel').onclick=()=>dialog.close();
  dialog.querySelectorAll('.multi-edit').forEach(b=>b.onclick=()=>editOne(id,x,recipes,Number(b.dataset.r)));dialog.querySelector('#multiSave').onclick=async()=>{const selected=[...dialog.querySelectorAll('input[data-r]:checked')].map(e=>Number(e.dataset.r));await saveMany(id,x,recipes.filter((_,i)=>selected.includes(i)));};}
