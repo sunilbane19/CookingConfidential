@@ -245,12 +245,18 @@ function parsePdfTextPages(pageLines,fileName){
   const recipes=[];
   for(let p=0;p<pageLines.length;p++){
     const ls=pageLines[p];
-    // A page may contain more than one numbered recipe; split at numbered title lines.
-    const starts=[];
-    ls.forEach((line,i)=>{if(/^\s*\d+[.)]\s+\S/.test(line)&&!/^step\s+\d+/i.test(line))starts.push(i);});
-    const segments=starts.length>1?starts.map((start,i)=>ls.slice(start,starts[i+1]??ls.length)):[ls];
-    for(let s=0;s<segments.length;s++){
-      const recipe=parsePdfRecipeSegment(segments[s],fileName);
+    // Only treat a numbered line as a recipe title when an Ingredients heading
+    // follows before the next numbered line. Numbered preparation steps are not titles.
+    const candidates=[];
+    ls.forEach((line,i)=>{
+      if(!/^\s*\d+[.)]\s+\S/.test(line)||/^step\s+\d+/i.test(line))return;
+      const nextNumber=ls.findIndex((other,j)=>j>i&&/^\s*\d+[.)]\s+\S/.test(other));
+      const end=nextNumber<0?ls.length:nextNumber;
+      if(ls.slice(i+1,end).some(s=>/^(?:ingredients?|ingredient list|what you need)\s*:?\s*$/i.test(clean(s))))candidates.push(i);
+    });
+    const segments=candidates.length>1?candidates.map((start,i)=>ls.slice(start,candidates[i+1]??ls.length)):[ls];
+    for(const segment of segments){
+      const recipe=parsePdfRecipeSegment(segment,fileName);
       if(recipe)recipes.push(recipe);
     }
   }
