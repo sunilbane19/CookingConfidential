@@ -133,20 +133,31 @@ function styles(){
  body.cc-menu-printing #ccMenuPrintPage{display:block!important}
  #ccMenuPrintPage{display:none}
  @media print{
-   @page{size:A4 portrait;margin:8mm}
-   body.cc-menu-printing{padding:0!important;background:#fff!important}
+   @page{size:A4 portrait;margin:15mm 17mm 17mm}
+   body.cc-menu-printing{padding:0!important;margin:0!important;background:#fff!important}
    body.cc-menu-printing>*:not(#ccMenuPrintPage){display:none!important}
-   body.cc-menu-printing #ccMenuPrintPage{display:block!important;width:194mm;margin:0 auto;background:#fff;color:#111}
-   #ccMenuPrintPage .cc-print-page{width:100%}
-   #ccMenuPrintPage .cc-print-header{text-align:center;margin:0 0 .8em}
-   #ccMenuPrintPage .cc-print-header h1{font:700 22px Georgia,serif;margin:0 0 .2em}
-   #ccMenuPrintPage .cc-print-header div{font:11px Arial,sans-serif;line-height:1.35;margin:0}
-   #ccMenuPrintPage .cc-print-document{font:13px/1.35 Georgia,"Times New Roman",serif}
-   #ccMenuPrintPage .cc-print-document h1,#ccMenuPrintPage .cc-print-document h2,#ccMenuPrintPage .cc-print-document h3,#ccMenuPrintPage .cc-print-document h4,#ccMenuPrintPage .cc-print-document h5,#ccMenuPrintPage .cc-print-document h6{margin:0 0 .65em}
-   #ccMenuPrintPage .cc-print-document p{margin:0 0 .65em}
-   #ccMenuPrintPage .cc-print-document ul,#ccMenuPrintPage .cc-print-document ol{margin:0 0 .65em;padding-left:22px}
-   #ccMenuPrintPage .cc-print-document .cc-menu-block{padding:0!important;margin:0 0 .65em!important;min-height:0!important}
-   #ccMenuPrintPage .cc-print-document .cc-divider{border-top:1px solid #aaa;height:1px;padding:0!important;margin:.8em 0!important}
+   body.cc-menu-printing #ccMenuPrintPage{display:block!important;width:176mm;margin:0 auto;background:#fff;color:#24231f}
+   #ccMenuPrintPage .cc-print-page{width:100%;font-family:Georgia,"Times New Roman",serif;color:#24231f}
+   #ccMenuPrintPage .cc-menu-print-header{margin:0 0 10mm;padding:0 0 6mm;border-bottom:.35mm solid #ddd6ca;text-align:left;break-inside:avoid}
+   #ccMenuPrintPage .cc-menu-print-brand{display:flex;align-items:center;gap:3mm;margin-bottom:7mm;font:10pt Arial,sans-serif;color:#4a4944}
+   #ccMenuPrintPage .cc-menu-print-logo{display:inline-flex;align-items:center;justify-content:center;width:10mm;height:10mm;border:.45mm solid #9b3f2f;border-radius:50%;font:bold 8pt Arial,sans-serif;color:#9b3f2f;box-sizing:border-box}
+   #ccMenuPrintPage .cc-menu-print-rule{height:.3mm;background:#ddd6ca;flex:1;margin-left:2mm}
+   #ccMenuPrintPage .cc-menu-print-label{font:8pt Arial,sans-serif;letter-spacing:2px;color:#9b3f2f}
+   #ccMenuPrintPage .cc-menu-print-header h1{font:normal 29pt/1.12 Georgia,serif;letter-spacing:-.3px;margin:0 0 3mm;color:#24231f;overflow-wrap:anywhere}
+   #ccMenuPrintPage .cc-menu-print-occasion{font:12pt/1.4 Georgia,serif;margin:0 0 1.5mm;color:#62584d}
+   #ccMenuPrintPage .cc-menu-print-date{font:9pt Arial,sans-serif;margin:0;color:#77736a}
+   #ccMenuPrintPage .cc-print-document{font:11.5pt/1.5 Georgia,"Times New Roman",serif}
+   #ccMenuPrintPage .cc-print-document h1,#ccMenuPrintPage .cc-print-document h2,#ccMenuPrintPage .cc-print-document h3,#ccMenuPrintPage .cc-print-document h4,#ccMenuPrintPage .cc-print-document h5,#ccMenuPrintPage .cc-print-document h6{font-family:Georgia,"Times New Roman",serif;line-height:1.22;margin:5mm 0 2mm;color:#9b3f2f;break-after:avoid}
+   #ccMenuPrintPage .cc-print-document h1{font-size:20pt;color:#24231f}
+   #ccMenuPrintPage .cc-print-document h2{font-size:16pt}
+   #ccMenuPrintPage .cc-print-document h3{font-size:13pt}
+   #ccMenuPrintPage .cc-print-document p{margin:0 0 2.5mm;orphans:3;widows:3}
+   #ccMenuPrintPage .cc-print-document ul,#ccMenuPrintPage .cc-print-document ol{margin:0 0 3mm;padding-left:7mm}
+   #ccMenuPrintPage .cc-print-document li{padding-left:1mm;margin:0 0 1mm}
+   #ccMenuPrintPage .cc-print-document .cc-menu-block{padding:0!important;margin:0 0 3mm!important;min-height:0!important;break-inside:avoid}
+   #ccMenuPrintPage .cc-print-document .cc-divider{border:0;border-top:.3mm solid #ddd6ca;height:1px;padding:0!important;margin:4mm 0!important}
+   #ccMenuPrintPage .cc-print-footer{display:flex;justify-content:space-between;gap:8mm;margin-top:10mm;padding-top:3mm;border-top:.25mm solid #ddd6ca;font:8pt Arial,sans-serif;color:#77736a}
+   #ccMenuPrintPage a{color:#9b3f2f;text-decoration:none}
  }
  @media print{
    body:not(.cc-menu-printing)>*:not(#ccMenuEditorDialog){display:none!important}
@@ -244,11 +255,16 @@ async function printMenuDocument(contentOrMenu){
  let content=null,doc,title,occasion,date;
  if(contentOrMenu?.querySelector){content=contentOrMenu;doc=content.querySelector('#ccMenuDocument');title=esc(content.querySelector('#ccMenuName')?.value||'Menu');occasion=esc(content.querySelector('#ccMenuOccasion')?.value||'');date=esc(content.querySelector('#ccMenuDate')?.value||'');}
  else{const menu=contentOrMenu||{},source=docFromMenu(menu);doc=document.createElement('div');doc.id='ccMenuDocument';doc.className='cc-menu-document';doc.innerHTML=(source.blocks||[]).map(blockMarkup).join('');title=esc(menu.name||'Menu');occasion=esc(menu.occasion||'');date=esc(formatMenuDate(menu.menu_date||''));}
- if(!doc)return; const old=document.querySelector('#ccMenuPrintPage');if(old)old.remove();
- const sheet=document.createElement('div');sheet.id='ccMenuPrintPage';const page=document.createElement('div');page.className='cc-print-page';
- const clone=doc.cloneNode(true);clone.removeAttribute('contenteditable');clone.classList.add('cc-print-document');clone.querySelectorAll('.cc-block-controls').forEach(x=>x.remove());
- page.innerHTML='<div class="cc-print-header"><h1>'+title+'</h1>'+(occasion?'<div>'+occasion+'</div>':'')+(date?'<div>'+date+'</div>':'')+'</div>';page.appendChild(clone);sheet.appendChild(page);document.body.appendChild(sheet);document.body.classList.add('cc-menu-printing');
- const cleanup=()=>{document.body.classList.remove('cc-menu-printing');sheet.remove()};window.addEventListener('afterprint',cleanup,{once:true});setTimeout(()=>window.print(),80);setTimeout(()=>{if(document.body.contains(sheet))cleanup()},10000);
+ if(!doc)return;
+ const previous=document.querySelector('#ccMenuPrintPage');if(previous)previous.remove();
+ const sheet=document.createElement('div');sheet.id='ccMenuPrintPage';
+ const page=document.createElement('div');page.className='cc-print-page';
+ const clone=doc.cloneNode(true);clone.removeAttribute('contenteditable');clone.classList.add('cc-print-document');clone.querySelectorAll('.cc-block-controls,[contenteditable="false"]').forEach(x=>{if(x.classList.contains('cc-block-controls'))x.remove()});
+ const header=document.createElement('header');header.className='cc-menu-print-header';
+ header.innerHTML='<div class="cc-menu-print-brand"><span class="cc-menu-print-logo">CC</span><span>Cooking Confidential</span><span class="cc-menu-print-rule"></span><span class="cc-menu-print-label">MENU</span></div><h1>'+title+'</h1>'+(occasion?'<p class="cc-menu-print-occasion">'+occasion+'</p>':'')+(date?'<p class="cc-menu-print-date">'+date+'</p>':'');
+ const footer=document.createElement('footer');footer.className='cc-menu-print-footer';footer.innerHTML='<span>Cooking Confidential</span><span>Good Food Well Remembered</span>';
+ page.appendChild(header);page.appendChild(clone);page.appendChild(footer);sheet.appendChild(page);document.body.appendChild(sheet);document.body.classList.add('cc-menu-printing');
+ const cleanup=()=>{document.body.classList.remove('cc-menu-printing');sheet.remove()};window.addEventListener('afterprint',cleanup,{once:true});setTimeout(()=>window.print(),100);setTimeout(()=>{if(document.body.contains(sheet))cleanup()},15000);
 }
 async function applyDocxParagraphAlignment(html,arrayBuffer){
   try{
