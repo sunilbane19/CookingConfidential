@@ -245,3 +245,10 @@ dialog .dialog-card{box-sizing:border-box;max-width:100%;min-width:0;overflow-x:
 
 /* Recipe rich-text editor: keep content scrollable within the edit dialog. */
 .rich-field{min-width:0;display:block}.rich-editor{box-sizing:border-box;min-height:150px;max-height:280px;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;white-space:pre-wrap;overflow-wrap:anywhere;outline-offset:2px}.rich-toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:6px}.rich-editor a{cursor:pointer}
+
+/* Rich editor toolbar: keep picker and Link button on the same line as formatting controls. */
+#detailContent .rich-toolbar{display:flex!important;flex-direction:row!important;align-items:center!important;flex-wrap:nowrap!important;gap:6px!important;min-width:0;overflow:visible}
+#detailContent .rich-toolbar .rich-tool{flex:0 0 auto!important;width:auto!important;min-width:34px!important}
+#detailContent .rich-toolbar .rich-recipe-link-select{display:block!important;flex:0 1 230px!important;width:auto!important;min-width:150px!important;max-width:260px!important;height:32px!important;min-height:32px!important;margin:0!important;padding:4px 28px 4px 9px!important;border:1px solid var(--line)!important;border-radius:7px!important;background:var(--card)!important;font:12px Arial,sans-serif!important;color:var(--ink)!important}
+#detailContent .rich-field-label{display:block;margin:0 0 6px;font:12px Arial,sans-serif;color:var(--muted)}
+@media(max-width:760px){#detailContent .rich-toolbar{flex-wrap:wrap!important}#detailContent .rich-toolbar .rich-recipe-link-select{flex:1 1 170px!important;max-width:none!important}}
