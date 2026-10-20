@@ -264,3 +264,8 @@ dialog .dialog-card{box-sizing:border-box;max-width:100%;min-width:0;overflow-x:
 #detailContent .rich-editor ol{display:block!important;list-style-type:decimal!important;list-style-position:outside!important;padding-inline-start:32px!important;margin-block:8px!important}
 #detailContent .rich-editor li{display:list-item!important;list-style:inherit!important;margin-block:3px!important;padding-inline-start:2px!important}
 #detailContent .rich-editor ul li::marker{content:"• "}
+
+/* Explicit markers for both rich-text list types. */
+#detailContent .rich-editor ol{list-style:decimal!important}
+#detailContent .rich-editor ol li::marker{content:counter(list-item) ". "!important}
+#detailContent .rich-editor ul li::marker{content:"• "!important}
