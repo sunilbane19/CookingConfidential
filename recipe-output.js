@@ -1,4 +1,4 @@
-import { sanitizeRichHtml } from './generic-editor.js?v=1.3.7';
+import { sanitizeRichHtml } from './generic-editor.js?v=1.3.8';
 const MARGIN=18;
 function clean(value=''){return String(value??'').trim()}
 function safeFileName(name){return clean(name||'recipe').replace(/[^a-z0-9]+/gi,'-').replace(/^-|-$/g,'').toLowerCase()||'recipe'}
