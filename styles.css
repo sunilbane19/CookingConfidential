@@ -258,3 +258,9 @@ dialog .dialog-card{box-sizing:border-box;max-width:100%;min-width:0;overflow-x:
 #detailContent .rich-field .rich-toolbar>.rich-recipe-link-select{display:inline-block!important;position:static!important;flex:0 1 460px!important;width:460px!important;min-width:300px!important;max-width:460px!important;height:32px!important;min-height:32px!important;margin:0!important;}
 #detailContent .rich-field .rich-toolbar>.rich-tool{flex:0 0 auto!important;width:auto!important;}
 @media(max-width:760px){#detailContent .rich-field .rich-toolbar{flex-wrap:wrap!important}#detailContent .rich-field .rich-toolbar>.rich-recipe-link-select{flex:1 1 170px!important;width:auto!important;max-width:none!important}}
+
+/* Make rich-text list markers visible inside the editor. */
+#detailContent .rich-editor ul{display:block!important;list-style-type:disc!important;list-style-position:outside!important;padding-inline-start:32px!important;margin-block:8px!important}
+#detailContent .rich-editor ol{display:block!important;list-style-type:decimal!important;list-style-position:outside!important;padding-inline-start:32px!important;margin-block:8px!important}
+#detailContent .rich-editor li{display:list-item!important;list-style:inherit!important;margin-block:3px!important;padding-inline-start:2px!important}
+#detailContent .rich-editor ul li::marker{content:"• "}
