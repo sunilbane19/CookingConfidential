@@ -131,7 +131,7 @@ async function loadData(){
   else if(view==='all')renderAll(search.value.trim().toLowerCase());
 }
 window.ccReloadRecipes=()=>loadRecipePage({offset:recipeOffset,refreshCount:true});window.ccRecipePageOffset=()=>recipeOffset;
-function recipeCard(r){const tags=Array.isArray(r.dietary_tags)?r.dietary_tags:[];return `<article class="card" data-id="${r.id}"><div class="card-image" aria-hidden="true"></div><div class="card-body"><span class="tag">${esc(r.cuisine||'Uncategorised')}</span><h3>${esc(r.name)}</h3><div class="meta">${esc([r.course||'Recipe',r.recipe_type].filter(Boolean).join(' · '))} · ${stars(r.rating)}</div>${tags.length?`<div class="meta">${esc(tags.join(' · '))}</div>`:''}<div class="created-by">Created by: <strong>${esc(r.creator_name||'')}</strong></div></div></article>`}
+function recipeCard(r){const tags=Array.isArray(r.dietary_tags)?r.dietary_tags:[];return `<article class="card" data-id="${r.id}"><div class="card-image" aria-hidden="true"></div><div class="card-body"><span class="tag">${esc(r.cuisine||'Uncategorised')}</span><h3>${esc(r.name)}</h3><div class="meta">${esc([r.course||'Recipe',r.recipe_type].filter(Boolean).join(' · '))} · ${stars(r.rating)}</div>${tags.length?`<div class="meta">${esc(tags.join(' · '))}</div>`:''}<div class="created-by">Added by: <strong>${esc(r.creator_name||'')}</strong></div></div></article>`}
 function recipePager(){
   const totalPages=Math.max(1,Math.ceil(recipeTotalCount/RECIPE_PAGE_SIZE));
   const page=Math.floor(recipeOffset/RECIPE_PAGE_SIZE)+1;
