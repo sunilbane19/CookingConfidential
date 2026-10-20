@@ -242,3 +242,6 @@ dialog .dialog-card{box-sizing:border-box;max-width:100%;min-width:0;overflow-x:
 /* Align Edit creator label/input with Add original file control. */
 #detailContent .cc-source-creator-row>p label{margin:0;}
 #detailContent .cc-source-creator-row{align-items:end;}
+
+/* Recipe rich-text editor: keep content scrollable within the edit dialog. */
+.rich-field{min-width:0;display:block}.rich-editor{box-sizing:border-box;min-height:150px;max-height:280px;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;white-space:pre-wrap;overflow-wrap:anywhere;outline-offset:2px}.rich-toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:6px}.rich-editor a{cursor:pointer}
