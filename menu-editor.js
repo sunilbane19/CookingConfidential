@@ -50,7 +50,7 @@ const normalizeBlocks=blocks=>blocks.map(b=>({...b,html:cleanHtml(b.html||'')}))
 const recipeCache=new Map();
 
 function styles(){
- /* menu editor UI refresh 1.9.22 */
+ /* menu editor UI refresh 1.9.26: clearer editable lines and selection guidance */
  if(document.querySelector('#ccMenuEditorStyles'))return;
  const s=document.createElement('style');s.id='ccMenuEditorStyles';s.textContent=`
  #ccMenuEditorDialog{max-width:min(1120px,96vw);width:100%;max-height:94vh}
@@ -61,12 +61,14 @@ function styles(){
  .cc-menu-toolrow button{cursor:pointer;font-weight:600}.cc-menu-align{min-width:42px}.cc-menu-align.active{background:var(--accent);color:#fff;border-color:var(--accent)}
  .cc-menu-toolrow .cc-tool-primary{background:var(--paper)}
  .cc-menu-document{background:#fff;border:1px solid var(--line);border-radius:14px;padding:24px;min-height:520px;box-shadow:0 4px 18px rgba(40,30,20,.05)}
- .cc-menu-document[contenteditable="true"] .cc-menu-block{position:relative;min-height:30px;padding:7px 42px 7px 6px;margin:2px 0;border-radius:7px;outline:none;line-height:1.45;font-family:Georgia,"Times New Roman",serif}
- .cc-menu-block:focus{box-shadow:inset 0 0 0 1px rgba(155,63,47,.35)} .cc-menu-block h1,.cc-menu-block h2,.cc-menu-block h3,.cc-menu-block h4,.cc-menu-block h5,.cc-menu-block h6{margin:0 0 8px}.cc-menu-block table{border-collapse:collapse;width:100%;margin:6px 0;table-layout:auto}.cc-menu-block th,.cc-menu-block td{border:1px solid var(--line);padding:5px 7px;vertical-align:top;text-align:inherit}
+ .cc-menu-document[contenteditable="true"] .cc-menu-block{position:relative;min-height:38px;padding:9px 118px 9px 10px;margin:5px 0;border:1px dashed #d5c6b8;border-radius:7px;outline:none;line-height:1.45;font-family:Georgia,"Times New Roman",serif;transition:border-color .12s,background .12s}
+ .cc-menu-block:focus{border:1px solid var(--accent);background:#fffdf9;box-shadow:inset 0 0 0 1px rgba(155,63,47,.12)} .cc-menu-block:hover{border-color:#b79b88;background:#fffdf9} .cc-menu-document[contenteditable="true"] .cc-menu-block:has(> br:first-child){min-height:46px} .cc-menu-block h1,.cc-menu-block h2,.cc-menu-block h3,.cc-menu-block h4,.cc-menu-block h5,.cc-menu-block h6{margin:0 0 8px}.cc-menu-block table{border-collapse:collapse;width:100%;margin:6px 0;table-layout:auto}.cc-menu-block th,.cc-menu-block td{border:1px solid var(--line);padding:5px 7px;vertical-align:top;text-align:inherit}
  .cc-menu-block.cc-divider{border-top:1px solid var(--line);height:1px;min-height:1px;padding:0;margin:16px 4px}
- .cc-menu-block .cc-block-controls{position:absolute;right:6px;top:50%;transform:translateY(-50%);display:flex;gap:3px;opacity:.35;z-index:4;align-items:center;white-space:nowrap}
+ .cc-menu-block .cc-block-controls{position:absolute;right:6px;top:50%;transform:translateY(-50%);display:flex;gap:4px;opacity:.9;z-index:4;align-items:center;white-space:nowrap;background:rgba(255,255,255,.94);padding:2px;border-radius:7px;border:1px solid var(--line)}
+ .cc-menu-block:has(> br:first-child)::before{content:'Click here to type a menu line';display:block;color:#8b8177;font:italic 14px Arial,sans-serif;pointer-events:none;padding:3px 0 5px;border:1px dashed #d5c6b8;border-radius:5px;margin:-2px 0 0;padding-left:8px;min-height:28px}
+ .cc-menu-block:has(> br:first-child):focus-within::before{display:none} .cc-menu-document[contenteditable="true"] .cc-menu-block::selection,.cc-menu-document[contenteditable="true"] .cc-menu-block *::selection{background:#f1c9bd;color:#241b17} .cc-menu-editor-hint{font:12px/1.4 Arial,sans-serif;color:var(--muted);margin:0 0 8px;padding:8px 10px;border-left:3px solid var(--accent);background:#f8f3eb}
  .cc-menu-block:hover .cc-block-controls,.cc-menu-block:focus-within .cc-block-controls{opacity:1}
- .cc-block-controls button{border:1px solid var(--line);background:var(--paper);border-radius:5px;width:28px;height:28px;padding:0;font:12px Arial}
+ .cc-block-controls button{border:1px solid #c9bdb0;background:#f8f3eb;color:#352b25;border-radius:5px;width:30px;height:30px;padding:0;font:600 14px Arial;cursor:pointer;box-shadow:0 1px 2px #0001}
  .cc-menu-meta{display:grid;grid-template-columns:2fr 1fr 1fr;gap:12px}
  .cc-menu-meta label{margin:8px 0}
  .cc-menu-meta input{display:block;width:100%;margin-top:6px;padding:10px;border:1px solid var(--line);border-radius:9px;background:#fff;font:14px Arial}
@@ -131,20 +133,31 @@ function styles(){
  body.cc-menu-printing #ccMenuPrintPage{display:block!important}
  #ccMenuPrintPage{display:none}
  @media print{
-   @page{size:A4 portrait;margin:8mm}
-   body.cc-menu-printing{padding:0!important;background:#fff!important}
+   @page{size:A4 portrait;margin:15mm 17mm 17mm}
+   body.cc-menu-printing{padding:0!important;margin:0!important;background:#fff!important}
    body.cc-menu-printing>*:not(#ccMenuPrintPage){display:none!important}
-   body.cc-menu-printing #ccMenuPrintPage{display:block!important;width:194mm;margin:0 auto;background:#fff;color:#111}
-   #ccMenuPrintPage .cc-print-page{width:100%}
-   #ccMenuPrintPage .cc-print-header{text-align:center;margin:0 0 .8em}
-   #ccMenuPrintPage .cc-print-header h1{font:700 22px Georgia,serif;margin:0 0 .2em}
-   #ccMenuPrintPage .cc-print-header div{font:11px Arial,sans-serif;line-height:1.35;margin:0}
-   #ccMenuPrintPage .cc-print-document{font:13px/1.35 Georgia,"Times New Roman",serif}
-   #ccMenuPrintPage .cc-print-document h1,#ccMenuPrintPage .cc-print-document h2,#ccMenuPrintPage .cc-print-document h3,#ccMenuPrintPage .cc-print-document h4,#ccMenuPrintPage .cc-print-document h5,#ccMenuPrintPage .cc-print-document h6{margin:0 0 .65em}
-   #ccMenuPrintPage .cc-print-document p{margin:0 0 .65em}
-   #ccMenuPrintPage .cc-print-document ul,#ccMenuPrintPage .cc-print-document ol{margin:0 0 .65em;padding-left:22px}
-   #ccMenuPrintPage .cc-print-document .cc-menu-block{padding:0!important;margin:0 0 .65em!important;min-height:0!important}
-   #ccMenuPrintPage .cc-print-document .cc-divider{border-top:1px solid #aaa;height:1px;padding:0!important;margin:.8em 0!important}
+   body.cc-menu-printing #ccMenuPrintPage{display:block!important;width:176mm;margin:0 auto;background:#fff;color:#24231f}
+   #ccMenuPrintPage .cc-print-page{width:100%;font-family:Georgia,"Times New Roman",serif;color:#24231f}
+   #ccMenuPrintPage .cc-menu-print-header{margin:0 0 10mm;padding:0 0 6mm;border-bottom:.35mm solid #ddd6ca;text-align:left;break-inside:avoid}
+   #ccMenuPrintPage .cc-menu-print-brand{display:flex;align-items:center;gap:3mm;margin-bottom:7mm;font:10pt Arial,sans-serif;color:#4a4944}
+   #ccMenuPrintPage .cc-menu-print-logo{display:inline-flex;align-items:center;justify-content:center;width:10mm;height:10mm;border:.45mm solid #9b3f2f;border-radius:50%;font:bold 8pt Arial,sans-serif;color:#9b3f2f;box-sizing:border-box}
+   #ccMenuPrintPage .cc-menu-print-rule{height:.3mm;background:#ddd6ca;flex:1;margin-left:2mm}
+   #ccMenuPrintPage .cc-menu-print-label{font:8pt Arial,sans-serif;letter-spacing:2px;color:#9b3f2f}
+   #ccMenuPrintPage .cc-menu-print-header h1{font:normal 29pt/1.12 Georgia,serif;letter-spacing:-.3px;margin:0 0 3mm;color:#24231f;overflow-wrap:anywhere}
+   #ccMenuPrintPage .cc-menu-print-occasion{font:12pt/1.4 Georgia,serif;margin:0 0 1.5mm;color:#62584d}
+   #ccMenuPrintPage .cc-menu-print-date{font:9pt Arial,sans-serif;margin:0;color:#77736a}
+   #ccMenuPrintPage .cc-print-document{font:11.5pt/1.5 Georgia,"Times New Roman",serif}
+   #ccMenuPrintPage .cc-print-document h1,#ccMenuPrintPage .cc-print-document h2,#ccMenuPrintPage .cc-print-document h3,#ccMenuPrintPage .cc-print-document h4,#ccMenuPrintPage .cc-print-document h5,#ccMenuPrintPage .cc-print-document h6{font-family:Georgia,"Times New Roman",serif;line-height:1.22;margin:5mm 0 2mm;color:#9b3f2f;break-after:avoid}
+   #ccMenuPrintPage .cc-print-document h1{font-size:20pt;color:#24231f}
+   #ccMenuPrintPage .cc-print-document h2{font-size:16pt}
+   #ccMenuPrintPage .cc-print-document h3{font-size:13pt}
+   #ccMenuPrintPage .cc-print-document p{margin:0 0 2.5mm;orphans:3;widows:3}
+   #ccMenuPrintPage .cc-print-document ul,#ccMenuPrintPage .cc-print-document ol{margin:0 0 3mm;padding-left:7mm}
+   #ccMenuPrintPage .cc-print-document li{padding-left:1mm;margin:0 0 1mm}
+   #ccMenuPrintPage .cc-print-document .cc-menu-block{padding:0!important;margin:0 0 3mm!important;min-height:0!important;break-inside:avoid}
+   #ccMenuPrintPage .cc-print-document .cc-divider{border:0;border-top:.3mm solid #ddd6ca;height:1px;padding:0!important;margin:4mm 0!important}
+   #ccMenuPrintPage .cc-print-footer{display:flex;justify-content:space-between;gap:8mm;margin-top:10mm;padding-top:3mm;border-top:.25mm solid #ddd6ca;font:8pt Arial,sans-serif;color:#77736a}
+   #ccMenuPrintPage a{color:#9b3f2f;text-decoration:none}
  }
  @media print{
    body:not(.cc-menu-printing)>*:not(#ccMenuEditorDialog){display:none!important}
@@ -242,11 +255,16 @@ async function printMenuDocument(contentOrMenu){
  let content=null,doc,title,occasion,date;
  if(contentOrMenu?.querySelector){content=contentOrMenu;doc=content.querySelector('#ccMenuDocument');title=esc(content.querySelector('#ccMenuName')?.value||'Menu');occasion=esc(content.querySelector('#ccMenuOccasion')?.value||'');date=esc(content.querySelector('#ccMenuDate')?.value||'');}
  else{const menu=contentOrMenu||{},source=docFromMenu(menu);doc=document.createElement('div');doc.id='ccMenuDocument';doc.className='cc-menu-document';doc.innerHTML=(source.blocks||[]).map(blockMarkup).join('');title=esc(menu.name||'Menu');occasion=esc(menu.occasion||'');date=esc(formatMenuDate(menu.menu_date||''));}
- if(!doc)return; const old=document.querySelector('#ccMenuPrintPage');if(old)old.remove();
- const sheet=document.createElement('div');sheet.id='ccMenuPrintPage';const page=document.createElement('div');page.className='cc-print-page';
- const clone=doc.cloneNode(true);clone.removeAttribute('contenteditable');clone.classList.add('cc-print-document');clone.querySelectorAll('.cc-block-controls').forEach(x=>x.remove());
- page.innerHTML='<div class="cc-print-header"><h1>'+title+'</h1>'+(occasion?'<div>'+occasion+'</div>':'')+(date?'<div>'+date+'</div>':'')+'</div>';page.appendChild(clone);sheet.appendChild(page);document.body.appendChild(sheet);document.body.classList.add('cc-menu-printing');
- const cleanup=()=>{document.body.classList.remove('cc-menu-printing');sheet.remove()};window.addEventListener('afterprint',cleanup,{once:true});setTimeout(()=>window.print(),80);setTimeout(()=>{if(document.body.contains(sheet))cleanup()},10000);
+ if(!doc)return;
+ const previous=document.querySelector('#ccMenuPrintPage');if(previous)previous.remove();
+ const sheet=document.createElement('div');sheet.id='ccMenuPrintPage';
+ const page=document.createElement('div');page.className='cc-print-page';
+ const clone=doc.cloneNode(true);clone.removeAttribute('contenteditable');clone.classList.add('cc-print-document');clone.querySelectorAll('.cc-block-controls,[contenteditable="false"]').forEach(x=>{if(x.classList.contains('cc-block-controls'))x.remove()});
+ const header=document.createElement('header');header.className='cc-menu-print-header';
+ header.innerHTML='<div class="cc-menu-print-brand"><span class="cc-menu-print-logo">CC</span><span>Cooking Confidential</span><span class="cc-menu-print-rule"></span><span class="cc-menu-print-label">MENU</span></div><h1>'+title+'</h1>'+(occasion?'<p class="cc-menu-print-occasion">'+occasion+'</p>':'')+(date?'<p class="cc-menu-print-date">'+date+'</p>':'');
+ const footer=document.createElement('footer');footer.className='cc-menu-print-footer';footer.innerHTML='<span>Cooking Confidential</span><span class="cc-menu-print-separator">|</span><span>Good Food Well Remembered</span>';
+ page.appendChild(header);page.appendChild(clone);page.appendChild(footer);sheet.appendChild(page);document.body.appendChild(sheet);document.body.classList.add('cc-menu-printing');
+ const cleanup=()=>{document.body.classList.remove('cc-menu-printing');sheet.remove()};window.addEventListener('afterprint',cleanup,{once:true});setTimeout(()=>window.print(),100);setTimeout(()=>{if(document.body.contains(sheet))cleanup()},15000);
 }
 async function applyDocxParagraphAlignment(html,arrayBuffer){
   try{
@@ -275,9 +293,9 @@ function blockMarkup(b,i){
  const blockHtml=cleanHtml(String(b.html||'')).replace(/↑\s*↓\s*×/g,''); return '<div class="cc-menu-block" data-index="'+i+'">'+blockHtml+'<div class="cc-block-controls"><button type="button" data-move="-1" title="Move up">↑</button><button type="button" data-move="1" title="Move down">↓</button><button type="button" data-delete="1" title="Delete">×</button></div></div>'
 }
 async function openEditor(menu,{blocks=null,sourceLabel='',newMenu=false}={}){
- styles();const d=ensureDialog();let source=blocks?{version:1,blocks}:docFromMenu(menu);if(!blocks&&menu.id&&!(source.blocks||[]).length){const legacy=await supabase.from('cc_menu_items').select('sort_order,custom_label,section,recipe_id,cc_recipes(id,name)').eq('menu_id',menu.id).order('sort_order');if(!legacy.error&&legacy.data?.length){source={version:1,blocks:legacy.data.map(x=>({type:'line',html:'<a href=\"#recipe-'+x.recipe_id+'\" data-recipe-id=\"'+x.recipe_id+'\">'+esc(x.custom_label||x.cc_recipes?.name||'Recipe')+'</a>'}))}}}const initial=normalizeBlocks(source.blocks||[]);
+ styles();const d=ensureDialog();let source=blocks?{version:1,blocks}:docFromMenu(menu);if(!blocks&&menu.id&&!(source.blocks||[]).length){const legacy=await supabase.from('cc_menu_items').select('sort_order,custom_label,section,recipe_id,cc_recipes(id,name)').eq('menu_id',menu.id).order('sort_order');if(!legacy.error&&legacy.data?.length){source={version:1,blocks:legacy.data.map(x=>({type:'line',html:'<a href=\"#recipe-'+x.recipe_id+'\" data-recipe-id=\"'+x.recipe_id+'\">'+esc(x.custom_label||x.cc_recipes?.name||'Recipe')+'</a>'}))}}}const initial=normalizeBlocks(source.blocks||[]);if(!initial.length)initial.push({type:'line',html:'<br>'});
  const recipes=await recipesForLinks();
- d.querySelector('#ccMenuEditorContent').innerHTML='<button class="close" type="button" id="ccMenuEditorClose">×</button><div class="cc-menu-dialog-title"><p class="eyebrow">'+(newMenu?'NEW MENU':'MENU EDITOR')+'</p><h2>'+(newMenu?'Create a menu':esc(menu.name||'Edit menu'))+'</h2></div><div class="cc-menu-meta"><label style="font-weight:700">Menu name<input id="ccMenuName" value="'+esc(menu.name||'')+'" required></label><label style="font-weight:700">Date<input id="ccMenuDate" type="text" inputmode="numeric" maxlength="10" placeholder="DD-MM-YYYY" value="'+esc(formatMenuDate(menu.menu_date||''))+'"></label><label style="font-weight:700">Guests<input id="ccMenuGuests" type="number" min="1" value="'+esc(menu.guest_count??'')+'"></label></div><label class="cc-menu-occasion-label" style="font-weight:700">Occasion<input id="ccMenuOccasion" value="'+esc(menu.occasion||'')+'"></label><div class="cc-menu-toolbar"><div class="cc-menu-toolrow"><button type="button" data-cmd="bold"><b>B</b></button><button type="button" data-cmd="italic"><i>I</i></button><button type="button" data-cmd="underline"><u>U</u></button><select id="ccMenuFont" title="Font"><option value="Georgia">Georgia</option><option value="Arial">Arial</option><option value="Times New Roman">Times New Roman</option><option value="Verdana">Verdana</option></select><select id="ccMenuSize" title="Font size"><option value="12px">Small</option><option value="14px">14</option><option value="16px" selected>Normal</option><option value="18px">Large</option><option value="22px">Extra large</option><option value="30px">Title</option></select><button type="button" data-block-style="normal">Normal</button><button type="button" data-block-style="heading">Heading</button><button type="button" data-block-style="subheading">Subheading</button><button type="button" class="cc-menu-align" data-align="left" title="Align left">L</button><button type="button" class="cc-menu-align" data-align="center" title="Align center">C</button><button type="button" class="cc-menu-align" data-align="right" title="Align right">R</button><button type="button" id="ccMenuBullet">• List</button><button type="button" id="ccMenuNumber">1. List</button><button type="button" id="ccMenuDivider">Divider</button><button type="button" id="ccMenuAddLine">＋ Line</button></div><div class="cc-menu-linkrow-wrap"><div class="cc-menu-linkrow"><select id="ccMenuRecipeLink"><option value="">Link selected text to a recipe…</option>'+recipes.map(r=>'<option value="'+r.id+'">'+esc(r.name)+'</option>').join('')+'</select><button type="button" id="ccMenuApplyRecipeLink">Link recipe</button><input id="ccMenuUrl" type="url" placeholder="https:// external link"><button type="button" id="ccMenuApplyUrl">Link URL</button><button type="button" class="secondary cc-menu-clear-selection" id="ccMenuClearSelection">Clear selection</button></div></div></div><div id="ccMenuDocument" class="cc-menu-document" contenteditable="true" spellcheck="true">'+initial.map(blockMarkup).join('')+'</div><div class="cc-menu-actions-grid"><button class="secondary" type="button" id="ccMenuShowOriginal">Original</button><button class="secondary" type="button" id="ccMenuSaveAs">Save As</button><button class="secondary danger" type="button" id="ccMenuDelete" '+(newMenu?'disabled':'')+'>Delete</button><button class="primary" type="button" id="ccMenuSave">Save</button></div>';
+ d.querySelector('#ccMenuEditorContent').innerHTML='<button class="close" type="button" id="ccMenuEditorClose">×</button><div class="cc-menu-dialog-title"><p class="eyebrow">'+(newMenu?'NEW MENU':'MENU EDITOR')+'</p><h2>'+(newMenu?'Create a menu':esc(menu.name||'Edit menu'))+'</h2></div><div class="cc-menu-meta"><label style="font-weight:700">Menu name<input id="ccMenuName" value="'+esc(menu.name||'')+'" required></label><label style="font-weight:700">Date<input id="ccMenuDate" type="text" inputmode="numeric" maxlength="10" placeholder="DD-MM-YYYY" value="'+esc(formatMenuDate(menu.menu_date||''))+'"></label><label style="font-weight:700">Guests<input id="ccMenuGuests" type="number" min="1" value="'+esc(menu.guest_count??'')+'"></label></div><label class="cc-menu-occasion-label" style="font-weight:700">Occasion<input id="ccMenuOccasion" value="'+esc(menu.occasion||'')+'"></label><div class="cc-menu-toolbar"><div class="cc-menu-toolrow"><button type="button" data-cmd="bold"><b>B</b></button><button type="button" data-cmd="italic"><i>I</i></button><button type="button" data-cmd="underline"><u>U</u></button><select id="ccMenuFont" title="Font"><option value="Georgia">Georgia</option><option value="Arial">Arial</option><option value="Times New Roman">Times New Roman</option><option value="Verdana">Verdana</option></select><select id="ccMenuSize" title="Font size"><option value="12px">Small</option><option value="14px">14</option><option value="16px" selected>Normal</option><option value="18px">Large</option><option value="22px">Extra large</option><option value="30px">Title</option></select><button type="button" data-block-style="normal">Normal</button><button type="button" data-block-style="heading">Heading</button><button type="button" data-block-style="subheading">Subheading</button><button type="button" class="cc-menu-align" data-align="left" title="Align left">L</button><button type="button" class="cc-menu-align" data-align="center" title="Align center">C</button><button type="button" class="cc-menu-align" data-align="right" title="Align right">R</button><button type="button" id="ccMenuBullet">• List</button><button type="button" id="ccMenuNumber">1. List</button><button type="button" id="ccMenuDivider">Divider</button><button type="button" id="ccMenuAddLine">＋ Line</button></div><div class="cc-menu-linkrow-wrap"><div class="cc-menu-linkrow"><select id="ccMenuRecipeLink"><option value="">Link selected text to a recipe…</option>'+recipes.map(r=>'<option value="'+r.id+'">'+esc(r.name)+'</option>').join('')+'</select><button type="button" id="ccMenuApplyRecipeLink">Link recipe</button><input id="ccMenuUrl" type="url" placeholder="https:// external link"><button type="button" id="ccMenuApplyUrl">Link URL</button><button type="button" class="secondary cc-menu-clear-selection" id="ccMenuClearSelection">Clear selection</button></div></div></div><p class="cc-menu-editor-hint">Click inside a bordered line to type. Use <strong>＋ Line</strong> to add another line after the current line. Select text, then use the formatting or link controls above; your selection is retained while you use the toolbar.</p><div id="ccMenuDocument" class="cc-menu-document" contenteditable="true" spellcheck="true">'+initial.map(blockMarkup).join('')+'</div><div class="cc-menu-actions-grid"><button class="secondary" type="button" id="ccMenuShowOriginal">Original</button><button class="secondary" type="button" id="ccMenuSaveAs">Save As</button><button class="secondary danger" type="button" id="ccMenuDelete" '+(newMenu?'disabled':'')+'>Delete</button><button class="primary" type="button" id="ccMenuSave">Save</button></div>';
  d.showModal();
  const content=d.querySelector('#ccMenuEditorContent');
  requestAnimationFrame(()=>{d.scrollTop=0;content.scrollTop=0;});
