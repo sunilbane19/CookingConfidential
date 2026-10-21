@@ -243,3 +243,16 @@ dialog .dialog-card{box-sizing:border-box;max-width:100%;min-width:0;overflow-x:
 /* Align Edit creator label/input with Add original file control. */
 #detailContent .cc-source-creator-row>p label{margin:0;}
 #detailContent .cc-source-creator-row{align-items:end;}
+
+
+/* Stage 2: rich-text toolbar layout and visible list markers */
+#detailContent .rich-toolbar{display:flex!important;flex-direction:row!important;align-items:center!important;flex-wrap:nowrap!important;gap:6px!important;min-width:0;overflow:visible}
+#detailContent .rich-toolbar .rich-tool{flex:0 0 auto!important;width:auto!important;min-width:34px!important}
+#detailContent .rich-toolbar .rich-recipe-link-select{display:block!important;flex:0 1 230px!important;width:auto!important;min-width:150px!important;max-width:260px!important;height:32px!important;min-height:32px!important;margin:0!important;padding:4px 28px 4px 9px!important;border:1px solid var(--line)!important;border-radius:7px!important;background:var(--card)!important;font:12px Arial,sans-serif!important;color:var(--ink)!important}
+#detailContent .rich-field-label{display:block;margin:0 0 6px;font:12px Arial,sans-serif;color:var(--muted)}
+@media(max-width:760px){#detailContent .rich-toolbar{flex-wrap:wrap!important}#detailContent .rich-toolbar .rich-recipe-link-select{flex:1 1 170px!important;max-width:none!important}}
+#detailContent .rich-editor ul{display:block!important;list-style-type:disc!important;list-style-position:outside!important;padding-inline-start:32px!important;margin-block:8px!important}
+#detailContent .rich-editor ol{display:block!important;list-style-type:decimal!important;list-style-position:outside!important;padding-inline-start:32px!important;margin-block:8px!important}
+#detailContent .rich-editor li{display:list-item!important;list-style:inherit!important;margin-block:3px!important;padding-inline-start:2px!important}
+#detailContent .rich-editor ol li::marker{content:counter(list-item) ". "!important}
+#detailContent .rich-editor ul li::marker{content:"• "!important}
