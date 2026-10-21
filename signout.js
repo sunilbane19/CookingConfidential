@@ -1,4 +1,4 @@
-import { supabase } from './auth-client.js?v=1.0.1';
+import { supabase } from './auth-client.js?v=1.0.2';
 
 const signOutBtn = document.querySelector('#signOutBtn');
 const authOnly = () => document.querySelectorAll('.auth-only');
