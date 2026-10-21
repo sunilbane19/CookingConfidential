@@ -268,3 +268,7 @@ dialog .dialog-card{box-sizing:border-box;max-width:100%;min-width:0;overflow-x:
 #detailContent #ccGenericEditorForm .two-col>.cc-multi-field .cc-multi-field-label{margin:0 0 6px!important;line-height:1.3!important;}
 #detailContent #ccGenericEditorForm .two-col>.cc-multi-field .cc-multi-trigger{height:49px!important;min-height:49px!important;}
 @media(max-width:760px){#detailContent #ccGenericEditorForm .two-col>.cc-multi-field{margin-top:16px!important;}}
+
+/* Align Dietary / suitability with Recipe type in the classification row (Add and Edit). */
+#detailContent #ccGenericEditorForm .two-col>.cc-multi-field{position:relative!important;top:16px!important;margin-top:16px!important;}
+@media(max-width:760px){#detailContent #ccGenericEditorForm .two-col>.cc-multi-field{top:0!important;margin-top:16px!important;}}
