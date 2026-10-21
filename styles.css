@@ -256,3 +256,9 @@ dialog .dialog-card{box-sizing:border-box;max-width:100%;min-width:0;overflow-x:
 #detailContent .rich-editor li{display:list-item!important;list-style:inherit!important;margin-block:3px!important;padding-inline-start:2px!important}
 #detailContent .rich-editor ol li::marker{content:counter(list-item) ". "!important}
 #detailContent .rich-editor ul li::marker{content:"• "!important}
+
+/* Recipe-link picker: wider list control, ported from the separate Staging UI change. */
+#detailContent .rich-field .rich-toolbar{display:flex!important;flex-flow:row nowrap!important;align-items:center!important;width:100%!important;}
+#detailContent .rich-field .rich-toolbar>.rich-recipe-link-select{display:inline-block!important;position:static!important;flex:0 1 460px!important;width:460px!important;min-width:300px!important;max-width:460px!important;height:32px!important;min-height:32px!important;margin:0!important;}
+#detailContent .rich-field .rich-toolbar>.rich-tool{flex:0 0 auto!important;width:auto!important;}
+@media(max-width:760px){#detailContent .rich-field .rich-toolbar{flex-wrap:wrap!important}#detailContent .rich-field .rich-toolbar>.rich-recipe-link-select{flex:1 1 170px!important;width:auto!important;max-width:none!important}}
