@@ -25,6 +25,14 @@ function renderValueSelect(select,kind,current=''){
   select.disabled=kind==='latest'||kind==='favourite';
 }
 function apply(){
+  const cards=[...document.querySelectorAll('#content .card')];
+  const data=new Map((window.ccRecipes||[]).map(r=>[Number(r.id),r]));
+  const {kind,value}=selectedValue();
+  let visible=0;
+  cards.forEach(card=>{const r=data.get(Number(card.dataset.id));if(!r)return;let ok=true;if(kind==='favourite')ok=!!r.is_favourite;if(kind==='cuisine')ok=r.cuisine===value;if(kind==='course')ok=r.course===value;if(kind==='recipe_type')ok=r.recipe_type===value;card.style.display=ok?'':'none';if(ok)visible++});
+  const count=document.querySelector('#content .section-head .count');if(count)count.textContent=kind==='latest'?'':`${visible} recipes`;
+}
+function applyServerFilter(){
   const {kind,value}=selectedValue();
   const field=({cuisine:'cuisine',course:'course',recipe_type:'recipe_type'})[kind]||(kind==='favourite'?'favourite':'');
   const filterValue=kind==='favourite'?'true':(['latest','favourite'].includes(kind)?'':value);
@@ -43,8 +51,8 @@ function ensure(){
     tools.querySelector('#ccNewRecipe').onclick=()=>window.ccOpenNewRecipeEditor?.();
     const kindSelect=tools.querySelector('#ccRecipeFilterKind'),valueSelect=tools.querySelector('#ccRecipeFilterValue');
     const {kind,value}=selectedValue(); kindSelect.value=kind; renderValueSelect(valueSelect,kind,value);
-    kindSelect.onchange=e=>{const k=e.target.value;state.filter=(k==='latest'||k==='favourite')?k:k+':'+(valueOptions(k)[0]?.[0]||'');renderValueSelect(valueSelect,k,'');apply()};
-    valueSelect.onchange=e=>{const k=kindSelect.value;state.filter=(k==='latest'||k==='favourite')?k:k+':'+e.target.value;apply()};
+    kindSelect.onchange=e=>{const k=e.target.value;state.filter=(k==='latest'||k==='favourite')?k:k+':'+(valueOptions(k)[0]?.[0]||'');renderValueSelect(valueSelect,k,'');applyServerFilter()};
+    valueSelect.onchange=e=>{const k=kindSelect.value;state.filter=(k==='latest'||k==='favourite')?k:k+':'+e.target.value;applyServerFilter()};
     apply();
   }else if(active==='menus'){
     tools.innerHTML='<div class="cc-library-toolbar"><div class="cc-library-actions"><button class="secondary cc-library-icon" id="ccImportMenus" type="button" aria-label="Upload menu" title="Upload menu">⇅</button><button class="primary cc-library-icon" id="ccNewMenuContext" type="button" aria-label="New menu" title="New menu">＋</button></div></div>';
