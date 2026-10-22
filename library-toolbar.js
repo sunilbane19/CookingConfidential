@@ -25,23 +25,16 @@ function renderValueSelect(select,kind,current=''){
   select.disabled=kind==='latest'||kind==='favourite';
 }
 function apply(){
-  const cards=[...document.querySelectorAll('#content .card')];
-  const data=new Map((window.ccRecipes||[]).map(r=>[Number(r.id),r]));
-  const {kind,value}=selectedValue();
-  let visible=0;
-  cards.forEach(card=>{
-    const r=data.get(Number(card.dataset.id)); if(!r)return;
-    let ok=true;
-    if(kind==='favourite')ok=!!r.is_favourite;
-    if(kind==='cuisine')ok=r.cuisine===value;
-    if(kind==='course')ok=r.course===value;
-    if(kind==='recipe_type')ok=r.recipe_type===value;
-    if(kind==='country')ok=r.country===value||r.region===value;
-    if(kind==='region')ok=r.region===value;
-    card.style.display=ok?'':'none'; if(ok)visible++;
-  });
-  const count=document.querySelector('#content .section-head .count');
-  if(count)count.textContent=`${visible} recipes`;
+  // Filtering must happen in the paginated Supabase query, not only against the
+  // 12 cards currently in the DOM. The server search resets pagination and count.
+  document.querySelectorAll('#content .card').forEach(card=>{card.style.display=''});
+}
+function applyServerFilter(kind,value=''){
+  const search=document.querySelector('#searchInput');
+  if(!search)return;
+  // Use the existing server-backed search path so matches beyond page one can appear.
+  search.value=(kind==='latest'||kind==='favourite')?'':value;
+  search.dispatchEvent(new Event('input',{bubbles:true}));
 }
 function ensure(){
   const content=document.querySelector('#content'); if(!content||content.hidden)return;
@@ -56,8 +49,8 @@ function ensure(){
     tools.querySelector('#ccNewRecipe').onclick=()=>window.ccOpenNewRecipeEditor?.();
     const kindSelect=tools.querySelector('#ccRecipeFilterKind'),valueSelect=tools.querySelector('#ccRecipeFilterValue');
     const {kind,value}=selectedValue(); kindSelect.value=kind; renderValueSelect(valueSelect,kind,value);
-    kindSelect.onchange=e=>{const k=e.target.value;state.filter=(k==='latest'||k==='favourite')?k:k+':'+(valueOptions(k)[0]?.[0]||'');renderValueSelect(valueSelect,k,'');apply()};
-    valueSelect.onchange=e=>{const k=kindSelect.value;state.filter=(k==='latest'||k==='favourite')?k:k+':'+e.target.value;apply()};
+    kindSelect.onchange=e=>{const k=e.target.value;state.filter=(k==='latest'||k==='favourite')?k:k+':'+(valueOptions(k)[0]?.[0]||'');renderValueSelect(valueSelect,k,'');applyServerFilter(k,valueSelect.value)};
+    valueSelect.onchange=e=>{const k=kindSelect.value;state.filter=(k==='latest'||k==='favourite')?k:k+':'+e.target.value;applyServerFilter(k,e.target.value)};
     apply();
   }else if(active==='menus'){
     tools.innerHTML='<div class="cc-library-toolbar"><div class="cc-library-actions"><button class="secondary cc-library-icon" id="ccImportMenus" type="button" aria-label="Upload menu" title="Upload menu">⇅</button><button class="primary cc-library-icon" id="ccNewMenuContext" type="button" aria-label="New menu" title="New menu">＋</button></div></div>';
