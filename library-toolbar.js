@@ -1,5 +1,5 @@
 // Event-driven recipe library toolbar. No MutationObserver.
-const state={filter:'latest'};
+const state={filter:(()=>{try{const f=JSON.parse(sessionStorage.getItem('ccLibraryFilterState')||'null');return f?.field==='favourite'?'favourite':f?.field&&f?.value?`${f.field}:${f.value}`:'latest'}catch{return'latest'}})()};
 const css=document.createElement('style');
 css.textContent=`#importBtn,#addRecipeBtn{display:none!important}#ccLibraryTools{display:block!important;position:relative;z-index:20;margin:0 0 10px}.cc-library-toolbar{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}.cc-library-actions{display:flex;gap:7px;align-items:center;padding-top:14px}.cc-library-icon{width:44px!important;height:40px!important;padding:0!important;display:grid!important;place-items:center!important;font-size:23px!important;line-height:1!important}.cc-library-filter{display:flex!important;gap:8px;align-items:flex-end;min-width:340px;max-width:48vw}.cc-library-filter label{display:block!important;flex:1;margin:0!important;font:10px Arial!important;color:var(--muted);letter-spacing:.04em}.cc-library-filter select{display:block;width:100%;min-width:145px;height:40px;box-sizing:border-box;border:1px solid var(--line);border-radius:9px;background:var(--card);color:var(--ink);padding:8px 10px;font:13px Arial;margin-top:4px;line-height:22px}.cc-library-filter select:disabled{opacity:.65}@media(max-width:760px){.cc-library-actions{padding-top:24px}.hero{padding:8px 18px 6px!important}.hero .eyebrow{margin-bottom:5px!important}.hero h1{margin-bottom:6px!important}.search-wrap{margin-top:8px!important}.tab{padding:8px 0!important}#content{padding:4px 18px!important}.section-head{margin-bottom:6px!important}.cc-library-filter{min-width:0;max-width:none;flex:1}.cc-library-filter label{flex:1}.cc-library-filter select{min-width:0}}`;
 document.head.appendChild(css);
@@ -34,6 +34,7 @@ function apply(){
 }
 function applyServerFilter(){
   const {kind,value}=selectedValue();
+  try{sessionStorage.setItem('ccLibraryFilterState',JSON.stringify({field:kind==='favourite'?'favourite':({cuisine:'cuisine',course:'course',recipe_type:'recipe_type'})[kind]||'',value:kind==='favourite'?'true':(['latest','favourite'].includes(kind)?'':value}))}catch{}
   const field=({cuisine:'cuisine',course:'course',recipe_type:'recipe_type'})[kind]||(kind==='favourite'?'favourite':'');
   const filterValue=kind==='favourite'?'true':(['latest','favourite'].includes(kind)?'':value);
   window.dispatchEvent(new CustomEvent('cc:library-filter-change',{detail:{field,value:filterValue}}));
