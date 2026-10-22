@@ -40,10 +40,10 @@ function applyServerFilter(){
   window.dispatchEvent(new CustomEvent('cc:library-filter-change',{detail:{field,value:filterValue}}));
 }
 function ensure(){
-  const content=document.querySelector('#content'); if(!content||content.hidden)return;
+  const content=document.querySelector('#content'); if(!content)return;
   const active=document.querySelector('.tab.active')?.dataset.view||'recipes';
   document.querySelector('#ccLibraryTools')?.remove();
-  const head=content.querySelector('.section-head'); if(!head)return;
+  const head=content.querySelector('.section-head')||content.querySelector('h2')?.parentElement; if(!head)return;
   const tools=document.createElement('div'); tools.id='ccLibraryTools';
   if(active==='recipes'){
     tools.innerHTML=`<div class="cc-library-toolbar"><div class="cc-library-actions"><button class="secondary cc-library-icon" id="ccImportRecipes" type="button" aria-label="Import recipes" title="Import recipes">⇅</button><button class="primary cc-library-icon" id="ccNewRecipe" type="button" aria-label="New recipe" title="New recipe">＋</button></div><div class="cc-library-filter"><label>Filter by<select id="ccRecipeFilterKind" aria-label="Filter by">${filterFields().map(([v,l])=>`<option value="${esc(v)}">${esc(l)}</option>`).join('')}</select></label><label>Value<select id="ccRecipeFilterValue" aria-label="Filter value"></select></label></div></div>`;
