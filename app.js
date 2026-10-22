@@ -14,7 +14,8 @@ const RECIPE_DETAIL_FIELDS='id,name,description,cuisine,country,region,course,re
 // Full recipe cache: fetch a recipe once when it is first opened during this session.
 const recipeDetailCache=new Map(),creatorNameCache=new Map();
 let recipeOffset=0,recipeTotalCount=0,recipeLoading=false,recipeRequestId=0,searchTimer=null;
-let libraryFilter={field:'',value:''};
+let libraryFilter=(()=>{try{return JSON.parse(sessionStorage.getItem('ccLibraryFilterState')||'{\"field\":\"\",\"value\":\"\"}')}catch{return{field:'',value:''}}})();
+try{if(search&&sessionStorage.getItem('ccLibrarySearchState')!==null)search.value=sessionStorage.getItem('ccLibrarySearchState')}catch{}
 window.ccImportItems=importItems;
 const esc=(s='')=>String(s).replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));
 const formatMenuDate=v=>{const s=String(v??'').trim();const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(s);return m?m[3]+'-'+m[2]+'-'+m[1]:s};
@@ -134,7 +135,7 @@ async function loadData(){
   else if(view==='all')renderAll(search.value.trim().toLowerCase());
 }
 window.ccReloadRecipes=()=>loadRecipePage({offset:recipeOffset,refreshCount:true});window.ccRecipePageOffset=()=>recipeOffset;
-window.ccSetLibraryFilter=(field,value)=>{libraryFilter={field:String(field||''),value:String(value||'')};loadRecipePage({offset:0,refreshCount:true}).catch(e=>showUiError(e.message,'Could not filter recipes'));};
+window.ccSetLibraryFilter=(field,value)=>{libraryFilter={field:String(field||''),value:String(value||'')};try{sessionStorage.setItem('ccLibraryFilterState',JSON.stringify(libraryFilter))}catch{}loadRecipePage({offset:0,refreshCount:true}).catch(e=>showUiError(e.message,'Could not filter recipes'));};
 window.addEventListener('cc:library-filter-change',e=>window.ccSetLibraryFilter(e.detail?.field,e.detail?.value));
 function recipeCard(r){const tags=Array.isArray(r.dietary_tags)?r.dietary_tags:[];return `<article class="card" data-id="${r.id}"><div class="card-image" aria-hidden="true"></div><div class="card-body"><span class="tag">${esc(r.cuisine||'Uncategorised')}</span><h3>${esc(r.name)}</h3><div class="meta">${esc([r.course||'Recipe',r.recipe_type].filter(Boolean).join(' · '))} · ${stars(r.rating)}</div>${tags.length?`<div class="meta">${esc(tags.join(' · '))}</div>`:''}<div class="created-by">Added by: <strong>${esc(r.creator_name||'')}</strong></div></div></article>`}
 function recipePager(){
