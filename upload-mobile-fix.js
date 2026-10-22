@@ -135,7 +135,7 @@ async function uploadSelected(){
   }catch(error){
     console.error('Cooking Confidential upload:',error);
     const failed=items.find(x=>x.status!=='Uploaded');
-    if(failed)setStatusForName(failed.file_name||failed.source_url||'Recipe import','Failed');
+    if(failed)setStatusForName(failed.file_name||'Recipe import','Failed');
     message('Upload failed: '+(error.message||'Please try again.'));
     if(button){button.disabled=false;button.textContent='Upload selected'}
   }finally{running=false}
@@ -143,7 +143,7 @@ async function uploadSelected(){
 function setStatusForName(name,text){
   const q=queue();if(!q)return;
   const target=String(name||'');
-  const item=(window.ccImportItems||[]).find(x=>String(x.file_name||x.source_url||'')===target);
+  const item=(window.ccImportItems||[]).find(x=>String(x.file_name||'')===target);
   const displayText=(text==='Uploaded'&&item?.dbId)?('Uploaded · Item ID '+item.dbId):text;
   const row=[...q.querySelectorAll('.queue-item,.review-item')].find(x=>x.querySelector('strong')?.textContent===target);
   if(row){const span=row.querySelector(':scope > span');if(span)span.textContent=displayText;else{const small=row.querySelector('small');if(small)small.textContent=displayText}}
