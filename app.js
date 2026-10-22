@@ -88,11 +88,9 @@ async function loadRecipePage({offset=0,refreshCount=true,silent=false}={}) {
   recipeLoading=true;
   if(!silent)content.innerHTML='<div class="empty">Loading your recipes…</div>';
   try{
-    const pageRequest=supabase.rpc('cc_search_recipe_cards_staging',{
-      p_search:q,
-      p_favourite_only:favouriteOnly,
-      p_offset:safeOffset,
-      p_limit:RECIPE_PAGE_SIZE
+    const pageRequest=supabase.rpc('cc_search_recipe_cards_filtered_staging',{
+      p_search:q, p_favourite_only:favouriteOnly, p_offset:safeOffset, p_limit:RECIPE_PAGE_SIZE,
+      p_filter_field:libraryFilter.field||'', p_filter_value:libraryFilter.value||''
     });
     const countRequest=refreshCount||recipeTotalCount===0
       ?supabase.rpc('cc_count_recipe_cards_filtered_staging',{p_search:q,p_favourite_only:favouriteOnly,p_filter_field:libraryFilter.field||'',p_filter_value:libraryFilter.value||''})
