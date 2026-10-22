@@ -25,23 +25,10 @@ function renderValueSelect(select,kind,current=''){
   select.disabled=kind==='latest'||kind==='favourite';
 }
 function apply(){
-  const cards=[...document.querySelectorAll('#content .card')];
-  const data=new Map((window.ccRecipes||[]).map(r=>[Number(r.id),r]));
   const {kind,value}=selectedValue();
-  let visible=0;
-  cards.forEach(card=>{
-    const r=data.get(Number(card.dataset.id)); if(!r)return;
-    let ok=true;
-    if(kind==='favourite')ok=!!r.is_favourite;
-    if(kind==='cuisine')ok=r.cuisine===value;
-    if(kind==='course')ok=r.course===value;
-    if(kind==='recipe_type')ok=r.recipe_type===value;
-    if(kind==='country')ok=r.country===value||r.region===value;
-    if(kind==='region')ok=r.region===value;
-    card.style.display=ok?'':'none'; if(ok)visible++;
-  });
-  const count=document.querySelector('#content .section-head .count');
-  if(count)count.textContent=`${visible} recipes`;
+  const field=({cuisine:'cuisine',course:'course',recipe_type:'recipe_type'})[kind]||(kind==='favourite'?'favourite':'');
+  const filterValue=kind==='favourite'?'true':(['latest','favourite'].includes(kind)?'':value);
+  window.dispatchEvent(new CustomEvent('cc:library-filter-change',{detail:{field,value:filterValue}}));
 }
 function ensure(){
   const content=document.querySelector('#content'); if(!content||content.hidden)return;
