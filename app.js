@@ -13,7 +13,9 @@ const RECIPE_CARD_FIELDS='id,name,cuisine,country,region,course,recipe_type,rati
 const RECIPE_DETAIL_FIELDS='id,name,description,cuisine,country,region,course,recipe_type,ingredients,method,personal_notes,rating,source_url,source_title,is_favourite,image_url,updated_at,servings,original_file_path,original_file_name,original_mime_type,source_type,created_by,dietary_tags';
 // Full recipe cache: fetch a recipe once when it is first opened during this session.
 const recipeDetailCache=new Map(),creatorNameCache=new Map();
-let recipeOffset=0,recipeTotalCount=0,recipeLoading=false,recipeRequestId=0,searchTimer=null;\nlet libraryFilter=(()=>{try{return JSON.parse(sessionStorage.getItem('ccLibraryFilter')||'{\"field\":\"\",\"value\":\"\"}')}catch{return{field:'',value:''}}})();\ntry{if(search&&!search.value)search.value=sessionStorage.getItem('ccLibrarySearch')||'';}catch{}
+let recipeOffset=0,recipeTotalCount=0,recipeLoading=false,recipeRequestId=0,searchTimer=null;
+let libraryFilter=(()=>{try{return JSON.parse(sessionStorage.getItem('ccLibraryFilter')||'{\"field\":\"\",\"value\":\"\"}')}catch{return{field:'',value:''}}})();
+try{if(search&&!search.value)search.value=sessionStorage.getItem('ccLibrarySearch')||'';}catch{}
 window.ccImportItems=importItems;
 const esc=(s='')=>String(s).replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));
 const formatMenuDate=v=>{const s=String(v??'').trim();const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(s);return m?m[3]+'-'+m[2]+'-'+m[1]:s};
@@ -130,7 +132,8 @@ async function loadData(){
   else if(view==='favourites')renderFavourites(search.value.trim().toLowerCase());
   else if(view==='all')renderAll(search.value.trim().toLowerCase());
 }
-window.ccReloadRecipes=()=>loadRecipePage({offset:recipeOffset,refreshCount:true});window.ccRecipePageOffset=()=>recipeOffset;\nwindow.ccSetLibraryFilter=(field,value)=>{libraryFilter={field:String(field||''),value:String(value||'')};sessionStorage.setItem('ccLibraryFilter',JSON.stringify(libraryFilter));loadRecipePage({offset:0,refreshCount:true}).catch(e=>showUiError(e.message,'Could not filter recipes'));};\nwindow.addEventListener('cc:library-filter-change',e=>window.ccSetLibraryFilter(e.detail?.field,e.detail?.value));
+window.ccReloadRecipes=()=>loadRecipePage({offset:recipeOffset,refreshCount:true});window.ccRecipePageOffset=()=>recipeOffset;\nwindow.ccSetLibraryFilter=(field,value)=>{libraryFilter={field:String(field||''),value:String(value||'')};sessionStorage.setItem('ccLibraryFilter',JSON.stringify(libraryFilter));loadRecipePage({offset:0,refreshCount:true}).catch(e=>showUiError(e.message,'Could not filter recipes'));};
+window.addEventListener('cc:library-filter-change',e=>window.ccSetLibraryFilter(e.detail?.field,e.detail?.value));
 function recipeCard(r){const tags=Array.isArray(r.dietary_tags)?r.dietary_tags:[];return `<article class="card" data-id="${r.id}"><div class="card-image" aria-hidden="true"></div><div class="card-body"><span class="tag">${esc(r.cuisine||'Uncategorised')}</span><h3>${esc(r.name)}</h3><div class="meta">${esc([r.course||'Recipe',r.recipe_type].filter(Boolean).join(' · '))} · ${stars(r.rating)}</div>${tags.length?`<div class="meta">${esc(tags.join(' · '))}</div>`:''}<div class="created-by">Added by: <strong>${esc(r.creator_name||'')}</strong></div></div></article>`}
 function recipePager(){
   const totalPages=Math.max(1,Math.ceil(recipeTotalCount/RECIPE_PAGE_SIZE));
@@ -158,7 +161,8 @@ function recipePager(){
 function wireRecipePager(){
   content.querySelectorAll('.pager-btn').forEach(btn=>btn.onclick=async()=>{
     if(btn.disabled||recipeLoading)return;
-    const offset=Number(btn.dataset.pageOffset)||0;try{sessionStorage.setItem('ccRecipeReturnOffset',String(offset));sessionStorage.setItem('ccLibrarySearch',search.value)}catch{}
+    const offset=Number(btn.dataset.pageOffset)||0;
+    try{sessionStorage.setItem('ccRecipeReturnOffset',String(offset));sessionStorage.setItem('ccLibrarySearch',search.value)}catch{}
     btn.disabled=true;
     try{await loadRecipePage({offset,refreshCount:false})}
     catch(e){showUiError(e.message,'Could not change recipe page')}
@@ -302,7 +306,8 @@ function queueFiles(files){
  if(selectAll)selectAll.onchange=()=>{queued.forEach(x=>x.selected=selectAll.checked);renderImportQueue()};importQueue.querySelectorAll('.cc-local-review').forEach(b=>b.onclick=async()=>{const id=Number(b.dataset.dbId);if(b.dataset.docx==='1'&&typeof window.ccReviewImportDocx==='function')return window.ccReviewImportDocx(id);if(typeof window.ccReviewImportItem==='function'){console.info('[CC image trace] queue:review-click',{id,isImage:b.dataset.image==='1',isDocx:b.dataset.docx==='1',item:importItems.find(x=>Number(x.dbId)===id)||null});return window.ccReviewImportItem(id,b.dataset.image==='1')}});
  importQueue.querySelectorAll('.import-select').forEach(cb=>cb.onchange=()=>{const x=importItems.find(i=>i.localId===cb.dataset.localId);if(x)x.selected=cb.checked;renderImportQueue()});
 }window.ccRenderImportQueue=renderImportQueue;window.addEventListener('cc:import-queue-changed',()=>render());
-search.oninput=()=>{\n  try{sessionStorage.setItem('ccLibrarySearch',search.value);sessionStorage.setItem('ccRecipeReturnOffset','0')}catch{}
+search.oninput=()=>{
+  try{sessionStorage.setItem('ccLibrarySearch',search.value);sessionStorage.setItem('ccRecipeReturnOffset','0')}catch{}
   if(view==='menus'||view==='favourites'){
     if(view==='menus')renderMenus(search.value.trim().toLowerCase());
     else loadRecipePage({offset:0,refreshCount:true}).catch(e=>showUiError(e.message,'Could not search favourites'));
