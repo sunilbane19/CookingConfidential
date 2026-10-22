@@ -5,13 +5,10 @@ const SUPABASE_PUBLISHABLE_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
 const sb=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
 let running=false;
 function queue(){return document.querySelector('#importQueue')}
-function selectedFiles(){return[...(document.querySelector('#fileInput')?.files||[])]}
 function message(text){const q=queue();if(!q)return;let el=q.querySelector('.cc-mobile-upload-message');if(!el){el=document.createElement('div');el.className='cc-mobile-upload-message';q.prepend(el)}el.textContent=text}
-function setStatus(text){const q=queue(),first=selectedFiles()[0],row=[...q.querySelectorAll('.queue-item')].find(x=>x.querySelector('strong')?.textContent===first?.name);if(row){const span=row.querySelector(':scope > span');if(span)span.textContent=text}}
 function authToken(){try{for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k?.includes('yiwmtfbqbynimqvwxosu')&&k.endsWith('-auth-token')){const p=JSON.parse(localStorage.getItem(k));if(p?.access_token)return p.access_token;if(p?.currentSession?.access_token)return p.currentSession.access_token}}}catch(e){console.warn('Cooking Confidential session read:',e)}return null}
 async function api(path,options={}){const token=authToken();if(!token)throw new Error('Your sign-in session is not ready. Please close and reopen Cooking Confidential, then try again.');const headers=new Headers(options.headers||{});headers.set('apikey',SUPABASE_PUBLISHABLE_KEY);headers.set('Authorization','Bearer '+token);const response=await fetch(SUPABASE_URL+path,{...options,headers});if(!response.ok){let detail='Request failed ('+response.status+')';try{const b=await response.json();detail=b.message||b.error_description||b.error||detail}catch{}throw new Error(detail)}const text=await response.text();return text?JSON.parse(text):null}
 async function uploadObject(path,file){const{error}=await sb.storage.from('cooking-confidential').upload(path,file,{contentType:file.type||'application/octet-stream',cacheControl:'86400',upsert:false});if(error)throw new Error(error.message||'Storage upload failed.')}
-async function startImageReview(itemId){message('Upload completed. Starting image recipe detection…');setStatus('Reading image…');const mod=await import('./generic-image-review.js?v=1.0.14');if(typeof mod.reviewImage!=='function')throw new Error('Image recipe reviewer could not be loaded.');await mod.reviewImage(itemId)}
 async function uploadSelected(){
   if(running)return;
   const queued=Array.isArray(window.ccImportItems)?window.ccImportItems.filter(x=>x&&x.status==='Queued'&&x.selected):[];
