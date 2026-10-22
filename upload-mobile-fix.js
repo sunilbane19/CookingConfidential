@@ -6,22 +6,6 @@ const sb=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
 let running=false;
 function queue(){return document.querySelector('#importQueue')}
 function selectedFiles(){return[...(document.querySelector('#fileInput')?.files||[])]}
-const MAX_IMAGE_EDGE=2400;
-const JPEG_QUALITY=.86;
-async function optimizeImageForUpload(file){
-  if(!String(file.type||'').startsWith('image/')||['image/gif','image/svg+xml'].includes(String(file.type||'').toLowerCase()))return{file,storedName:file.name,mimeType:file.type||'application/octet-stream'};
-  try{
-    const bitmap=await createImageBitmap(file),maxEdge=Math.max(bitmap.width,bitmap.height);
-    if(maxEdge<=MAX_IMAGE_EDGE&&file.size<=3*1024*1024){bitmap.close();return{file,storedName:file.name,mimeType:file.type||'image/jpeg'}}
-    const scale=Math.min(1,MAX_IMAGE_EDGE/maxEdge),canvas=document.createElement('canvas');
-    canvas.width=Math.max(1,Math.round(bitmap.width*scale));canvas.height=Math.max(1,Math.round(bitmap.height*scale));
-    const ctx=canvas.getContext('2d',{alpha:false});ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.drawImage(bitmap,0,0,canvas.width,canvas.height);bitmap.close();
-    const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',JPEG_QUALITY));canvas.width=1;canvas.height=1;
-    if(!blob||blob.size>=file.size*.95)return{file,storedName:file.name,mimeType:file.type||'image/jpeg'};
-    const base=file.name.replace(/\.[^.]+$/,'')||'recipe-image',optimized=new File([blob],base+'.jpg',{type:'image/jpeg',lastModified:file.lastModified});
-    return{file:optimized,storedName:optimized.name,mimeType:optimized.type};
-  }catch(error){console.warn('Cooking Confidential image optimization skipped:',error);return{file,storedName:file.name,mimeType:file.type||'application/octet-stream'}}
-}
 function message(text){const q=queue();if(!q)return;let el=q.querySelector('.cc-mobile-upload-message');if(!el){el=document.createElement('div');el.className='cc-mobile-upload-message';q.prepend(el)}el.textContent=text}
 function setStatus(text){const q=queue(),first=selectedFiles()[0],row=[...q.querySelectorAll('.queue-item')].find(x=>x.querySelector('strong')?.textContent===first?.name);if(row){const span=row.querySelector(':scope > span');if(span)span.textContent=text}}
 function authToken(){try{for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k?.includes('yiwmtfbqbynimqvwxosu')&&k.endsWith('-auth-token')){const p=JSON.parse(localStorage.getItem(k));if(p?.access_token)return p.access_token;if(p?.currentSession?.access_token)return p.currentSession.access_token}}}catch(e){console.warn('Cooking Confidential session read:',e)}return null}
@@ -44,28 +28,8 @@ async function uploadSelected(){
     const sessionPayload=JSON.parse(atob(token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))),userId=sessionPayload.sub;
     if(!userId)throw new Error('Could not read your sign-in session.');
     for(const item of items){
-      const sourceUrl=String(item.source_url||'').trim();
-      const displayName=item.file_name||sourceUrl||'Recipe import';
+      const displayName=item.file_name||'Recipe import';
       setStatusForName(displayName,'Uploading…');
-      if(sourceUrl){
-        const imports=await api('/rest/v1/cc_imports?select=id',{
-          method:'POST',
-          headers:{'Content-Type':'application/json','Prefer':'return=representation'},
-          body:JSON.stringify({source_type:'social_url',source_url:sourceUrl,original_file_path:null,created_by:userId})
-        });
-        const importRow=imports?.[0];
-        if(!importRow?.id)throw new Error('Could not create the URL import record.');
-        const itemsResult=await api('/rest/v1/cc_import_items?select=id',{
-          method:'POST',
-          headers:{'Content-Type':'application/json','Prefer':'return=representation'},
-          body:JSON.stringify({import_id:importRow.id,file_name:displayName,mime_type:'text/url',source_url:sourceUrl,file_path:null,created_by:userId,extraction_status:'pending',review_status:'pending'})
-        });
-        const itemRow=itemsResult?.[0];
-        if(!itemRow?.id)throw new Error('Could not save the recipe URL.');
-        item.dbId=Number(itemRow.id); item.importId=Number(importRow.id); item.status='Uploaded';
-        setStatusForName(displayName,'Uploaded');
-        continue;
-      }
       const file=item.file;
       if(!file){item.status='Failed';setStatusForName(displayName,'Failed');continue}
       // Persistent duplicate guard: the temporary queue guard cannot catch a file
@@ -84,17 +48,16 @@ async function uploadSelected(){
       });
       const importRow=imports?.[0];
       if(!importRow?.id)throw new Error('Could not create the import record.');
-      const optimized=await optimizeImageForUpload(file),safeName=optimized.storedName.replace(/[^a-zA-Z0-9._-]/g,'_'),path=userId+'/'+Date.now()+'-'+safeName;
-      await uploadObject('originals/'+path,optimized.file);
+      const safeName=file.name.replace(/[^a-zA-Z0-9._-]/g,'_'),path=userId+'/'+Date.now()+'-'+safeName;
+      await uploadObject('originals/'+path,file);
       setStatusForName(displayName,'Saving…');
       const itemsResult=await api('/rest/v1/cc_import_items?select=id',{
         method:'POST',
         headers:{'Content-Type':'application/json','Prefer':'return=representation'},
-        body:JSON.stringify({import_id:importRow.id,file_name:file.name,mime_type:optimized.mimeType,source_url:null,file_path:'originals/'+path,created_by:userId,extraction_status:'pending',review_status:'pending'})
+        body:JSON.stringify({import_id:importRow.id,file_name:file.name,mime_type:file.type||'application/octet-stream',source_url:null,file_path:'originals/'+path,created_by:userId,extraction_status:'pending',review_status:'pending'})
       });
       const itemRow=itemsResult?.[0];
       if(!itemRow?.id)throw new Error('Could not save the uploaded recipe.');
-      const isImage=/\.(png|jpe?g|webp)$/i.test(file.name)||String(file.type||'').startsWith('image/');
       item.dbId=Number(itemRow.id);
       item.importId=Number(importRow.id);
       item.status='Uploaded';
@@ -109,8 +72,7 @@ async function uploadSelected(){
         await window.ccMultiReview(itemRow.id,false);
         multiReviewIds.push(Number(itemRow.id));
         setStatusForName(displayName,'Uploaded');
-      }else if(isImage){setStatusForName(displayName,'Uploaded');message('Image uploaded. It is waiting in the Import Inbox. Press Review when you are ready to read and process it.')}
-      else{setStatusForName(displayName,'Uploaded');message('Upload completed. Open Review in the Import Inbox to extract the recipe.')}
+      }else{setStatusForName(displayName,'Uploaded');message('Upload completed. Open Review in the Import Inbox to extract the recipe.')}
     }
     // All selected multi-recipe files are extracted independently before opening
     // a single review dialog. This prevents the last file from overwriting the
