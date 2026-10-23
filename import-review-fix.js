@@ -254,7 +254,7 @@ function normalizeLegacyDocSections(value){
   const headings='General Ingredients|Ingredients|Description|Method|Directions|Instructions|Preparation|Steps|Notes|Servings|Contents|Recipe';
   // Normalize heading boundaries without depending on Docstream's line-break fidelity.
   t=t.replace(new RegExp('\\s+(?=('+headings+')\\s*:?)','gi'),'\n');
-  t=t.replace(new RegExp('(^|\\n)\\s*('+headings+')\\s*:?\\s*','gi'),'$1$2:\\n');
+  t=t.replace(new RegExp('(^|\\n)\\s*('+headings+')\\s*:?\\s*','gi'),'$1$2:\n');
   t=t.replace(/^\s*(?:Contents|Recipe)\s*:\s*$/gim,'');
   const out=[];let section='';
   const headingRe=/^(description|general ingredients|ingredients|method|directions|instructions|preparation|steps|notes|servings|contents|recipe)\s*:?\s*(.*)$/i;
