@@ -71,8 +71,12 @@ async function loadRescueDocstream(){
 function normalizeLegacyDocText(value){
   let t=String(value||'').replace(/\r/g,'').replace(/\u0000/g,' ').replace(/[ \t]+\n/g,'\n').replace(/\n{3,}/g,'\n\n');
   t=t.replace(/^\s*#+\s*/gm,'').replace(/\*\*(.*?)\*\*/g,'$1');
-  t=t.replace(/\s+(?=(?:Description|Ingredients|General Ingredients|Contents|Method|Directions|Instructions|Preparation|Steps|Notes|Servings)\s*:?)/gi,'\n');
-  t=t.replace(/(^|\n)\s*(Ingredients|General Ingredients|Contents|Method|Directions|Instructions|Preparation|Steps|Notes|Description|Servings)\s*:?\s*/gi,'$1$2:\n');
+  t=t.replace(/HYPERLINK\s+"[^"]*"/gi,'').replace(/https?:\/\/\S+/gi,'');
+  const headings='General Ingredients|Ingredients|Description|Method|Directions|Instructions|Preparation|Steps|Notes|Servings|Contents|Recipe';
+  t=t.replace(new RegExp('\\s+(?=(?:'+headings+')\\s*:?)','gi'),'\n');
+  t=t.replace(new RegExp('(^|\\n)\\s*('+headings+')\\s*:?\\s*','gi'),'$1$2:\n');
+  t=t.replace(/^\s*(?:Contents|Recipe)\s*:\s*$/gim,'');
+  t=t.replace(/([A-Za-z])(?=\d+\s+(?:cups?|tbsp|tsp|grams?|gms?|kg|ml|cloves?|medium|large|small|inch|ounces?|oz|lbs?|pounds?)\b)/gi,'$1\n');
   t=t.replace(/\s+(?=\d{1,2}\.\s+[A-Z])/g,'\n');
   return t.split('\n').map(s=>s.replace(/[ \t]+/g,' ').trim()).filter(Boolean).join('\n').trim();
 }
