@@ -34,9 +34,9 @@ runButton.addEventListener('click',async()=>{
   const files=[...fileInput.files];
   results.replaceChildren();
   if(!files.length){setStatus('Select at least one .doc file first.','fail');return}
-  if(!window.docstream||typeof window.docstream.parseOffice!=='function'){
-    setStatus('Docstream browser bundle did not load. No files were processed.','fail');
-    results.innerHTML='<section class="panel"><p>Expected global <code>docstream.parseOffice</code> was not found. Check the CDN URL, browser console and compatibility before integrating it into CC.</p></section>';
+  if(!window.officeParser||typeof window.officeParser.parseOffice!=='function'){
+    setStatus('The expected parser API was not found. No files were processed.','fail');
+    results.innerHTML='<section class="panel"><p>Expected global <code>officeParser.parseOffice</code> was not found. Check the CDN response and browser console before integrating it into CC.</p></section>';
     return;
   }
   runButton.disabled=true;
@@ -45,7 +45,7 @@ runButton.addEventListener('click',async()=>{
     setStatus('Parsing '+file.name+'…');
     const section=document.createElement('section');section.className='panel';
     try{
-      const ast=await window.docstream.parseOffice(await file.arrayBuffer());
+      const ast=await window.officeParser.parseOffice(await file.arrayBuffer());
       const text=typeof ast.toText==='function'?ast.toText():'';
       const markdown=typeof ast.toMarkdown==='function'?ast.toMarkdown():text;
       if(!text.trim())throw new Error('Parser returned no text.');
@@ -57,7 +57,7 @@ runButton.addEventListener('click',async()=>{
   setStatus('Finished: '+passed+' of '+files.length+' file(s) parsed. Inspect each output for missing or merged recipe sections.',passed===files.length?'pass':'fail');
   runButton.disabled=false;
 });
-window.addEventListener('error',event=>{if(!window.docstream)setStatus('A script failed to load: '+(event.message||'unknown error'),'fail')});
+window.addEventListener('error',event=>{if(!window.officeParser)setStatus('A script failed to load or initialize: '+(event.message||'unknown error'),'fail')});
 </script>
 </body>
 </html>
