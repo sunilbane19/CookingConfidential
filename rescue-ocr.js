@@ -54,20 +54,57 @@ function structuredText(value){
     return out.join('\n');
   }catch{return ''}
 }
+let ccRescueDocstreamPromise;
+async function loadRescueDocstream(){
+  if(window.officeParser&&typeof window.officeParser.parseOffice==='function')return window.officeParser;
+  if(!ccRescueDocstreamPromise){
+    ccRescueDocstreamPromise=new Promise((resolve,reject)=>{
+      const script=document.createElement('script');
+      script.src='https://cdn.jsdelivr.net/gh/joseespana/docstream@master/docs/dist/officeparser.browser.js';
+      script.onload=()=>window.officeParser&&typeof window.officeParser.parseOffice==='function'?resolve(window.officeParser):reject(Error('Docstream loaded but the browser parser API was not available.'));
+      script.onerror=()=>reject(Error('Could not load Docstream to read the original legacy .doc file.'));
+      document.head.appendChild(script);
+    }).catch(e=>{ccRescueDocstreamPromise=null;throw e});
+  }
+  return ccRescueDocstreamPromise;
+}
+function normalizeLegacyDocText(value){
+  let t=String(value||'').replace(/\\r/g,'').replace(/\\u0000/g,' ').replace(/[ \\t]+\\n/g,'\\n').replace(/\\n{3,}/g,'\\n\\n');
+  t=t.replace(/^\\s*#+\\s*/gm,'').replace(/\\*\\*(.*?)\\*\\*/g,'$1');
+  // Docstream can preserve the words but flatten Word paragraph/list boundaries.
+  // Put section labels back on their own lines before recipe parsing/recovery.
+  t=t.replace(/\\s+(?=(?:Description|Ingredients|General Ingredients|Contents|Method|Directions|Instructions|Preparation|Steps|Notes|Servings)\\s*:?)/gi,'\\n');
+  t=t.replace(/(^|\\n)\\s*(Ingredients|General Ingredients|Contents|Method|Directions|Instructions|Preparation|Steps|Notes|Description|Servings)\\s*:?\\s*/gi,'$1$2:\\n');
+  t=t.replace(/\\s+(?=\\d{1,2}\\.\\s+[A-Z])/g,'\\n');
+  return t.split('\\n').map(s=>s.replace(/[ \\t]+/g,' ').trim()).filter(Boolean).join('\\n').trim();
+}
 async function sourceText(x,status){
+  const name=String(x.file_name||'').toLowerCase();
+  // For legacy .doc, always reread the original file. Saved extraction text may
+  // contain only the title after an earlier failed attempt and must not mask it.
+  if(/\\.doc$/i.test(name)){
+    status('Reading original Word document with Docstream…');
+    const b=await blob(x),parser=await loadRescueDocstream(),ast=await parser.parseOffice(await b.arrayBuffer());
+    const md=typeof ast?.toMarkdown==='function'?String(ast.toMarkdown()||''):'';
+    const plain=typeof ast?.toText==='function'?String(ast.toText()||''):'';
+    const full=normalizeLegacyDocText(md.trim()?md:plain);
+    console.info('[CC image trace]',status.traceId||'CCIMG-unknown','rescue:legacy-docstream-result',{format:md.trim()?'markdown':'plain-text-fallback',length:full.length,preview:full.slice(0,500)});
+    if(full.length>name.replace(/\\.doc$/i,'').length+20)return full;
+    throw Error('Docstream returned only a title or too little text from the original .doc. The raw document has been preserved; please use the original-file recovery path.');
+  }
   const structured=(()=>{try{const j=typeof x.extracted_text==='string'?JSON.parse(x.extracted_text||'{}'):x.extracted_text;return String(j?.raw_text||'').trim()||structuredText(x.extracted_text)}catch{return structuredText(x.extracted_text)}})();
   if(structured.trim())return structured;
-  const name=String(x.file_name||'').toLowerCase(), b=await blob(x);
-  if(/\.docx$/i.test(name)||b.type==='application/vnd.openxmlformats-officedocument.wordprocessingml.document'){
+  const b=await blob(x);
+  if(/\\.docx$/i.test(name)||b.type==='application/vnd.openxmlformats-officedocument.wordprocessingml.document'){
     status('Reading document text…');
     const out=await mammoth.extractRawText({arrayBuffer:await b.arrayBuffer()});
     return out.value||'';
   }
-  if(/^text\//i.test(String(x.mime_type||''))||/\.(txt|md|csv)$/i.test(name)){
+  if(/^text\\//i.test(String(x.mime_type||''))||/\\.(txt|md|csv)$/i.test(name)){
     status('Reading document text…');
     return await b.text();
   }
-  if(b.type==='application/pdf'||/\.pdf$/i.test(name)||String(x.mime_type||'').startsWith('image/')){
+  if(b.type==='application/pdf'||/\\.pdf$/i.test(name)||String(x.mime_type||'').startsWith('image/')){
     console.info('[CC image trace]',status.traceId||'CCIMG-unknown','rescue:source-text:ocr-selected',{file_name:x.file_name,blobType:b.type,mime_type:x.mime_type});
     return await ocr(b,x.file_name||'',status,status.traceId);
   }
