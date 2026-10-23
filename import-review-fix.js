@@ -242,9 +242,14 @@ async function extractLegacyDocText(item){
   const buffer=await (await response.blob()).arrayBuffer();
   const parser=await loadDocstreamBrowser();
   const ast=await parser.parseOffice(buffer);
-  const text=typeof ast?.toText==='function'?ast.toText():'';
-  if(!text.trim())throw new Error('Docstream could not extract readable text from this .doc file.');
-  await extractionDiag(item.id,'legacy_docstream_text_extracted',{parser:'docstream-browser',type:ast.type||'doc',text_length:text.length});
+  // Prefer Markdown because it preserves headings, list boundaries and paragraph
+  // breaks. Plain toText() can concatenate "Ingredients" with the first ingredient
+  // and collapse Contents/Recipe labels into the method for some legacy .doc files.
+  const markdown=typeof ast?.toMarkdown==='function'?String(ast.toMarkdown()||''):'';
+  const plain=typeof ast?.toText==='function'?String(ast.toText()||''):'';
+  const text=(markdown.trim()?markdown:plain).replace(/\\r/g,'').replace(/[ \\t]+\\n/g,'\\n').replace(/\\n{3,}/g,'\\n\\n').trim();
+  if(!text)throw new Error('Docstream could not extract readable text from this .doc file.');
+  await extractionDiag(item.id,'legacy_docstream_text_extracted',{parser:'docstream-browser',format:markdown.trim()?'markdown':'plain-text-fallback',type:ast.type||'doc',text_length:text.length,plain_text_length:plain.length});
   return text;
 }
 
