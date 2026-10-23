@@ -63,6 +63,8 @@ function parseRecipe(x){
       const fallbackName=titleQuality(bestFallback)>=.68?bestFallback:fileTitle;
       r={...r,name:(long||weak||!n)?fallbackName:n,personal_notes:s.personal_notes||s.notes||'',ingredients:s.ingredients||s.recipeIngredient||[],method:s.method||s.recipeInstructions||'',cuisine:s.cuisine||s.recipeCuisine||r.cuisine,course:s.course||s.recipeCategory||r.course,servings:s.servings||s.recipeYield||'',description:s.description||(long?clean(n):'')};
       if(Array.isArray(r.method))r.method=r.method.map(v=>typeof v==='string'?v:v?.text||v?.name||'').join('\n');
+      // Reject obvious method prose accidentally mapped into the servings field.
+      if(typeof r.servings==='string'&&(r.servings.length>40||/\b(?:stir|heat|serve|cook|add|simmer|transfer|sprinkle|season|fry)\b/i.test(r.servings)))r.servings='';
     }catch{}
   }
   return r
