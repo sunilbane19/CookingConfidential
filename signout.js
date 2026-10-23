@@ -1,3 +1,4 @@
+import './auth-redirect-fix.js?v=1.0.0';
 // Reuse the single Supabase client created by app.js. No second Auth client/storage.
 const signOutBtn = document.querySelector('#signOutBtn');
 const authOnly = () => document.querySelectorAll('.auth-only');
