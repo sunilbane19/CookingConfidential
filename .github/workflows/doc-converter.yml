@@ -1,0 +1,40 @@
+name: DOC converter container check
+
+on:
+  pull_request:
+    branches: [dietary-suitability-staging-test]
+    paths:
+      - "services/doc-converter/**"
+      - ".github/workflows/doc-converter.yml"
+  push:
+    branches: [feature/legacy-doc-conversion-engine]
+    paths:
+      - "services/doc-converter/**"
+      - ".github/workflows/doc-converter.yml"
+
+jobs:
+  build-and-health-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build container
+        run: docker build -t cc-doc-converter services/doc-converter
+      - name: Start container and verify health endpoint
+        run: |
+          docker run -d --name cc-doc-converter -p 8080:8080 -e CONVERTER_API_KEY=ci-test-secret cc-doc-converter
+          for i in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8080/health; then
+              echo
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs cc-doc-converter
+          exit 1
+      - name: Verify endpoint requires authentication
+        run: |
+          code=$(curl --silent --output /dev/null --write-out "%{http_code}" -F "file=@services/doc-converter/app.py;filename=wrong.doc" http://127.0.0.1:8080/convert/doc-to-docx)
+          test "$code" = "401"
+      - name: Clean up
+        if: always()
+        run: docker rm -f cc-doc-converter || true

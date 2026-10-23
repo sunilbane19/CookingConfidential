@@ -277,13 +277,9 @@ loginForm.onsubmit=async e=>{
 document.querySelector('#recipeForm').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target),{data:{user}}=await supabase.auth.getUser();if(!user)return showUiError('Please sign in again.','Sign-in required');const ingredients=String(f.get('ingredients')).split('\n').map(x=>x.trim()).filter(Boolean);const{error}=await supabase.from('cc_recipes').insert({name:f.get('name'),cuisine:f.get('cuisine')||null,course:f.get('course')||null,ingredients,method:f.get('method')||null,personal_notes:f.get('notes')||null,created_by:user.id,visibility:'private'});if(error)return showUiError(error.message,'Could not save recipe');recipeDialog.close();e.target.reset();await loadData()};
 document.querySelector('#menuForm').onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target),{data:{user}}=await supabase.auth.getUser();if(!user)return showUiError('Please sign in again.','Sign-in required');const{error}=await supabase.from('cc_menus').insert({name:f.get('name'),menu_date:f.get('date')||null,guest_count:f.get('guests')?Number(f.get('guests')):null,occasion:f.get('occasion')||null,notes:f.get('notes')||null,visibility:'private',created_by:user.id});if(error)return showUiError(error.message,'Could not create menu');menuDialog.close();e.target.reset();await loadData();view='menus'};
 document.querySelector('#addRecipeBtn').onclick=()=>recipeDialog.showModal();const closeRecipeDialog=()=>{recipeDialog.close();document.querySelector('#recipeForm').reset()};document.querySelector('#recipeForm .close').onclick=e=>{e.preventDefault();closeRecipeDialog()};document.querySelector('#recipeForm .dialog-actions button[value="cancel"]').onclick=e=>{e.preventDefault();closeRecipeDialog()};document.querySelector('#importBtn').onclick=()=>{importDialog.showModal();if(typeof window.ccOpenImportInbox==='function')window.ccOpenImportInbox();};document.querySelector('#closeImport').onclick=()=>importDialog.close();document.querySelector('#fileInput').onchange=e=>queueFiles([...e.target.files]);function importAlreadyQueued(item){
-  const key=item?.source_url?String(item.source_url).trim().toLowerCase():String(item?.file_name||'').trim().toLowerCase();
+  const key=String(item?.file_name||'').trim().toLowerCase();
   if(!key)return false;
-  return importItems.some(x=>{
-    if(x?.status!=='Queued')return false;
-    if(item?.source_url||x?.source_url)return String(x?.source_url||'').trim().toLowerCase()===key;
-    return String(x?.file_name||'').trim().toLowerCase()===key && Number(x?.size||0)===Number(item?.size||0) && Number(x?.file?.lastModified||0)===Number(item?.file?.lastModified||0);
-  });
+  return importItems.some(x=>x?.status==='Queued'&&String(x?.file_name||'').trim().toLowerCase()===key&&Number(x?.size||0)===Number(item?.size||0)&&Number(x?.file?.lastModified||0)===Number(item?.file?.lastModified||0));
 }
 function addImportItem(item){
   if(importAlreadyQueued(item))return false;
