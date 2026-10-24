@@ -10,9 +10,9 @@ function renderInbox(rows){
    const name=x.file_name||x.source_url||'Import';
    const image=/\.(png|jpe?g|webp)$/i.test(name)||String(x.mime_type||'').startsWith('image/');
    let multi=false;
-   try{const j=typeof x.extracted_text==='string'?JSON.parse(x.extracted_text||'{}'):x.extracted_text;multi=j?.multiple===true&&Array.isArray(j?.recipes)}catch(_){multi=false}
+   try{const j=typeof x.extracted_text==='string'?JSON.parse(x.extracted_text||'{}'):x.extracted_text;multi=(j?.multiple===true&&Array.isArray(j?.recipes))||j?.import_mode==='multiple'}catch(_){multi=false}
    if(!multi){try{multi=!!localStorage.getItem('ccMultiImport:'+x.id)}catch(_){}} 
-   return '<article class="review-item"><label class="import-select-item"><input class="cc-import-select" type="checkbox" value="'+x.id+'"><span class="import-select-mark" aria-hidden="true"></span></label><div class="review-item-main"><strong title="'+esc(name)+'">'+esc(name)+'</strong><small>'+esc(statusText(x))+'</small></div><div class="review-item-actions"><button class="secondary review-btn cc-inbox-review" data-id="'+x.id+'" data-image="'+(image?'1':'0')+'" data-multi="'+(multi?'1':'0')+'" type="button">Review</button><button class="secondary danger cc-delete-import" data-id="'+x.id+'" type="button">Delete</button></div></article>'
+   return '<article class="review-item"><label class="import-select-item"><input class="cc-import-select" type="checkbox" value="'+x.id+'"><span class="import-select-mark" aria-hidden="true"></span></label><div class="review-item-main"><strong title="'+esc(name)+'">'+esc(name)+'</strong><small>'+(multi?'Multiple recipe import':'Single recipe import')+' · '+esc(statusText(x))+'</small></div><div class="review-item-actions"><button class="secondary review-btn cc-inbox-review" data-id="'+x.id+'" data-image="'+(image?'1':'0')+'" data-multi="'+(multi?'1':'0')+'" type="button">Review</button><button class="secondary danger cc-delete-import" data-id="'+x.id+'" type="button">Delete</button></div></article>'
  }).join('');
  const updateBulk=()=>{
    const boxes=[...importInbox.querySelectorAll('.cc-import-select')], selected=boxes.filter(b=>b.checked).length;
