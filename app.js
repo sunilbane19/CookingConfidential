@@ -289,7 +289,7 @@ document.querySelector('#addRecipeBtn').onclick=()=>recipeDialog.showModal();con
 }
 function addImportItem(item){
   if(importAlreadyQueued(item))return false;
-  item.localId=crypto.randomUUID();item.status='Queued';item.selected=false;importItems.push(item);window.ccImportItems=importItems;renderImportQueue();return true
+  item.importMode=item.importMode||document.querySelector('#importModePanel input[name="importMode"]:checked')?.value||'single';item.expectedCount=item.expectedCount??(item.importMode==='multi'&&document.querySelector('#multiRecipeCount')?.value?Number(document.querySelector('#multiRecipeCount').value):null);item.localId=crypto.randomUUID();item.status='Queued';item.selected=false;importItems.push(item);window.ccImportItems=importItems;renderImportQueue();return true
 }
 function queueFiles(files){
   const traceId='CCIMG-'+Date.now().toString(36);
@@ -297,7 +297,7 @@ function queueFiles(files){
   const isImageFile=file=>String(file?.type||'').toLowerCase().startsWith('image/')||/\.(png|jpe?g|webp|gif|bmp|heic|heif|tiff?|svg)$/i.test(String(file?.name||''));
   const unsupported=files.filter(isImageFile),supported=files.filter(file=>!isImageFile(file));
   let added=0;
-  supported.forEach(file=>{if(addImportItem({file,file_name:file.name,mime_type:file.type||'application/octet-stream',size:file.size}))added++});
+  const importMode=document.querySelector('#importModePanel input[name="importMode"]:checked')?.value||'single';const expectedCount=importMode==='multi'&&document.querySelector('#multiRecipeCount')?.value?Number(document.querySelector('#multiRecipeCount').value):null;supported.forEach(file=>{if(addImportItem({file,file_name:file.name,mime_type:file.type||'application/octet-stream',size:file.size,importMode,expectedCount}))added++});
   console.info('[CC image trace]',traceId,'queueFiles:queued',{received:files.length,unsupportedImages:unsupported.map(f=>f.name),added,queueCount:importItems.length,items:importItems.map(x=>({name:x.file_name,mime_type:x.mime_type,size:x.size,status:x.status,selected:x.selected,hasLocalFile:!!x.file}))});
   if(unsupported.length)window.ccShowError?.('Image files are not catered for in this upload workflow yet. Please upload a PDF, DOCX or TXT file instead.','File type not supported');
   if(added<supported.length)window.ccShowError?.('The same file is already in the upload list. It has not been added twice.','Duplicate upload skipped');
@@ -305,7 +305,7 @@ function queueFiles(files){
  const queued=importItems.filter(x=>x.status==='Queued'),selected=queued.filter(x=>x.selected).length;
  importQueue.innerHTML=importItems.length?
  '<div class="queue-head"><label class="queue-select-all"><input id="selectAllImports" type="checkbox" '+(queued.length&&selected===queued.length?'checked':'')+' '+(!queued.length?'disabled':'')+'><span>Select all</span></label><button class="secondary" id="uploadAll" type="button" '+(!selected?'disabled':'')+'>Upload selected</button></div>'+
- importItems.map(x=>'<div class="queue-item"><label class="queue-select"><input class="import-select" type="checkbox" data-local-id="'+esc(x.localId||'')+'" '+(x.selected?'checked':'')+' '+(x.status!=='Queued'?'disabled':'')+'><span><strong>'+esc(x.file_name)+'</strong></span></label><span>'+esc(x.status)+(x.dbId?' · Item ID '+esc(x.dbId):'')+'</span>'+(x.status==='Uploaded'&&x.dbId?'<button type="button" class="secondary cc-local-review" data-db-id="'+esc(x.dbId)+'" data-image="'+(String(x.mime_type||'').startsWith('image/')?'1':'0')+'" data-docx="'+(/\.docx$/i.test(x.file_name||'')?'1':'0')+'">Review</button>':'')+'</div>').join(''):'';
+ importItems.map(x=>'<div class="queue-item"><label class="queue-select"><input class="import-select" type="checkbox" data-local-id="'+esc(x.localId||'')+'" '+(x.selected?'checked':'')+' '+(x.status!=='Queued'?'disabled':'')+'><span><strong>'+esc(x.file_name)+'</strong><small class="cc-import-mode-label">'+(x.importMode==='multi'?'Multiple recipes':'Single recipe')+(x.expectedCount?' · Expected '+esc(x.expectedCount):'')+'</small></span></label><span>'+esc(x.status)+(x.dbId?' · Item ID '+esc(x.dbId):'')+'</span>'+(x.status==='Uploaded'&&x.dbId?'<button type="button" class="secondary cc-local-review" data-db-id="'+esc(x.dbId)+'" data-image="'+(String(x.mime_type||'').startsWith('image/')?'1':'0')+'" data-docx="'+(/\.docx$/i.test(x.file_name||'')?'1':'0')+'">Review</button>':'')+'</div>').join(''):'';
  const selectAll=document.querySelector('#selectAllImports');
  if(selectAll)selectAll.onchange=()=>{queued.forEach(x=>x.selected=selectAll.checked);renderImportQueue()};importQueue.querySelectorAll('.cc-local-review').forEach(b=>b.onclick=async()=>{const id=Number(b.dataset.dbId);if(b.dataset.docx==='1'&&typeof window.ccReviewImportDocx==='function')return window.ccReviewImportDocx(id);if(typeof window.ccReviewImportItem==='function'){console.info('[CC image trace] queue:review-click',{id,isImage:b.dataset.image==='1',isDocx:b.dataset.docx==='1',item:importItems.find(x=>Number(x.dbId)===id)||null});return window.ccReviewImportItem(id,b.dataset.image==='1')}});
  importQueue.querySelectorAll('.import-select').forEach(cb=>cb.onchange=()=>{const x=importItems.find(i=>i.localId===cb.dataset.localId);if(x)x.selected=cb.checked;renderImportQueue()});
