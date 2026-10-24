@@ -166,6 +166,42 @@ async function invokeExtract(itemId,textOverride=null){
   return {data:null,error:lastError||new Error('Could not start recipe extraction.')};
 }
 async function showOriginal(x,back=()=>showReview(x,x.id)){if(!x?.file_path)return window.ccShowError('Original file is not available.','Original file unavailable');let signedUrl;try{signedUrl=await getCachedSignedUrl(supabase,'cooking-confidential',x.file_path)}catch(error){return window.ccShowError(error?.message||'Could not open the original file.','Could not open original file')}const res=await fetch(signedUrl);if(!res.ok)return window.ccShowError('Could not load the original file.','Could not load original file');const blob=await res.blob(),name=x.file_name||'Original recipe',lower=name.toLowerCase();let body='';if(lower.endsWith('.docx')){const out=await mammoth.convertToHtml({arrayBuffer:await blob.arrayBuffer()});body=`<div class="original-viewer">${out.value||'<p>No readable content found.</p>'}</div>`}else if(lower.endsWith('.pdf')||blob.type==='application/pdf'){body=`<iframe class="original-pdf" title="Original recipe PDF" src="${URL.createObjectURL(blob)}"></iframe>`}else if(blob.type.startsWith('image/')){body=`<div class="original-viewer"><img class="original-image" alt="Original recipe" src="${URL.createObjectURL(blob)}"></div>`}else body=`<pre class="original-viewer">${esc(await blob.text())}</pre>`;detailDialog.querySelector('#detailContent').innerHTML=`<button class="close" type="button" id="ccBackOriginal">×</button><p class="eyebrow">ORIGINAL RECIPE</p><h2>${esc(name)}</h2><p class="small-note">Original uploaded file — retained privately in Cooking Confidential.</p>${body}`;document.querySelector('#ccBackOriginal').onclick=back}
+function normalizeImportedPunctuationText(value){
+  return String(value??'')
+    .replace(/[\\t ]+([,;:!?])/g,'$1')
+    .replace(/([,;:])(?=\\S)/g,'$1 ')
+    // Repair missing sentence spaces only when punctuation is followed by an
+    // uppercase letter; avoid decimals and most abbreviations.
+    .replace(/([.!?])(?=[A-ZÀ-ÖØ-Þ])/g,'$1 ')
+    .replace(/ {2,}/g,' ');
+}
+function normalizeImportedPunctuation(value){
+  if(typeof value!=='string'||!value)return value;
+  if(!/<[a-z][\\s\\S]*>/i.test(value))return normalizeImportedPunctuationText(value);
+  // Preserve rich-text formatting and links by normalizing text nodes only.
+  try{
+    const doc=new DOMParser().parseFromString('<div>'+value+'</div>','text/html');
+    const root=doc.body.firstElementChild;
+    const visit=node=>{
+      if(node.nodeType===Node.TEXT_NODE){node.nodeValue=normalizeImportedPunctuationText(node.nodeValue||'');return}
+      [...(node.childNodes||[])].forEach(visit);
+    };
+    [...(root?.childNodes||[])].forEach(visit);
+    return root?.innerHTML??value;
+  }catch{return value}
+}
+function normalizeImportedRecipePunctuation(recipe){
+  for(const key of ['name','description','method','personal_notes','servings','cuisine','course','ingredientsHtml','methodHtml','notesHtml']){
+    if(typeof recipe?.[key]==='string')recipe[key]=normalizeImportedPunctuation(recipe[key]);
+  }
+  if(Array.isArray(recipe?.ingredients))recipe.ingredients=recipe.ingredients.map(item=>{
+    if(typeof item==='string')return normalizeImportedPunctuation(item);
+    if(item&&typeof item==='object')return Object.fromEntries(Object.entries(item).map(([key,value])=>[key,typeof value==='string'?normalizeImportedPunctuation(value):value]));
+    return item;
+  });
+  if(Array.isArray(recipe?.method))recipe.method=recipe.method.map(v=>typeof v==='string'?normalizeImportedPunctuation(v):v);
+  return recipe;
+}
 async function showReview(x,id){
   await extractionDiag(id,'show_review_start',{extraction_status:x?.extraction_status});
   if(!x)return window.ccShowError('Import item could not be loaded.','Could not load import');
@@ -193,6 +229,9 @@ async function showReview(x,id){
       await extractionDiag(id,'docx_formatting_fallback',{message:String(error?.message||error)});
     }
   }
+  // Generic import cleanup: repair punctuation spacing in imported text without
+  // changing recipe content or stripping rich-text formatting.
+  normalizeImportedRecipePunctuation(r);
   const ingredientHtml=Array.isArray(r.ingredients)
     ? r.ingredients.map(v=>typeof v==='string'?clean(v):[v?.quantity,v?.unit,v?.name].filter(Boolean).join(' ')).filter(Boolean).join('\n')
     : clean(r.ingredients||'');
@@ -350,7 +389,7 @@ async function extractLegacyDocText(item){
   return text;
 }
 
-const REVIEW_MODULE_VERSION='1.4.124';
+const REVIEW_MODULE_VERSION='1.4.125';
 export async function reviewImportFixed(id){window.ccImportReviewActive=true;await extractionDiag(id,'review_module_version',{version:REVIEW_MODULE_VERSION});window.ccReturnToImportInbox=true;importDialog?.close();detailDialog.querySelector('#detailContent').innerHTML='<div class="dialog-card"><p class="eyebrow">REVIEW IMPORT</p><h2>Preparing recipe…</h2><p class="small-note">Reading the selected upload. This may take a few seconds.</p></div>';detailDialog.showModal();let{data:x,error}=await supabase.from('cc_import_items').select('*').eq('id',id).single();if(error||!x){detailDialog.close();return window.ccShowError(error?.message||'Import item could not be loaded.','Could not load import')}const displayName=x.file_name||x.source_url||'Recipe import';await extractionDiag(id,'review_open',{file_name:x.file_name||null,mime_type:x.mime_type||null,extraction_status:x.extraction_status,review_status:x.review_status,has_scanned_pdf:typeof x.extracted_text==='string'&&x.extracted_text.includes('"scanned_pdf":true')});detailDialog.querySelector('#detailContent').innerHTML='<div class="dialog-card import-preparing"><p class="eyebrow">REVIEW IMPORT</p><h2>Preparing your recipe</h2><p class="small-note">Reading <strong>'+esc(displayName)+'</strong>.</p><div style="margin:18px 0 8px;padding:12px 14px;border:1px solid rgba(120,70,50,.18);border-radius:10px;background:rgba(120,70,50,.05);font-size:14px;line-height:1.5;color:#5d514a"><strong>Almost there.</strong><br>Your recipe is being extracted now.</div><p class="small-note import-status" style="margin-top:10px">Please keep this window open while the recipe is extracted.</p></div>';const image=/\.(png|jpe?g|webp)$/i.test(x.file_name||'')||String(x.mime_type||'').startsWith('image/');if(image){detailDialog.close();try{const mod=await import('./generic-image-review.js?v=1.2.0');if(typeof mod.reviewImage==='function')return mod.reviewImage(id);throw new Error('Image review function is unavailable.')}catch(e){console.error('[CC image trace] explicit Review routing failed',{id,message:e?.message,stack:e?.stack});return window.ccShowError(e.message||'Could not open image review.','Could not open image review')}}const pdf=/\.pdf$/i.test(x.file_name||'')||x.mime_type==='application/pdf';
 // Legacy .doc files must be read through Docstream on every Review attempt,
 // not only while the import row is pending/processing. Existing rows may already
