@@ -137,8 +137,6 @@ function mapRescueTextToFields(raw,title){
  const instructions=method>=0?lines.slice(method+1,methodEnd).filter(Boolean):[];
  const extraNotes=notes>=0?lines.slice(notes+1).filter(Boolean):[];
  // Keep any unclassified content recoverable rather than dropping it.
- const mapped=[...description?[]:[]];
- const assigned=new Set([titleLine,descriptionHeading,ing,method,notes].filter(i=>i>=0));
  const known=new Set();
  if(titleLine>=0)known.add(titleLine);
  for(let i=0;i<lines.length;i++){
