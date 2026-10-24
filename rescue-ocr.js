@@ -138,4 +138,13 @@ function render(id,x,s){
 export async function rescueImport(id){const traceId='CCIMG-'+id+'-'+Date.now().toString(36);console.warn('[CC image trace]',traceId,'rescueImport:start',{id,at:new Date().toISOString()});const x=await item(id);console.info('[CC image trace]',traceId,'rescueImport:item-loaded',{id:x.id,file_name:x.file_name,mime_type:x.mime_type,file_path:x.file_path,original_file_path:x.original_file_path,extractedTextLength:String(x.extracted_text||'').length});dialog.querySelector('#detailContent').innerHTML='<div class="dialog-card"><p class="eyebrow">RESCUE EXTRACTION</p><h2>Making a best-effort recovery…</h2><p class="small-note" id="ccRescueStatus">Trying the original extracted text first.</p></div>';dialog.showModal();const st=t=>{const e=document.querySelector('#ccRescueStatus');if(e)e.textContent=t};st.traceId=traceId;let raw='';try{raw=await sourceText(x,st)}catch(e){console.warn('Cooking Confidential universal rescue source read:',e)}console.info('[CC image trace]',traceId,'rescue:raw-text-before-parse',{length:raw.length,text:raw});
 if(!raw.trim())raw=String(x.file_name||'Imported recipe').replace(/\.[^.]+$/,'').replace(/[_-]+/g,' ');
 const rs=parse(raw).map(norm);
-console.info('[CC image trace]',traceId,'rescue:parsed-structure',{recipes:rs});const title=rs[0]?.name||String(x.file_name||'Imported recipe').replace(/\.[^.]+$/,'').replace(/[_-]+/g,' ');render(id,x,{title,raw})}
+console.info('[CC image trace]',traceId,'rescue:parsed-structure',{recipes:rs});
+// Rescue is a fallback UI, not the destination for text that parsed cleanly.
+// If the labelled-text parser found a complete recipe, hand it to the standard editor.
+const candidate=rs[0];
+if(candidate&&candidate.ingredients.length>=3&&candidate.method.join(' ').replace(/<[^>]+>/g,' ').trim().length>=35&&typeof window.ccShowStructuredImport==='function'){
+  console.info('[CC image trace]',traceId,'rescue:valid-structure-route-normal-editor',{ingredients:candidate.ingredients.length,methodLength:candidate.method.join(' ').length});
+  const routed=await window.ccShowStructuredImport(id,x,candidate);
+  if(routed)return;
+}
+const title=candidate?.name||String(x.file_name||'Imported recipe').replace(/\.[^.]+$/,'').replace(/[_-]+/g,' ');render(id,x,{title,raw})}
