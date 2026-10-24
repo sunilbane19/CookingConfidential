@@ -35,7 +35,6 @@ async function uploadSelected(){
   const items=queued;
   if(!items.length){message('There are no new imports selected. Use Review on an uploaded item below.');return}
   running=true;
-  const multiReviewIds=[];
   const button=document.querySelector('#uploadAll');
   if(button){button.disabled=true;button.textContent='Uploading…'}
   try{
@@ -90,7 +89,7 @@ async function uploadSelected(){
       const itemsResult=await api('/rest/v1/cc_import_items?select=id',{
         method:'POST',
         headers:{'Content-Type':'application/json','Prefer':'return=representation'},
-        body:JSON.stringify({import_id:importRow.id,file_name:file.name,mime_type:optimized.mimeType,source_url:null,file_path:'originals/'+path,created_by:userId,extraction_status:'pending',review_status:'pending'})
+        body:JSON.stringify({import_id:importRow.id,file_name:file.name,mime_type:optimized.mimeType,source_url:null,file_path:'originals/'+path,created_by:userId,extraction_status:'pending',review_status:'pending',extracted_text:JSON.stringify({version:1,import_mode:item.importMode==='multi'?'multiple':'single',expected_count:item.importMode==='multi'?(item.expectedCount||null):null})})
       });
       const itemRow=itemsResult?.[0];
       if(!itemRow?.id)throw new Error('Could not save the uploaded recipe.');
@@ -98,25 +97,12 @@ async function uploadSelected(){
       item.dbId=Number(itemRow.id);
       item.importId=Number(importRow.id);
       item.status='Uploaded';
-      const multiMode=window.ccImportMode==='multi';
+      const multiMode=item.importMode==='multi';
       if(multiMode){
-        setStatusForName(displayName,'Extracting multiple recipes…');
-        window.localStorage.setItem('ccMultiImport:'+itemRow.id,JSON.stringify({expectedCount:window.ccExpectedRecipeCount||null,fileName:displayName,createdAt:new Date().toISOString()}));
-        if(typeof window.ccMultiReview!=='function'){
-          await import('./multi-recipe-import.js?v=1.3.10');
-        }
-        if(typeof window.ccMultiReview!=='function') throw new Error('Multi-recipe importer could not be loaded.');
-        await window.ccMultiReview(itemRow.id,false);
-        multiReviewIds.push(Number(itemRow.id));
-        setStatusForName(displayName,'Uploaded');
-      }else if(isImage){setStatusForName(displayName,'Uploaded');message('Image uploaded. It is waiting in the Import Inbox. Press Review when you are ready to read and process it.')}
-      else{setStatusForName(displayName,'Uploaded');message('Upload completed. Open Review in the Import Inbox to extract the recipe.')}
-    }
-    // All selected multi-recipe files are extracted independently before opening
-    // a single review dialog. This prevents the last file from overwriting the
-    // review dialog while earlier files are still being processed.
-    if(multiReviewIds.length&&typeof window.ccMultiReview==='function'){
-      await window.ccMultiReview(multiReviewIds[0],true);
+        window.localStorage.setItem('ccMultiImport:'+itemRow.id,JSON.stringify({expectedCount:item.expectedCount||null,fileName:displayName,createdAt:new Date().toISOString()}));
+      }
+      if(isImage){setStatusForName(displayName,'Uploaded');message('Image uploaded. It is waiting in the Import Inbox. Press Review when you are ready to read and process it.')}
+      else{setStatusForName(displayName,'Uploaded');message('Upload completed. The file is waiting in the Import Inbox. Press Review when you are ready to process it.')}
     }
     // Uploaded files have now moved into the persistent Import Inbox.
     // Remove successful items from this temporary upload queue so they are not shown twice.
