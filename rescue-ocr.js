@@ -54,10 +54,47 @@ function structuredText(value){
     return out.join('\n');
   }catch{return ''}
 }
+let ccRescueDocstreamPromise;
+async function loadRescueDocstream(){
+  if(window.officeParser&&typeof window.officeParser.parseOffice==='function')return window.officeParser;
+  if(!ccRescueDocstreamPromise){
+    ccRescueDocstreamPromise=new Promise((resolve,reject)=>{
+      const script=document.createElement('script');
+      script.src='https://cdn.jsdelivr.net/gh/joseespana/docstream@master/docs/dist/officeparser.browser.js';
+      script.onload=()=>window.officeParser&&typeof window.officeParser.parseOffice==='function'?resolve(window.officeParser):reject(Error('Docstream loaded but the browser parser API was not available.'));
+      script.onerror=()=>reject(Error('Could not load Docstream to read the original legacy .doc file.'));
+      document.head.appendChild(script);
+    }).catch(e=>{ccRescueDocstreamPromise=null;throw e});
+  }
+  return ccRescueDocstreamPromise;
+}
+function normalizeLegacyDocText(value){
+  let t=String(value||'').replace(/\r/g,'').replace(/\u0000/g,' ').replace(/[ \t]+\n/g,'\n').replace(/\n{3,}/g,'\n\n');
+  t=t.replace(/^\s*#+\s*/gm,'').replace(/\*\*(.*?)\*\*/g,'$1');
+  t=t.replace(/HYPERLINK\s+"[^"]*"/gi,'').replace(/https?:\/\/\S+/gi,'');
+  const headings='General Ingredients|Ingredients|Description|Method|Directions|Instructions|Preparation|Steps|Notes|Servings|Contents|Recipe';
+  t=t.replace(new RegExp('\\s+(?=(?:'+headings+')\\s*:?)','gi'),'\n');
+  t=t.replace(new RegExp('(^|\\n)\\s*('+headings+')\\s*:?\\s*','gi'),'$1$2:\n');
+  t=t.replace(/^\s*(?:Contents|Recipe)\s*:\s*$/gim,'');
+  t=t.replace(/([A-Za-z])(?=\d+\s+(?:cups?|tbsp|tsp|grams?|gms?|kg|ml|cloves?|medium|large|small|inch|ounces?|oz|lbs?|pounds?)\b)/gi,'$1\n');
+  t=t.replace(/\s+(?=\d{1,2}\.\s+[A-Z])/g,'\n');
+  return t.split('\n').map(s=>s.replace(/[ \t]+/g,' ').trim()).filter(Boolean).join('\n').trim();
+}
 async function sourceText(x,status){
+  const name=String(x.file_name||'').toLowerCase();
+  if(/\.doc$/i.test(name)){
+    status('Reading original Word document with Docstream…');
+    const b=await blob(x),parser=await loadRescueDocstream(),ast=await parser.parseOffice(await b.arrayBuffer());
+    const md=typeof ast?.toMarkdown==='function'?String(ast.toMarkdown()||''):'';
+    const plain=typeof ast?.toText==='function'?String(ast.toText()||''):'';
+    const full=normalizeLegacyDocText(md.trim()?md:plain);
+    console.info('[CC image trace]',status.traceId||'CCIMG-unknown','rescue:legacy-docstream-result',{format:md.trim()?'markdown':'plain-text-fallback',length:full.length,preview:full.slice(0,500)});
+    if(full.length>name.replace(/\.doc$/i,'').length+20)return full;
+    throw Error('Docstream returned only a title or too little text from the original .doc.');
+  }
   const structured=(()=>{try{const j=typeof x.extracted_text==='string'?JSON.parse(x.extracted_text||'{}'):x.extracted_text;return String(j?.raw_text||'').trim()||structuredText(x.extracted_text)}catch{return structuredText(x.extracted_text)}})();
   if(structured.trim())return structured;
-  const name=String(x.file_name||'').toLowerCase(), b=await blob(x);
+  const b=await blob(x);
   if(/\.docx$/i.test(name)||b.type==='application/vnd.openxmlformats-officedocument.wordprocessingml.document'){
     status('Reading document text…');
     const out=await mammoth.extractRawText({arrayBuffer:await b.arrayBuffer()});
@@ -101,4 +138,13 @@ function render(id,x,s){
 export async function rescueImport(id){const traceId='CCIMG-'+id+'-'+Date.now().toString(36);console.warn('[CC image trace]',traceId,'rescueImport:start',{id,at:new Date().toISOString()});const x=await item(id);console.info('[CC image trace]',traceId,'rescueImport:item-loaded',{id:x.id,file_name:x.file_name,mime_type:x.mime_type,file_path:x.file_path,original_file_path:x.original_file_path,extractedTextLength:String(x.extracted_text||'').length});dialog.querySelector('#detailContent').innerHTML='<div class="dialog-card"><p class="eyebrow">RESCUE EXTRACTION</p><h2>Making a best-effort recovery…</h2><p class="small-note" id="ccRescueStatus">Trying the original extracted text first.</p></div>';dialog.showModal();const st=t=>{const e=document.querySelector('#ccRescueStatus');if(e)e.textContent=t};st.traceId=traceId;let raw='';try{raw=await sourceText(x,st)}catch(e){console.warn('Cooking Confidential universal rescue source read:',e)}console.info('[CC image trace]',traceId,'rescue:raw-text-before-parse',{length:raw.length,text:raw});
 if(!raw.trim())raw=String(x.file_name||'Imported recipe').replace(/\.[^.]+$/,'').replace(/[_-]+/g,' ');
 const rs=parse(raw).map(norm);
-console.info('[CC image trace]',traceId,'rescue:parsed-structure',{recipes:rs});const title=rs[0]?.name||String(x.file_name||'Imported recipe').replace(/\.[^.]+$/,'').replace(/[_-]+/g,' ');render(id,x,{title,raw})}
+console.info('[CC image trace]',traceId,'rescue:parsed-structure',{recipes:rs});
+// Rescue is a fallback UI, not the destination for text that parsed cleanly.
+// If the labelled-text parser found a complete recipe, hand it to the standard editor.
+const candidate=rs[0];
+if(candidate&&candidate.ingredients.length>=3&&candidate.method.join(' ').replace(/<[^>]+>/g,' ').trim().length>=35&&typeof window.ccShowStructuredImport==='function'){
+  console.info('[CC image trace]',traceId,'rescue:valid-structure-route-normal-editor',{ingredients:candidate.ingredients.length,methodLength:candidate.method.join(' ').length});
+  const routed=await window.ccShowStructuredImport(id,x,candidate);
+  if(routed)return;
+}
+const title=candidate?.name||String(x.file_name||'Imported recipe').replace(/\.[^.]+$/,'').replace(/[_-]+/g,' ');render(id,x,{title,raw})}
