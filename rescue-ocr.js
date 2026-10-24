@@ -111,6 +111,48 @@ async function sourceText(x,status){
   return '';
 }
 function field(r,k){return k==='name'||k==='description'?clean(r[k]):r[k].join('\n')}
+function mapRescueTextToFields(raw,title){
+ const source=String(raw||'').replace(/\r/g,'').replace(/\u0000/g,' ');
+ const lines=source.split('\n').map(v=>v.replace(/[ \t]+/g,' ').trim());
+ const isHeading=(line,kind)=>{
+  const t=line.replace(/^#+\s*/,'').replace(/[：:]\s*$/,'').trim().toLowerCase();
+  if(kind==='ingredients')return /^(?:general\s+)?ingredients?(?:\s+(?:list|section|needed|required))?$/.test(t)||/^(?:what you need|ingredient list|ingredients list)$/.test(t);
+  if(kind==='method')return /^(?:step[- ]by[- ]step\s+)?(?:cooking\s+)?(?:instructions?|method|directions?|preparation|steps?)(?:\s+(?:for cooking|to follow))?$/.test(t)||/^(?:step[- ]by[- ]step cooking instructions|cooking method|how to make|procedure)$/.test(t);
+  if(kind==='notes')return /^(?:my\s+)?(?:notes?|tips?|storage|serving suggestions?)$/.test(t);
+  if(kind==='description')return /^(?:description|introduction|about this recipe)$/.test(t);
+  return false;
+ };
+ const cleanTitle=String(title||'').trim();
+ const titleLine=lines.findIndex(l=>l&&l.toLowerCase()===cleanTitle.toLowerCase());
+ const ing=lines.findIndex(l=>isHeading(l,'ingredients'));
+ const method=lines.findIndex((l,i)=>i>(ing>=0?ing:-1)&&isHeading(l,'method'));
+ const notes=lines.findIndex((l,i)=>i>(method>=0?method:ing>=0?ing:-1)&&isHeading(l,'notes'));
+ const descriptionHeading=lines.findIndex(l=>isHeading(l,'description'));
+ const beforeEnd=ing>=0?ing:(method>=0?method:lines.length);
+ const descStart=descriptionHeading>=0&&descriptionHeading<beforeEnd?descriptionHeading+1:0;
+ const description=lines.slice(descStart,beforeEnd).filter((l,i)=>l&&l.toLowerCase()!==cleanTitle.toLowerCase()&&!(i===0&&titleLine===0)).join('\n').trim();
+ const ingredientEnd=method>=0?method:(notes>=0?notes:lines.length);
+ const ingredients=ing>=0?lines.slice(ing+1,ingredientEnd).filter(Boolean):[];
+ const methodEnd=notes>=0?notes:lines.length;
+ const instructions=method>=0?lines.slice(method+1,methodEnd).filter(Boolean):[];
+ const extraNotes=notes>=0?lines.slice(notes+1).filter(Boolean):[];
+ // Keep any unclassified content recoverable rather than dropping it.
+ const mapped=[...description?[]:[]];
+ const assigned=new Set([titleLine,descriptionHeading,ing,method,notes].filter(i=>i>=0));
+ const known=new Set();
+ if(titleLine>=0)known.add(titleLine);
+ for(let i=0;i<lines.length;i++){
+  if(i===descriptionHeading||i===ing||i===method||i===notes)known.add(i);
+  if(ing>=0&&i>ing&&i<ingredientEnd)known.add(i);
+  if(method>=0&&i>method&&i<methodEnd)known.add(i);
+  if(notes>=0&&i>notes)known.add(i);
+  if(i<beforeEnd&&i!==titleLine&&(descriptionHeading<0||i>descriptionHeading))known.add(i);
+ }
+ const unassigned=lines.filter((l,i)=>l&&!known.has(i)&&i!==titleLine);
+ const notesOut=[...extraNotes];
+ if(unassigned.length)notesOut.push('Recovered text to review:',...unassigned);
+ return {name:cleanTitle||String(lines[0]||'Imported recipe'),description,ingredients:ingredients.join('\n'),method:instructions.join('\n'),notes:notesOut.join('\n'),rawText:source};
+}
 function render(id,x,s){
  const raw=s.raw||'';
  const title=s.title||String(x.file_name||'Imported recipe').replace(/\.[^.]+$/,'').replace(/[_-]+/g,' ');
@@ -131,7 +173,7 @@ function render(id,x,s){
    const titleValue=dialog.querySelector('#ccRescueTitle').value.trim();
    const textValue=dialog.querySelector('#ccRescueRaw').value;
    dialog.close();
-   if(typeof window.ccOpenNewRecipeEditor==='function')return window.ccOpenNewRecipeEditor({name:titleValue,rawText:textValue});
+   if(typeof window.ccOpenNewRecipeEditor==='function')const mapped=mapRescueTextToFields(textValue,titleValue);console.info('[CC rescue mapping] field lengths',{description:mapped.description.length,ingredientLines:mapped.ingredients.split('\\n').filter(Boolean).length,methodLines:mapped.method.split('\\n').filter(Boolean).length,notes:mapped.notes.length});return window.ccOpenNewRecipeEditor(mapped);
    window.ccShowError?.('The New Recipe Editor could not be opened.','Could not continue');
  });
 }
