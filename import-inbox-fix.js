@@ -3,7 +3,13 @@ const importDialog=document.querySelector('#importDialog'),importInbox=document.
 const esc=s=>String(s??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));let busy=false;
 async function openInbox(){if(!importDialog||!importInbox)return;importDialog.showModal();loadInbox()}
 async function loadInbox(){if(busy)return;busy=true;importInbox.innerHTML='<div class="empty compact">Loading import inbox…</div>';try{const{data,error}=await sb.from('cc_import_items').select('*').order('created_at',{ascending:false}).limit(50);if(error)throw Error(error.message||'Could not load the import inbox.');renderInbox(data||[])}catch(e){importInbox.innerHTML=`<div class="empty compact">${esc(e.message||'Could not load the import inbox.')}</div>`}finally{busy=false}}
-function statusText(x){return `${x.extraction_status||'pending'} · ${x.review_status||'pending'}`}
+function statusText(x){
+ const extraction=String(x.extraction_status||'pending').toLowerCase();
+ const review=String(x.review_status||'pending').toLowerCase();
+ const extractionLabel=({ready:'Ready',pending:'Waiting',processing:'Extracting',failed:'Failed'})[extraction]||extraction;
+ const reviewLabel=({pending:'Awaiting review',approved:'Approved & saved',rejected:'Rejected'})[review]||review;
+ return 'Extraction: '+extractionLabel+' · Review: '+reviewLabel;
+}
 function renderInbox(rows){
  const head=rows.length?'<div class="queue-head import-inbox-head"><label class="import-select-all"><input id="ccSelectAllImports" type="checkbox"> <strong>Select all</strong></label><span>'+rows.length+' items</span><button type="button" class="secondary danger" id="ccDeleteSelected" disabled>Delete selected</button></div>':'';
  importInbox.innerHTML=(rows.length?head:'<div class="empty compact">No imports yet.</div>')+rows.map(x=>{
