@@ -152,6 +152,17 @@ export function parseDocx(html,fileName='Imported document'){
       if(SECTION.ingredients.test(t)){current='ingredients';continue;}
       if(SECTION.method.test(t)){current='method';continue;}
       if(SECTION.notes.test(t)){current='notes';continue;}
+      // In multi-recipe Word documents, bold standalone headings after a completed
+      // method often introduce source/promotional material rather than another step.
+      // Route that heading and following prose to Notes, until another recognized
+      // recipe section begins. Do not trigger for numbered or imperative cooking steps.
+      const isStandaloneHeading=(n.tag&&/^h[1-6]$/.test(n.tag)||n.bold)&&t.length<=70&&!/[.!?]$/.test(t);
+      const looksLikeStep=/^(?:step\s*\d+|\d+[.)]\s+|(?:mix|add|heat|bake|cook|stir|pour|place|remove|cover|serve|grill|cut|drain|blend|whisk|combine|bring|allow|leave|roll|fold|preheat|season|marinate|fry|simmer|boil|peel|chop)\b)/i.test(t);
+      if(current==='method'&&isStandaloneHeading&&!looksLikeStep&&t.split(/\s+/).length<=7){
+        current='notes';
+        r.notes.push(t);rich.notes.push(n);
+        continue;
+      }}
       if(isGarbage(t))continue;
 
       // Inline Note:/Notes:/Tip: paragraphs commonly occur at the end of a
