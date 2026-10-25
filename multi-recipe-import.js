@@ -6,7 +6,7 @@ import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
 import { createGenericEditor, editorValue, sanitizeRichHtml } from './generic-editor.js?v=1.3.5';
 import { checkRecipeQuality } from './recipe-quality.js?v=1.0.4';
 import { readSourceTextWithVision } from './vision-text-reader.js?v=1.0.0';
-import { parseDocx } from './docx-parser.js?v=1.0.13';
+import { parseDocx } from './docx-parser.js?v=1.0.14';
 
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
@@ -123,7 +123,8 @@ function parseDocxMulti(html,file,expectedCount=0){
       if(recipe)separated.push(recipe);
     }
   }
-  if(separated.length>=2&&separated.length===candidates.length&&(!expectedCount||separated.length===expectedCount))return separated;
+  // Keep valid recipe blocks even when other bold blocks are promotional text; do not fall back to whole-document parsing and reintroduce those blocks as recipes.
+  if(separated.length>=2&&(!expectedCount||separated.length<=expectedCount))return separated;
   return parseDocx(html,file);
 }
 function ocrLines(words){const valid=words.filter(w=>w.text?.trim()&&Number(w.confidence||0)>=25);if(!valid.length)return[];const medH=valid.map(w=>w.bbox.y1-w.bbox.y0).sort((a,b)=>a-b)[Math.floor(valid.length/2)]||20,rows=[];for(const w of [...valid].sort((a,b)=>a.bbox.y0-b.bbox.y0||a.bbox.x0-b.bbox.x0)){const cy=(w.bbox.y0+w.bbox.y1)/2;let row=rows.find(r=>Math.abs(r.cy-cy)<Math.max(8,medH*.55));if(!row){row={cy,words:[]};rows.push(row);}row.words.push(w);}return rows.map(r=>{r.words.sort((a,b)=>a.bbox.x0-b.bbox.x0);return {text:clean(r.words.map(w=>w.text).join(' ')),x0:Math.min(...r.words.map(w=>w.bbox.x0)),x1:Math.max(...r.words.map(w=>w.bbox.x1)),y0:Math.min(...r.words.map(w=>w.bbox.y0)),y1:Math.max(...r.words.map(w=>w.bbox.y1)),height:Math.max(...r.words.map(w=>w.bbox.y1-w.bbox.y0))};}).filter(r=>r.text.length>1);}
