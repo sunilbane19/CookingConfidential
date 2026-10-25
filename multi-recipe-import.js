@@ -31,6 +31,9 @@ const esc=s=>String(s??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'
 // common scan/social-media artefacts without inventing quantities or ingredients.
 function clean(s){
   let x=String(s??'').replace(/\r/g,'').replace(/[\u0000-\u001F\u007F\uFFFD]/g,' ').replace(/\s*\[(?:\s*\d+\s*(?:[,;]\s*\d+\s*)+)\]\s*/g,' ');
+  // Docstream can leak an underline-markup fragment into labels such as "u>Pastry:".
+  // Remove the stray prefix only when it precedes a short section label ending in a colon.
+  x=x.replace(/^u>\s*(?=[A-Za-z][A-Za-z /&-]{1,30}:)/i,'');
   x=x.replace(/\s+/g,' ').trim();
   // Remove checkbox/list/bracket noise introduced by OCR.
   x=x.replace(/^[\[\]{}()<>|•·▪◦●○✓✔☐☑\s]+/,'').replace(/^[\[\](){}]+\s*/,'');
