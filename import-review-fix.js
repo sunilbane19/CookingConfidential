@@ -12,7 +12,7 @@ async function extractionDiag(itemId,stage,details={}){try{const p=supabase.from
 const detailDialog=document.querySelector('#detailDialog'),importDialog=document.querySelector('#importDialog');
 const esc=(s='')=>String(s).replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));
 const decodeEntities=s=>{let v=String(s??'');for(let i=0;i<2;i++){const t=document.createElement('textarea');t.innerHTML=v;const n=t.value;if(n===v)break;v=n}return v};
-const clean=s=>decodeEntities(String(s??'').replace(/\s*\[[\s\d,;,-]+\]\s*/g,' ').replace(/[\u0000-\u001F\u007F\uFFFD]/g,' ')).replace(/[^\S\r\n]+/g,' ').replace(/[ \t]+\n/g,'\n').replace(/\n{3,}/g,'\n\n').trim();
+const clean=s=>decodeEntities(String(s??'').replace(/\s*\[(?:\s*\d+\s*(?:[,;]\s*\d+\s*)+)\]\s*/g,' ').replace(/[\u0000-\u001F\u007F\uFFFD]/g,' ')).replace(/[^\S\r\n]+/g,' ').replace(/[ \t]+\n/g,'\n').replace(/\n{3,}/g,'\n\n').trim();
 const cleanMethod=s=>clean(s);
 const sanitizeRichHtml=s=>String(s??'')
   .replace(/<(script|style|iframe|object|embed|form)[^>]*>[\s\S]*?<\/\1>/gi,'')
