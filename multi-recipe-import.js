@@ -1,4 +1,4 @@
-import { stripImportCitations } from './import-citation-cleanup.js?v=1.0.0';
+import { stripImportCitations } from './import-citation-cleanup.js?v=1.0.1';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { createWorker } from 'https://esm.sh/tesseract.js@5';
 import * as mammoth from 'https://esm.sh/mammoth@1.6.0';
@@ -6,7 +6,7 @@ import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
 import { createGenericEditor, editorValue, sanitizeRichHtml } from './generic-editor.js?v=1.3.5';
 import { checkRecipeQuality } from './recipe-quality.js?v=1.0.4';
 import { readSourceTextWithVision } from './vision-text-reader.js?v=1.0.0';
-import { parseDocx } from './docx-parser.js?v=1.0.9';
+import { parseDocx } from './docx-parser.js?v=1.0.10';
 
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
