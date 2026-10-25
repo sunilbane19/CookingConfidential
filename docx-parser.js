@@ -12,7 +12,7 @@ const UNIT=/\b(?:g|gm|kg|mg|ml|l|oz|lb|lbs|tsp|tbsp|cup|cups|pint|pints|quart|qu
 const NUMBER=/\b\d+(?:[.,]\d+)?(?:\s*[½¼¾⅓⅔⅛⅜⅝⅞])?\b/;
 const META=/^(?:prep|preparation|cook|cooking|steam|steaming|chill|chilling|fry|frying|rest|resting|freeze|freezing|yield|makes?|serves?|servings?|total|active|inactive|time|difficulty|cuisine|course)\b/i;
 
-function stripCitationArtifacts(s){return String(s||'').replace(/[ \\t]*\[\s*\d+(?:\s*[,;]\s*\d+)+\s*\]/g,'').replace(/[ \t]{2,}/g,' ');}
+function stripCitationArtifacts(s){return String(s||'').replace(/[ \t]*\[\s*\d+(?:\s*[,;]\s*\d+)+\s*\]/g,'').replace(/[ \t]{2,}/g,' ');}
 
 function cleanRecipeText(s){
   return clean(s)
