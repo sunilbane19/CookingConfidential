@@ -171,7 +171,7 @@ function mapRescueTextToFields(raw,title){
 function render(id,x,s){
  const raw=s.raw||'';
  const title=s.title||String(x.file_name||'Imported recipe').replace(/\.[^.]+$/,'').replace(/[_-]+/g,' ');
- const proposed=mapRescueTextToFields(raw,title);
+ const proposed=s.fields||mapRescueTextToFields(raw,title);
  dialog.querySelector('#detailContent').innerHTML=
  '<button class="close" type="button" id="ccRescueClose">×</button>'+
  '<p class="eyebrow">RESCUE EDITOR</p>'+
@@ -197,9 +197,10 @@ function render(id,x,s){
   dialog.querySelector('#ccRescueNotes').value=mapped.notes;
  });
  bind('#ccRescueOpenEditor',()=>{
-  const mapped={name:dialog.querySelector('#ccRescueTitle').value.trim(),description:dialog.querySelector('#ccRescueDescription').value,ingredients:dialog.querySelector('#ccRescueIngredients').value,method:dialog.querySelector('#ccRescueMethod').value,notes:dialog.querySelector('#ccRescueNotes').value,rawText:dialog.querySelector('#ccRescueRaw').value};
+  const mapped={name:dialog.querySelector('#ccRescueTitle').value.trim(),__ccRescueReturn:true,description:dialog.querySelector('#ccRescueDescription').value,ingredients:dialog.querySelector('#ccRescueIngredients').value,method:dialog.querySelector('#ccRescueMethod').value,notes:dialog.querySelector('#ccRescueNotes').value,rawText:dialog.querySelector('#ccRescueRaw').value};
   if(!mapped.name){window.ccShowError?.('Please enter a recipe title before continuing.','Recipe title required');return}
   if(typeof window.ccOpenNewRecipeEditor!=='function'){window.ccShowError?.('The New Recipe Editor could not be opened. Your recovery text is still available here.','Could not continue');return}
+  window.ccResumeRescueEditor=()=>{window.ccResumeRescueEditor=null;render(id,x,{title:mapped.name,raw:mapped.rawText,fields:mapped})};
   console.info('[CC rescue mapping] edited preview transferred',{description:mapped.description.length,ingredientLines:mapped.ingredients.split('\n').filter(Boolean).length,methodLines:mapped.method.split('\n').filter(Boolean).length,notes:mapped.notes.length});
   dialog.close();
   return window.ccOpenNewRecipeEditor(mapped);
