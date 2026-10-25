@@ -393,7 +393,7 @@ async function extractLegacyDocText(item){
 }
 
 const REVIEW_MODULE_VERSION='1.4.125';
-export async function reviewImportFixed(id){window.ccImportReviewActive=true;await extractionDiag(id,'review_module_version',{version:REVIEW_MODULE_VERSION});window.ccReturnToImportInbox=true;importDialog?.close();detailDialog.querySelector('#detailContent').innerHTML='<div class="dialog-card"><p class="eyebrow">REVIEW IMPORT</p><h2>Preparing recipe…</h2><p class="small-note">Reading the selected upload. This may take a few seconds.</p></div>';detailDialog.showModal();let{data:x,error}=await supabase.from('cc_import_items').select('*').eq('id',id).single();if(error||!x){detailDialog.close();return window.ccShowError(error?.message||'Import item could not be loaded.','Could not load import')}const displayName=x.file_name||x.source_url||'Recipe import';await extractionDiag(id,'review_open',{file_name:x.file_name||null,mime_type:x.mime_type||null,extraction_status:x.extraction_status,review_status:x.review_status,has_scanned_pdf:typeof x.extracted_text==='string'&&x.extracted_text.includes('"scanned_pdf":true')});detailDialog.querySelector('#detailContent').innerHTML='<div class="dialog-card import-preparing"><p class="eyebrow">REVIEW IMPORT</p><h2>Preparing your recipe</h2><p class="small-note">Reading <strong>'+esc(displayName)+'</strong>.</p><div style="margin:18px 0 8px;padding:12px 14px;border:1px solid rgba(120,70,50,.18);border-radius:10px;background:rgba(120,70,50,.05);font-size:14px;line-height:1.5;color:#5d514a"><strong>Almost there.</strong><br>Your recipe is being extracted now.</div><p class="small-note import-status" style="margin-top:10px">Please keep this window open while the recipe is extracted.</p></div>';const image=/\.(png|jpe?g|webp)$/i.test(x.file_name||'')||String(x.mime_type||'').startsWith('image/');if(image){detailDialog.close();try{const mod=await import('./generic-image-review.js?v=1.2.0');if(typeof mod.reviewImage==='function')return mod.reviewImage(id);throw new Error('Image review function is unavailable.')}catch(e){console.error('[CC image trace] explicit Review routing failed',{id,message:e?.message,stack:e?.stack});return window.ccShowError(e.message||'Could not open image review.','Could not open image review')}}const pdf=/\.pdf$/i.test(x.file_name||'')||x.mime_type==='application/pdf';
+async function reviewImportFixedInner(id){window.ccImportReviewActive=true;await extractionDiag(id,'review_module_version',{version:REVIEW_MODULE_VERSION});window.ccReturnToImportInbox=true;importDialog?.close();detailDialog.querySelector('#detailContent').innerHTML='<div class="dialog-card"><p class="eyebrow">REVIEW IMPORT</p><h2>Preparing recipe…</h2><p class="small-note">Reading the selected upload. This may take a few seconds.</p></div>';detailDialog.showModal();let{data:x,error}=await supabase.from('cc_import_items').select('*').eq('id',id).single();if(error||!x){detailDialog.close();return window.ccShowError(error?.message||'Import item could not be loaded.','Could not load import')}const displayName=x.file_name||x.source_url||'Recipe import';await extractionDiag(id,'review_open',{file_name:x.file_name||null,mime_type:x.mime_type||null,extraction_status:x.extraction_status,review_status:x.review_status,has_scanned_pdf:typeof x.extracted_text==='string'&&x.extracted_text.includes('"scanned_pdf":true')});detailDialog.querySelector('#detailContent').innerHTML='<div class="dialog-card import-preparing"><p class="eyebrow">REVIEW IMPORT</p><h2>Preparing your recipe</h2><p class="small-note">Reading <strong>'+esc(displayName)+'</strong>.</p><div style="margin:18px 0 8px;padding:12px 14px;border:1px solid rgba(120,70,50,.18);border-radius:10px;background:rgba(120,70,50,.05);font-size:14px;line-height:1.5;color:#5d514a"><strong>Almost there.</strong><br>Your recipe is being extracted now.</div><p class="small-note import-status" style="margin-top:10px">Please keep this window open while the recipe is extracted.</p></div>';const image=/\.(png|jpe?g|webp)$/i.test(x.file_name||'')||String(x.mime_type||'').startsWith('image/');if(image){detailDialog.close();try{const mod=await import('./generic-image-review.js?v=1.2.0');if(typeof mod.reviewImage==='function')return mod.reviewImage(id);throw new Error('Image review function is unavailable.')}catch(e){console.error('[CC image trace] explicit Review routing failed',{id,message:e?.message,stack:e?.stack});return window.ccShowError(e.message||'Could not open image review.','Could not open image review')}}const pdf=/\.pdf$/i.test(x.file_name||'')||x.mime_type==='application/pdf';
 // Legacy .doc files must be read through Docstream on every Review attempt,
 // not only while the import row is pending/processing. Existing rows may already
 // be marked ready by the server extractor even though their structure is unusable.
@@ -544,4 +544,33 @@ if(!quality.good){await extractionDiag(id,'quality_gate_failed',{quality});
   try{const rescue=await import('./rescue-ocr.js?v=1.1.5');return rescue.rescueImport(id)}catch(e){console.warn('Cooking Confidential universal rescue:',e)}
 }
 await extractionDiag(id,'before_show_review',{name:parsedForQuality?.name||null,ingredient_count:Array.isArray(parsedForQuality?.ingredients)?parsedForQuality.ingredients.length:0});window.ccImportReviewActive=false;await showReview(x,id);await extractionDiag(id,'show_review_returned',{});}
+// Watchdog: extraction must never leave Review spinning indefinitely. If the normal
+// pipeline stalls (for example, on a malformed or difficult PDF), open Rescue Editor.
+export async function reviewImportFixed(id){
+  let timer;
+  let timedOut=false;
+  const work=reviewImportFixedInner(id);
+  const watchdog=new Promise(resolve=>{
+    timer=setTimeout(()=>resolve({__ccReviewTimeout:true}),45000);
+  });
+  const result=await Promise.race([work.then(value=>({value}),error=>({error})),watchdog]);
+  clearTimeout(timer);
+  if(!result.__ccReviewTimeout){
+    if(result.error)throw result.error;
+    return result.value;
+  }
+  timedOut=true;
+  window.ccImportReviewTimedOut=true;
+  window.ccImportReviewActive=false;
+  void extractionDiag(id,'review_watchdog_timeout',{timeout_ms:45000,action:'rescue-editor'});
+  console.warn('Cooking Confidential review extraction timed out; routing to Rescue Editor.',{id,timeout_ms:45000});
+  try{
+    const rescue=await import('./rescue-ocr.js?v=1.1.6');
+    return await rescue.rescueImport(id);
+  }catch(error){
+    detailDialog?.close();
+    return window.ccShowError('Recipe extraction took too long and Rescue Editor could not open: '+(error?.message||String(error)),'Rescue Editor unavailable');
+  }
+}
+
 document.addEventListener('click',async event=>{const button=event.target.closest('.review-btn');if(!button)return;event.preventDefault();event.stopImmediatePropagation();const id=Number(button.dataset.id);if(button.dataset.multi==='1'){try{const mod=await import('./multi-recipe-import.js?v=1.3.24');if(typeof mod.ccMultiReview==='function')return mod.ccMultiReview(id);if(typeof window.ccMultiReview==='function')return window.ccMultiReview(id);throw Error('Multi-recipe reviewer could not be loaded.')}catch(e){return window.ccShowError(e?.message||'Could not open multi-recipe review.','Multi-recipe review failed')}}reviewImportFixed(id)},true);
