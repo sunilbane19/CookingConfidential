@@ -112,7 +112,13 @@ function looksLikeIngredientTitle(s){
 function parseDocxMulti(html,file,expectedCount=0){
   const doc=new DOMParser().parseFromString(html,'text/html');
   const blocks=docxRecipeBlocks(doc);
-  const candidates=blocks.filter(b=>b.length>=3&&!looksLikeIngredientTitle(b[0].text));
+  // A multi-recipe document may contain promotional/source sections after the last
+  // recipe. A block is a recipe candidate only when it has explicit recipe section
+  // boundaries (ingredients plus method/preparation). A title and several paragraphs
+  // alone are not sufficient: this is what allowed "Athens Walking Tours" through.
+  const hasIngredientHeading=b=>b.some(item=>/^(?:the\s+)?ingredients?(?:\s+(?:list|needed|required))?\s*:?$/i.test(clean(item.text)));
+  const hasMethodHeading=b=>b.some(item=>/^(?:(?:the\s+)?(?:method|preparation|instructions?|directions?|steps?)|step[- ]by[- ]step(?:\s+cooking)?\s+instructions?)\s*:?$/i.test(clean(item.text)));
+  const candidates=blocks.filter(b=>b.length>=3&&!looksLikeIngredientTitle(b[0].text)&&hasIngredientHeading(b)&&hasMethodHeading(b));
   const separated=[];
   if(candidates.length>=2){
     for(const block of candidates){
@@ -126,7 +132,9 @@ function parseDocxMulti(html,file,expectedCount=0){
       if(recipe)separated.push(recipe);
     }
   }
-  // Keep valid recipe blocks even when other bold blocks are promotional text; do not fall back to whole-document parsing and reintroduce those blocks as recipes.
+  // Once multiple explicitly structured recipe blocks have been found, return only
+  // those blocks. Never fall back to whole-document parsing: that can reintroduce a
+  // trailing promotional section as a phantom recipe.
   if(separated.length>=2&&(!expectedCount||separated.length<=expectedCount))return separated;
   return parseDocx(html,file);
 }
