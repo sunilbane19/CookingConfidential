@@ -19,6 +19,7 @@ function cleanRecipeText(s){
     .replace(/\s*\[\s*\d+(?:\s*[,;]\s*\d+)+\s*\]\s*/g,' ')
     .replace(/\s*\[(?:\s*\d+\s*(?:,\s*\d+\s*)*)\]\s*/g,' ')
     .replace(/\s*\[(?:\s*\d+\s*(?:-\s*\d+)?\s*)\]\s*/g,' ')
+    .replace(/^u>\s*/i,'')
     .replace(/\s{2,}/g,' ')
     .trim();
 }
@@ -107,7 +108,7 @@ function escHtml(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt
 export function parseDocx(html,fileName='Imported document'){
   const doc=new DOMParser().parseFromString(html,'text/html');
   const nodes=[...doc.querySelectorAll('h1,h2,h3,h4,h5,h6,p,li')]
-    .flatMap(e=>expandedLines(e.textContent||'').map(text=>({raw:text,text,tag:e.tagName.toLowerCase(),html:safeInlineHtml(e.innerHTML),listType:e.parentElement?.tagName?.toLowerCase()||''})))
+    .flatMap(e=>expandedLines(e.textContent||'').map(text=>({raw:text,text,tag:e.tagName.toLowerCase(),bold:/^H[1-6]$/.test(e.tagName)||!!e.querySelector('strong,b'),html:safeInlineHtml(e.innerHTML),listType:e.parentElement?.tagName?.toLowerCase()||''})))
     .filter(n=>n.text);
   if(!nodes.length)return[];
 
