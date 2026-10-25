@@ -6,7 +6,7 @@ import { parseLabeledRecipeText } from './recipe-structure-parser.js?v=1.1.0';
 const URL='https://yiwmtfbqbynimqvwxosu.supabase.co',KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
 const sb=createClient(URL,KEY),dialog=document.querySelector('#detailDialog');
 const esc=s=>String(s??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));
-const clean=s=>String(s??'').replace(/[\u0000-\u001F\u007F\uFFFD]/g,' ').replace(/\s+/g,' ').trim();
+const clean=s=>String(s??'').replace(/[\u0000-\u001F\u007F\uFFFD]/g,' ').replace(/\s*\[(?:\s*\d+\s*(?:[,;]\s*\d+\s*)+)\]\s*/g,' ').replace(/\s+/g,' ').trim();
 const generic=/^(?:ingredients?|general ingredients?|method|directions?|instructions?|preparation|steps?|notes?|description|servings?|recipe)\s*:?\s*$/i;
 const lines=t=>String(t||'').replace(/\r/g,'').split('\n').map(clean).filter(Boolean);
 async function item(id){const{data,error}=await sb.from('cc_import_items').select('*').eq('id',id).single();if(error||!data)throw Error(error?.message||'Import item not found.');return data}
