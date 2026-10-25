@@ -171,7 +171,7 @@ function render(id,x,s){
    const titleValue=dialog.querySelector('#ccRescueTitle').value.trim();
    const textValue=dialog.querySelector('#ccRescueRaw').value;
    dialog.close();
-   if(typeof window.ccOpenNewRecipeEditor==='function')const mapped=mapRescueTextToFields(textValue,titleValue);console.info('[CC rescue mapping] field lengths',{description:mapped.description.length,ingredientLines:mapped.ingredients.split('\\n').filter(Boolean).length,methodLines:mapped.method.split('\\n').filter(Boolean).length,notes:mapped.notes.length});return window.ccOpenNewRecipeEditor(mapped);
+   if(typeof window.ccOpenNewRecipeEditor==='function'){const mapped=mapRescueTextToFields(textValue,titleValue);console.info('[CC rescue mapping] field lengths',{description:mapped.description.length,ingredientLines:mapped.ingredients.split('\\n').filter(Boolean).length,methodLines:mapped.method.split('\\n').filter(Boolean).length,notes:mapped.notes.length});return window.ccOpenNewRecipeEditor(mapped);}
    window.ccShowError?.('The New Recipe Editor could not be opened.','Could not continue');
  });
 }
