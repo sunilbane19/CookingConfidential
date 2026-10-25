@@ -114,65 +114,95 @@ function field(r,k){return k==='name'||k==='description'?clean(r[k]):r[k].join('
 function mapRescueTextToFields(raw,title){
  const source=String(raw||'').replace(/\r/g,'').replace(/\u0000/g,' ');
  const lines=source.split('\n').map(v=>v.replace(/[ \t]+/g,' ').trim());
+ const normHeading=v=>v.replace(/^#+\s*/,'').replace(/[：:]\s*$/,'').trim().toLowerCase();
  const isHeading=(line,kind)=>{
-  const t=line.replace(/^#+\s*/,'').replace(/[：:]\s*$/,'').trim().toLowerCase();
+  const t=normHeading(line);
   if(kind==='ingredients')return /^(?:general\s+)?ingredients?(?:\s+(?:list|section|needed|required))?$/.test(t)||/^(?:what you need|ingredient list|ingredients list)$/.test(t);
-  if(kind==='method')return /^(?:step[- ]by[- ]step\s+)?(?:cooking\s+)?(?:instructions?|method|directions?|preparation|steps?)(?:\s+(?:for cooking|to follow))?$/.test(t)||/^(?:step[- ]by[- ]step cooking instructions|cooking method|how to make|procedure)$/.test(t);
+  if(kind==='method')return /^(?:step[- ]by[- ]step\s+)?(?:cooking\s+)?(?:instructions?|method|directions?|preparation|steps?)(?:\s+(?:for cooking|to follow))?$/.test(t)||/^procedure$/.test(t)||/^how to make(?:\s+.+)?$/.test(t);
   if(kind==='notes')return /^(?:my\s+)?(?:notes?|tips?|storage|serving suggestions?)$/.test(t);
   if(kind==='description')return /^(?:description|introduction|about this recipe)$/.test(t);
   return false;
  };
  const cleanTitle=String(title||'').trim();
  const titleLine=lines.findIndex(l=>l&&l.toLowerCase()===cleanTitle.toLowerCase());
- const ing=lines.findIndex(l=>isHeading(l,'ingredients'));
- const method=lines.findIndex((l,i)=>i>(ing>=0?ing:-1)&&isHeading(l,'method'));
- const notes=lines.findIndex((l,i)=>i>(method>=0?method:ing>=0?ing:-1)&&isHeading(l,'notes'));
- const descriptionHeading=lines.findIndex(l=>isHeading(l,'description'));
- const beforeEnd=ing>=0?ing:(method>=0?method:lines.length);
- const descStart=descriptionHeading>=0&&descriptionHeading<beforeEnd?descriptionHeading+1:0;
- const description=lines.slice(descStart,beforeEnd).filter((l,i)=>l&&l.toLowerCase()!==cleanTitle.toLowerCase()&&!(i===0&&titleLine===0)).join('\n').trim();
- const ingredientEnd=method>=0?method:(notes>=0?notes:lines.length);
- const ingredients=ing>=0?lines.slice(ing+1,ingredientEnd).filter(Boolean):[];
- const methodEnd=notes>=0?notes:lines.length;
- const instructions=method>=0?lines.slice(method+1,methodEnd).filter(Boolean):[];
- const extraNotes=notes>=0?lines.slice(notes+1).filter(Boolean):[];
- // Keep any unclassified content recoverable rather than dropping it.
- const known=new Set();
- if(titleLine>=0)known.add(titleLine);
- for(let i=0;i<lines.length;i++){
-  if(i===descriptionHeading||i===ing||i===method||i===notes)known.add(i);
-  if(ing>=0&&i>ing&&i<ingredientEnd)known.add(i);
-  if(method>=0&&i>method&&i<methodEnd)known.add(i);
-  if(notes>=0&&i>notes)known.add(i);
-  if(i<beforeEnd&&i!==titleLine&&(descriptionHeading<0||i>descriptionHeading))known.add(i);
+ let ing=lines.findIndex(l=>isHeading(l,'ingredients'));
+ let method=lines.findIndex((l,i)=>i>(ing>=0?ing:-1)&&isHeading(l,'method'));
+ let notes=lines.findIndex((l,i)=>i>(method>=0?method:ing>=0?ing:-1)&&isHeading(l,'notes'));
+ const looksLikeIngredient=l=>/^(?:[-•*]\s*)?(?:(?:\d+(?:[./]\d+)?|[½¼¾⅓⅔⅛⅜⅝⅞])\s*(?:-\s*)?)(?:g|kg|mg|ml|l|lit(?:re|er)s?|tsp|tbsp|teaspoons?|tablespoons?|cups?|oz|ounces?|pounds?|lb|cloves?|pieces?|pinch(?:es)?|slices?|large|small|medium|whole|cans?|packets?|sprigs?|bunch(?:es)?|to taste)?\b/i.test(l)||/^(?:[-•*]\s*)?(?:a pinch|a handful|salt and pepper|oil for)/i.test(l);
+ const looksLikeStep=l=>/^(?:(?:step\s*)?\d{1,2}[.)]|[-•]\s*(?:first|then|next|finally)\b)/i.test(l);
+ if(ing<0){
+  let runStart=-1,run=0,bestStart=-1,best=0;
+  for(let i=0;i<lines.length;i++){
+   if(looksLikeIngredient(lines[i])){if(run===0)runStart=i;run++;if(run>best){best=run;bestStart=runStart}}
+   else {run=0;runStart=-1}
+  }
+  if(best>=3)ing=bestStart;
  }
- const unassigned=lines.filter((l,i)=>l&&!known.has(i)&&i!==titleLine);
+ if(method<0&&ing>=0){
+  for(let i=ing+1;i<lines.length;i++){
+   if(isHeading(lines[i],'method')||looksLikeStep(lines[i])){method=i;break}
+  }
+ }
+ if(notes<0)notes=lines.findIndex((l,i)=>i>(method>=0?method:ing>=0?ing:-1)&&isHeading(l,'notes'));
+ const descriptionHeading=lines.findIndex(l=>isHeading(l,'description'));
+ const sectionStarts=[ing,method,notes].filter(i=>i>=0).sort((a,b)=>a-b);
+ const descEnd=sectionStarts.length?sectionStarts[0]:lines.length;
+ const descStart=descriptionHeading>=0&&descriptionHeading<descEnd?descriptionHeading+1:0;
+ const description=lines.slice(descStart,descEnd).filter((l,i)=>l&&l.toLowerCase()!==cleanTitle.toLowerCase()&&!(i===0&&titleLine===0)).join('\n').trim();
+ const ingredientEnd=method>=0?method:(notes>=0?notes:lines.length);
+ const ingredients=ing>=0?lines.slice(ing+(isHeading(lines[ing],'ingredients')?1:0),ingredientEnd).filter(Boolean):[];
+ const methodEnd=notes>=0?notes:lines.length;
+ const instructions=method>=0?lines.slice(method+(isHeading(lines[method],'method')?1:0),methodEnd).filter(Boolean):[];
+ const extraNotes=notes>=0?lines.slice(notes+1).filter(Boolean):[];
+ const classified=new Set();
+ if(titleLine>=0)classified.add(titleLine);
+ for(let i=0;i<lines.length;i++){
+  if(i===descriptionHeading||i===ing||i===method||i===notes)classified.add(i);
+  if(ing>=0&&i>ing&&i<ingredientEnd)classified.add(i);
+  if(method>=0&&i>method&&i<methodEnd)classified.add(i);
+  if(notes>=0&&i>notes)classified.add(i);
+  if(i<descEnd&&i!==titleLine&&(descriptionHeading<0||i>descriptionHeading))classified.add(i);
+ }
+ const unassigned=lines.filter((l,i)=>l&&!classified.has(i)&&i!==titleLine);
  const notesOut=[...extraNotes];
- if(unassigned.length)notesOut.push('Recovered text to review:',...unassigned);
+ if(unassigned.length)notesOut.push('Other recovered text to review:',...unassigned);
  return {name:cleanTitle||String(lines[0]||'Imported recipe'),description,ingredients:ingredients.join('\n'),method:instructions.join('\n'),notes:notesOut.join('\n'),rawText:source};
 }
 function render(id,x,s){
  const raw=s.raw||'';
  const title=s.title||String(x.file_name||'Imported recipe').replace(/\.[^.]+$/,'').replace(/[_-]+/g,' ');
+ const proposed=mapRescueTextToFields(raw,title);
  dialog.querySelector('#detailContent').innerHTML=
  '<button class="close" type="button" id="ccRescueClose">×</button>'+
  '<p class="eyebrow">RESCUE EDITOR</p>'+
  '<h2>Recover your recipe</h2>'+
- '<p class="small-note">The recipe could not be reliably structured automatically. Edit the extracted text freely, then open the normal New Recipe Editor to finish the recipe.</p>'+
- '<label>Recipe Title<input id="ccRescueTitle" value="'+esc(title)+'"></label>'+
- '<label style="display:block;margin-top:16px">Extracted text<textarea id="ccRescueRaw" rows="22" style="width:100%;min-height:420px;resize:vertical">'+esc(raw)+'</textarea></label>'+
- '<div class="detail-actions"><button class="secondary" id="ccRescueCancel" type="button">Cancel</button><button class="secondary" id="ccRescueCopy" type="button">Copy text</button><button class="primary" id="ccRescueOpenEditor" type="button">Open New Recipe Editor</button></div>';
+ '<p class="small-note">Review the proposed fields first. Nothing is saved here. Correct the title, description, ingredients and method, then transfer them to the normal New Recipe Editor. The original extracted text remains available below as a fallback.</p>'+
+ '<label>Recipe Title<input id="ccRescueTitle" value="'+esc(proposed.name)+'"></label>'+
+ '<label style="display:block;margin-top:12px">Description<textarea id="ccRescueDescription" rows="4" style="width:100%;min-height:90px;resize:vertical">'+esc(proposed.description)+'</textarea></label>'+
+ '<label style="display:block;margin-top:12px">Ingredients<textarea id="ccRescueIngredients" rows="7" style="width:100%;min-height:140px;resize:vertical">'+esc(proposed.ingredients)+'</textarea></label>'+
+ '<label style="display:block;margin-top:12px">Method / instructions<textarea id="ccRescueMethod" rows="8" style="width:100%;min-height:160px;resize:vertical">'+esc(proposed.method)+'</textarea></label>'+
+ '<label style="display:block;margin-top:12px">Notes / other recovered text<textarea id="ccRescueNotes" rows="3" style="width:100%;min-height:75px;resize:vertical">'+esc(proposed.notes)+'</textarea></label>'+
+ '<details style="margin-top:16px"><summary style="cursor:pointer;font-weight:600">Original extracted text (kept for recovery)</summary><label style="display:block;margin-top:10px">Raw text<textarea id="ccRescueRaw" rows="16" style="width:100%;min-height:300px;resize:vertical">'+esc(raw)+'</textarea></label><button class="secondary" id="ccRescueRebuild" type="button" style="margin-top:8px">Rebuild proposed fields from raw text</button></details>'+
+ '<div class="detail-actions"><button class="secondary" id="ccRescueCancel" type="button">Cancel</button><button class="secondary" id="ccRescueCopy" type="button">Copy raw text</button><button class="primary" id="ccRescueOpenEditor" type="button">Transfer fields to New Recipe Editor</button></div>';
  dialog.showModal();
  const bind=(sel,fn)=>{const b=dialog.querySelector(sel);if(!b)return;b.onclick=async e=>{e.preventDefault();e.stopPropagation();await fn()};};
  bind('#ccRescueClose',()=>dialog.close());
  bind('#ccRescueCancel',()=>dialog.close());
- bind('#ccRescueCopy',async()=>{const ta=dialog.querySelector('#ccRescueRaw');try{await navigator.clipboard.writeText(ta.value);const b=dialog.querySelector('#ccRescueCopy');b.textContent='Copied';setTimeout(()=>b.textContent='Copy text',1200)}catch{ta.focus();ta.select()}});
+ bind('#ccRescueCopy',async()=>{const ta=dialog.querySelector('#ccRescueRaw');try{await navigator.clipboard.writeText(ta.value);const b=dialog.querySelector('#ccRescueCopy');b.textContent='Copied';setTimeout(()=>b.textContent='Copy raw text',1200)}catch{ta.focus();ta.select()}});
+ bind('#ccRescueRebuild',()=>{
+  const mapped=mapRescueTextToFields(dialog.querySelector('#ccRescueRaw').value,dialog.querySelector('#ccRescueTitle').value);
+  dialog.querySelector('#ccRescueDescription').value=mapped.description;
+  dialog.querySelector('#ccRescueIngredients').value=mapped.ingredients;
+  dialog.querySelector('#ccRescueMethod').value=mapped.method;
+  dialog.querySelector('#ccRescueNotes').value=mapped.notes;
+ });
  bind('#ccRescueOpenEditor',()=>{
-   const titleValue=dialog.querySelector('#ccRescueTitle').value.trim();
-   const textValue=dialog.querySelector('#ccRescueRaw').value;
-   dialog.close();
-   if(typeof window.ccOpenNewRecipeEditor==='function'){const mapped=mapRescueTextToFields(textValue,titleValue);console.info('[CC rescue mapping] field lengths',{description:mapped.description.length,ingredientLines:mapped.ingredients.split('\\n').filter(Boolean).length,methodLines:mapped.method.split('\\n').filter(Boolean).length,notes:mapped.notes.length});return window.ccOpenNewRecipeEditor(mapped);}
-   window.ccShowError?.('The New Recipe Editor could not be opened.','Could not continue');
+  const mapped={name:dialog.querySelector('#ccRescueTitle').value.trim(),description:dialog.querySelector('#ccRescueDescription').value,ingredients:dialog.querySelector('#ccRescueIngredients').value,method:dialog.querySelector('#ccRescueMethod').value,notes:dialog.querySelector('#ccRescueNotes').value,rawText:dialog.querySelector('#ccRescueRaw').value};
+  if(!mapped.name){window.ccShowError?.('Please enter a recipe title before continuing.','Recipe title required');return}
+  if(typeof window.ccOpenNewRecipeEditor!=='function'){window.ccShowError?.('The New Recipe Editor could not be opened. Your recovery text is still available here.','Could not continue');return}
+  console.info('[CC rescue mapping] edited preview transferred',{description:mapped.description.length,ingredientLines:mapped.ingredients.split('\n').filter(Boolean).length,methodLines:mapped.method.split('\n').filter(Boolean).length,notes:mapped.notes.length});
+  dialog.close();
+  return window.ccOpenNewRecipeEditor(mapped);
  });
 }
 export async function rescueImport(id){const traceId='CCIMG-'+id+'-'+Date.now().toString(36);console.warn('[CC image trace]',traceId,'rescueImport:start',{id,at:new Date().toISOString()});const x=await item(id);console.info('[CC image trace]',traceId,'rescueImport:item-loaded',{id:x.id,file_name:x.file_name,mime_type:x.mime_type,file_path:x.file_path,original_file_path:x.original_file_path,extractedTextLength:String(x.extracted_text||'').length});dialog.querySelector('#detailContent').innerHTML='<div class="dialog-card"><p class="eyebrow">RESCUE EXTRACTION</p><h2>Making a best-effort recovery…</h2><p class="small-note" id="ccRescueStatus">Trying the original extracted text first.</p></div>';dialog.showModal();const st=t=>{const e=document.querySelector('#ccRescueStatus');if(e)e.textContent=t};st.traceId=traceId;let raw='';try{raw=await sourceText(x,st)}catch(e){console.warn('Cooking Confidential universal rescue source read:',e)}console.info('[CC image trace]',traceId,'rescue:raw-text-before-parse',{length:raw.length,text:raw});
