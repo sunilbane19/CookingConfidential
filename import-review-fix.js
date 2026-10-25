@@ -392,7 +392,7 @@ async function extractLegacyDocText(item){
   return text;
 }
 
-const REVIEW_MODULE_VERSION='1.4.125';
+const REVIEW_MODULE_VERSION='1.4.129';
 async function showLegacyDocWithQualityGate(x,id,recipe,rawText,stage){
   let quality;
   try{
@@ -567,7 +567,7 @@ if(!quality.good && pdf){
 }
 if(!quality.good){await extractionDiag(id,'quality_gate_failed',{quality});
   console.warn('Cooking Confidential quality gate sent import to rescue:',quality);
-  try{const rescue=await import('./rescue-ocr.js?v=1.1.5');return rescue.rescueImport(id)}catch(e){console.warn('Cooking Confidential universal rescue:',e)}
+  try{const rescue=await import('./rescue-ocr.js?v=1.1.6');return await rescue.rescueImport(id)}catch(e){await extractionDiag(id,'rescue_editor_open_failed_after_quality_gate',{name:e?.name||null,message:e?.message||String(e),stack:String(e?.stack||'').slice(0,1600)});console.error('Cooking Confidential universal rescue failed; refusing normal review fallback:',e);return window.ccShowError('This import failed the recipe quality check, but Rescue Editor could not open: '+(e?.message||String(e))+'. The normal editor has been blocked to prevent saving the incorrect extraction.','Rescue Editor unavailable')}
 }
 await extractionDiag(id,'before_show_review',{name:parsedForQuality?.name||null,ingredient_count:Array.isArray(parsedForQuality?.ingredients)?parsedForQuality.ingredients.length:0});window.ccImportReviewActive=false;await showReview(x,id);await extractionDiag(id,'show_review_returned',{});}
 // Watchdog: extraction must never leave Review spinning indefinitely. If the normal
