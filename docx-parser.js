@@ -162,7 +162,7 @@ export function parseDocx(html,fileName='Imported document'){
         current='notes';
         r.notes.push(t);rich.notes.push(n);
         continue;
-      }}
+      }
       if(isGarbage(t))continue;
 
       // Inline Note:/Notes:/Tip: paragraphs commonly occur at the end of a
