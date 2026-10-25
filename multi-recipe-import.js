@@ -97,6 +97,9 @@ function docxRecipeBlocks(doc){
 }
 function looksLikeIngredientTitle(s){
   const x=clean(s);
+  // A title explicitly wrapped in Markdown bold markers in a DOCX is often a pasted
+  // promotional/source heading, not a recipe title (e.g. **Athens Walking Tours **).
+  if(/^\*\*[^*]{2,80}\*\*$/.test(String(s??'').trim()))return true;
   if(!x||GENERIC.test(x))return true;
   if(/^\d+(?:[./]\d+)?\s*(?:tsp|tbsp|cup|cups|oz|lb|lbs|g|kg|ml|l|cl|pinch|cloves?|sprigs?)\b/i.test(x))return true;
   if(/^(?:half|quarter|one|two|three|four|five)\s+(?:tsp|tbsp|cup|cloves?|sprigs?|oz|lb|lbs)\b/i.test(x))return true;
