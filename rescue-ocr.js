@@ -152,7 +152,8 @@ function mapRescueTextToFields(raw,title){
  const ingredientEnd=method>=0?method:(notes>=0?notes:lines.length);
  const ingredients=ing>=0?lines.slice(ing+(isHeading(lines[ing],'ingredients')?1:0),ingredientEnd).filter(Boolean):[];
  const methodEnd=notes>=0?notes:lines.length;
- const instructions=method>=0?lines.slice(method+(isHeading(lines[method],'method')?1:0),methodEnd).filter(Boolean):[];\n if(instructions.length>1&&instructions.every(l=>/^(?:step\\s*)?\\d{1,2}[.)]\\s*/i.test(l))){const numbered=instructions.map((line,index)=>({line,index,number:Number((line.match(/^(?:step\\s*)?(\\d{1,2})[.)]/i)||[])[1])}));if(new Set(numbered.map(x=>x.number)).size===numbered.length&&numbered.some((x,i)=>i&&x.number<numbered[i-1].number))instructions.splice(0,instructions.length,...numbered.sort((a,b)=>a.number-b.number||a.index-b.index).map(x=>x.line));}
+ const instructions=method>=0?lines.slice(method+(isHeading(lines[method],'method')?1:0),methodEnd).filter(Boolean):[];
+ if(instructions.length>1&&instructions.every(l=>/^(?:step\s*)?\d{1,2}[.)]\s*/i.test(l))){const numbered=instructions.map((line,index)=>({line,index,number:Number((line.match(/^(?:step\s*)?(\d{1,2})[.)]/i)||[])[1])}));if(new Set(numbered.map(x=>x.number)).size===numbered.length&&numbered.some((x,i)=>i&&x.number<numbered[i-1].number))instructions.splice(0,instructions.length,...numbered.sort((a,b)=>a.number-b.number||a.index-b.index).map(x=>x.line));}
  const extraNotes=notes>=0?lines.slice(notes+1).filter(Boolean):[];
  const classified=new Set();
  if(titleLine>=0)classified.add(titleLine);
