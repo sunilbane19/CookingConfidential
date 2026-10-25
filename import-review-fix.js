@@ -2,7 +2,7 @@ import { stripImportCitations } from './import-citation-cleanup.js?v=1.0.1';
 import { supabase } from './supabase-client-legacy.js?v=1.0.0';
 import * as mammoth from 'https://esm.sh/mammoth@1.6.0';
 import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
-import { checkRecipeQuality } from './recipe-quality.js?v=1.0.8';
+import { checkRecipeQuality } from './recipe-quality.js?v=1.0.9';
 import { readSourceTextWithVision } from './vision-text-reader.js?v=1.0.0';
 import { createGenericEditor, editorValue, sanitizeRichHtml as sanitizeGenericRichHtml } from './generic-editor.js?v=1.3.10';
 import { parseDocx } from './docx-parser.js?v=1.0.14';
