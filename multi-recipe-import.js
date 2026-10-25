@@ -6,7 +6,7 @@ import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
 import { createGenericEditor, editorValue, sanitizeRichHtml } from './generic-editor.js?v=1.3.5';
 import { checkRecipeQuality } from './recipe-quality.js?v=1.0.4';
 import { readSourceTextWithVision } from './vision-text-reader.js?v=1.0.0';
-import { parseDocx } from './docx-parser.js?v=1.0.12';
+import { parseDocx } from './docx-parser.js?v=1.0.13';
 
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
@@ -119,7 +119,7 @@ function parseDocxMulti(html,file,expectedCount=0){
         return '<'+tag+'>'+(item.bold&&tag==='p'?'<strong>'+text+'</strong>':text)+'</'+tag+'>';
       }).join('');
       const parsed=parseDocx(chunk,file+' — '+block[0].text);
-      const recipe=parsed.find(r=>(r.ingredients?.length||0)>0||(r.method?.length||0)>0);
+      const recipe=parsed.find(r=>(r.ingredients?.length||0)>=2&&(r.method?.length||0)>0);
       if(recipe)separated.push(recipe);
     }
   }
