@@ -178,7 +178,7 @@ function parseTextMulti(text,file){
     else if(mode==='notes')current.notes.push(s);
   }
   flush();
-  return out.map(r=>({...r,ingredients:cleanIngredientLines(r.ingredients),method:r.method.filter(x=>!isOcrGarbage(x)),notes:r.notes.filter(x=>!isOcrGarbage(x))})).filter(r=>r.ingredients.length>=2);
+  return out.map(r=>({...r,ingredients:cleanIngredientLines(r.ingredients),method:r.method.filter(x=>!isOcrGarbage(x)),notes:r.notes.filter(x=>!isOcrGarbage(x))})).filter(r=>r.ingredients.length>=2&&r.method.length>=1);
 }
 function dedupeRecipes(recipes){const seen=new Set();return recipes.filter(r=>{const k=clean(r.name).toLowerCase().replace(/[^a-z0-9]+/g,' ');if(!k||seen.has(k))return false;seen.add(k);return true;});}
 async function recognizeTile(worker,bitmap,x,y,w,h){const insetX=w*.035,insetY=h*.035;const sx=x+insetX,sy=y+insetY,sw=w-insetX*2,sh=h-insetY*2;const scale=4;const canvas=document.createElement('canvas');canvas.width=Math.round(sw*scale);canvas.height=Math.round(sh*scale);const ctx=canvas.getContext('2d');ctx.drawImage(bitmap,sx,sy,sw,sh,0,0,canvas.width,canvas.height);const image=ctx.getImageData(0,0,canvas.width,canvas.height),d=image.data;for(let i=0;i<d.length;i+=4){const yv=.299*d[i]+.587*d[i+1]+.114*d[i+2];const v=Math.max(0,Math.min(255,(yv-128)*1.45+128));d[i]=d[i+1]=d[i+2]=v}ctx.putImageData(image,0,0);return worker.recognize(canvas);}
