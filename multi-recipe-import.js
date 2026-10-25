@@ -87,10 +87,24 @@ function makeRecipe(name){return {name:clean(name)||'Imported recipe',descriptio
 function docxRecipeBlocks(doc){
   const blocks=[]; let current=[];
   const push=()=>{if(current.length){blocks.push(current);current=[];}};
+  const hasIngredientHeading=items=>items.some(item=>/^(?:the\\s+)?ingredients?(?:\\s+(?:list|needed|required))?\\s*:?$/i.test(clean(item.text)));
+  const hasMethodHeading=items=>items.some(item=>/^(?:(?:the\\s+)?(?:method|preparation|instructions?|directions?|steps?)|step[- ]by[- ]step(?:\\s+cooking)?\\s+instructions?)\\s*:?$/i.test(clean(item.text)));
+  const titleLike=item=>{
+    const text=clean(item.text);
+    return item.bold && text.length>=4 && text.length<=85 &&
+      !/[.!?]$/.test(text) &&
+      !/^(?:ingredients?|method|preparation|instructions?|directions?|notes?|description|step[- ]by[- ]step)/i.test(text);
+  };
   for(const el of [...doc.querySelectorAll('h1,h2,h3,h4,h5,h6,p,li')]){
     const text=clean(el.textContent);
     if(!text){if(el.tagName==='P')push();continue;}
-    current.push({text,bold:/^H[1-6]$/.test(el.tagName)||!!el.querySelector('strong,b'),tag:el.tagName.toLowerCase()});
+    const item={text,bold:/^H[1-6]$/.test(el.tagName)||!!el.querySelector('strong,b'),tag:el.tagName.toLowerCase()};
+    // In Word recipe collections, recipe names are often bold paragraphs rather than
+    // headings. Start a new block only after the current block already has both
+    // recipe section markers. A trailing bold promotional title then starts its own
+    // block and is rejected later because it has no Ingredients + Method sections.
+    if(titleLike(item)&&hasIngredientHeading(current)&&hasMethodHeading(current))push();
+    current.push(item);
   }
   push();
   return blocks;
