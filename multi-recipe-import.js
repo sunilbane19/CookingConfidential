@@ -163,7 +163,9 @@ function parseTextMulti(text,file){
   let current=null, mode='';
   const flush=()=>{if(current&&current.name&&current.ingredients.length)out.push(current);current=null;mode=''};
   for(const raw of ls){
-    const s=clean(raw);
+    // Legacy DOCStream can emit underline markup as a literal `u>` before subsection labels.
+    // Strip it at the multi-recipe text parser boundary as well as during generic cleanup.
+    const s=clean(raw).replace(/^u>\s*(?=[A-Za-z][A-Za-z /&-]{1,30}:)/i,'');
     if(/^ingredients?$/i.test(s)){if(current)mode='ingredients';continue}
     if(/^(method|directions?|instructions?|preparation|preparations|steps?|cooking steps|recipe steps|cooking instructions|preparation steps|recipe method|cooking method|procedure)$/i.test(s)){if(current)mode='method';continue}
     if(/^notes?$/i.test(s)){if(current)mode='notes';continue}
