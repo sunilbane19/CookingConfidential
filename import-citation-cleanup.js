@@ -1,5 +1,6 @@
 // Remove common numeric citation references injected by document exports/OCR.
 // Only strip bracketed comma/semicolon-separated numeric lists, not quantities like [1/2].
+// v1.0.1: valid browser RegExp for numeric citation lists.
 export function stripImportCitations(value){
  const citation=/[ \t]*\[\s*\d+(?:\s*[,;]\s*\d+)+\s*\]/g;
  if(typeof value==='string')return value.replace(citation,'').replace(/[ \t]{2,}/g,' ').replace(/ *\n */g,'\n');
