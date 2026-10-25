@@ -1,3 +1,4 @@
+import { stripImportCitations } from './import-citation-cleanup.js?v=1.0.0';
 import { supabase } from './supabase-client-legacy.js?v=1.0.0';
 import * as mammoth from 'https://esm.sh/mammoth@1.6.0';
 import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
@@ -205,7 +206,7 @@ function normalizeImportedRecipePunctuation(recipe){
 async function showReview(x,id){
   await extractionDiag(id,'show_review_start',{extraction_status:x?.extraction_status});
   if(!x)return window.ccShowError('Import item could not be loaded.','Could not load import');
-  const r=parseRecipe(x);
+  const r=stripImportCitations(parseRecipe(x));
   // DOCX-only enrichment: use the original Word HTML to retain bold, emphasis,
   // subheadings and bullet/numbered list structure in the rich review fields.
   // PDF/OCR and all other extraction paths remain unchanged.
@@ -232,6 +233,7 @@ async function showReview(x,id){
   // Generic import cleanup: repair punctuation spacing in imported text without
   // changing recipe content or stripping rich-text formatting.
   normalizeImportedRecipePunctuation(r);
+  for(const key of ['ingredientsHtml','methodHtml','notesHtml'])if(r[key])r[key]=stripImportCitations(r[key]);
   const ingredientHtml=Array.isArray(r.ingredients)
     ? r.ingredients.map(v=>typeof v==='string'?clean(v):[v?.quantity,v?.unit,v?.name].filter(Boolean).join(' ')).filter(Boolean).join('\n')
     : clean(r.ingredients||'');
