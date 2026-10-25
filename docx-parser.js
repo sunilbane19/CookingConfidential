@@ -12,8 +12,11 @@ const UNIT=/\b(?:g|gm|kg|mg|ml|l|oz|lb|lbs|tsp|tbsp|cup|cups|pint|pints|quart|qu
 const NUMBER=/\b\d+(?:[.,]\d+)?(?:\s*[½¼¾⅓⅔⅛⅜⅝⅞])?\b/;
 const META=/^(?:prep|preparation|cook|cooking|steam|steaming|chill|chilling|fry|frying|rest|resting|freeze|freezing|yield|makes?|serves?|servings?|total|active|inactive|time|difficulty|cuisine|course)\b/i;
 
+function stripCitationArtifacts(s){return String(s||'').replace(/[ \\t]*\\[\\s*\\d+(?:\\s*[,;]\\s*\\d+)+\\s*\\]/g,'').replace(/[ \\t]{2,}/g,' ');}
+
 function cleanRecipeText(s){
   return clean(s)
+    .replace(/\s*\[\s*\d+(?:\s*[,;]\s*\d+)+\s*\]\s*/g,' ')
     .replace(/\s*\[(?:\s*\d+\s*(?:,\s*\d+\s*)*)\]\s*/g,' ')
     .replace(/\s*\[(?:\s*\d+\s*(?:-\s*\d+)?\s*)\]\s*/g,' ')
     .replace(/\s{2,}/g,' ')
@@ -142,6 +145,7 @@ export function parseDocx(html,fileName='Imported document'){
     const sourceTitle=nodes[start].text;
     const r=makeRecipe(embeddedTitle(sourceTitle)||sourceTitle);
     let current='';
+    const description=[];
     const rich={ingredients:[],method:[],notes:[]};
     for(const n of nodes.slice(start+1,end)){
       const t=cleanRecipeText(n.text);
@@ -176,6 +180,7 @@ export function parseDocx(html,fileName='Imported document'){
         continue;
       }
 
+      if(!current){description.push(t);continue;}
       if(current==='ingredients'){
         if(COMPONENT.test(t)){r.ingredients.push(t);rich.ingredients.push(n);continue;}
         if(!STEP.test(t)){r.ingredients.push(t);rich.ingredients.push(n);}
@@ -185,12 +190,13 @@ export function parseDocx(html,fileName='Imported document'){
         r.notes.push(t);rich.notes.push(n);
       }
     }
+    r.description=[...new Set(description)].filter(Boolean).join('\n');
     r.ingredients=[...new Set(r.ingredients)].filter(Boolean);
     r.method=[...new Set(r.method)].filter(Boolean);
     r.notes=[...new Set(r.notes)].filter(Boolean);
-    r.ingredientsHtml=richSection(rich.ingredients);
-    r.methodHtml=richSection(rich.method);
-    r.notesHtml=richSection(rich.notes);
+    r.ingredientsHtml=stripCitationArtifacts(richSection(rich.ingredients));
+    r.methodHtml=stripCitationArtifacts(richSection(rich.method));
+    r.notesHtml=stripCitationArtifacts(richSection(rich.notes));
     if(r.ingredients.length||r.method.length)recipes.push(r);
   }
 
