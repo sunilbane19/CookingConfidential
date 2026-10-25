@@ -29,7 +29,7 @@ const esc=s=>String(s??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'
 // Generic OCR cleanup. This is deliberately recipe-agnostic: it removes
 // common scan/social-media artefacts without inventing quantities or ingredients.
 function clean(s){
-  let x=String(s??'').replace(/\r/g,'').replace(/[\u0000-\u001F\u007F\uFFFD]/g,' ');
+  let x=String(s??'').replace(/\r/g,'').replace(/[\u0000-\u001F\u007F\uFFFD]/g,' ').replace(/\s*\[(?:\s*\d+\s*(?:[,;]\s*\d+\s*)+)\]\s*/g,' ');
   x=x.replace(/\s+/g,' ').trim();
   // Remove checkbox/list/bracket noise introduced by OCR.
   x=x.replace(/^[\[\]{}()<>|•·▪◦●○✓✔☐☑\s]+/,'').replace(/^[\[\](){}]+\s*/,'');
