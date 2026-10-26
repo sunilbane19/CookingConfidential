@@ -1,12 +1,16 @@
 import { supabase, APP_URL } from './auth-client.js?v=1.0.2';
 const content=document.querySelector('#content'),search=document.querySelector('#searchInput'),loginPanel=document.querySelector('#loginPanel'),appPanel=document.querySelector('#appPanel'),userBadge=document.querySelector('#userBadge'),loginForm=document.querySelector('#loginForm'),loginMessage=document.querySelector('#loginMessage'),recipeDialog=document.querySelector('#recipeDialog'),menuDialog=document.querySelector('#menuDialog'),detailDialog=document.querySelector('#detailDialog'),importDialog=document.querySelector('#importDialog'),importQueue=document.querySelector('#importQueue');
 let importItems=[],recipes=[],menus=[],view='all';
+try{const returnView=sessionStorage.getItem('ccRecipeReturnView');if(['all','recipes','menus','favourites'].includes(returnView)){view=returnView;sessionStorage.removeItem('ccRecipeReturnView');}}catch{}
+document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.view===view));
 const RECIPE_PAGE_SIZE=12;
 const RECIPE_CARD_FIELDS='id,name,cuisine,country,region,course,recipe_type,rating,is_favourite,image_url,updated_at';
 const RECIPE_DETAIL_FIELDS='id,name,description,cuisine,country,region,course,recipe_type,ingredients,method,personal_notes,rating,source_url,source_title,is_favourite,image_url,updated_at,servings,original_file_path,original_file_name,original_mime_type,source_type,created_by,dietary_tags';
 // Full recipe cache: fetch a recipe once when it is first opened during this session.
 const recipeDetailCache=new Map(),creatorNameCache=new Map();
 let recipeOffset=0,recipeTotalCount=0,recipeLoading=false,recipeRequestId=0,searchTimer=null;
+let libraryFilter=(()=>{try{return JSON.parse(sessionStorage.getItem('ccLibraryFilterState')||'{"field":"","value":""}')}catch{return{field:'',value:''}}})();
+try{if(search&&sessionStorage.getItem('ccLibrarySearchState')!==null)search.value=sessionStorage.getItem('ccLibrarySearchState')}catch{}
 window.ccImportItems=importItems;
 const esc=(s='')=>String(s).replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));
 const formatMenuDate=v=>{const s=String(v??'').trim();const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(s);return m?m[3]+'-'+m[2]+'-'+m[1]:s};
@@ -72,20 +76,22 @@ const menuMatchesSearch=(m,q)=>!q||menuSearchText(m).includes(q);
 async function loadRecipePage({offset=0,refreshCount=true,silent=false}={}) {
   const requestId=++recipeRequestId;
   const q=cleanSearchTerm(search.value);
-  const favouriteOnly=view==='favourites';
+  const favouriteOnly=view==='favourites'||libraryFilter.field==='favourite';
   const safeOffset=Math.max(0,Math.floor(Number(offset)||0));
   recipeOffset=safeOffset;
   recipeLoading=true;
   if(!silent)content.innerHTML='<div class="empty">Loading your recipes…</div>';
   try{
-    const pageRequest=supabase.rpc('cc_search_recipe_cards_staging',{
+    const pageRequest=supabase.rpc('cc_search_recipe_cards_filtered_staging',{
       p_search:q,
       p_favourite_only:favouriteOnly,
       p_offset:safeOffset,
-      p_limit:RECIPE_PAGE_SIZE
+      p_limit:RECIPE_PAGE_SIZE,
+      p_filter_field:libraryFilter.field==='favourite'?'':libraryFilter.field,
+      p_filter_value:libraryFilter.field==='favourite'?'':libraryFilter.value
     });
     const countRequest=refreshCount||recipeTotalCount===0
-      ?supabase.rpc('cc_count_recipe_cards_staging',{p_search:q,p_favourite_only:favouriteOnly})
+      ?supabase.rpc('cc_count_recipe_cards_filtered_staging',{p_search:q,p_favourite_only:favouriteOnly,p_filter_field:libraryFilter.field==='favourite'?'':libraryFilter.field,p_filter_value:libraryFilter.field==='favourite'?'':libraryFilter.value})
       :Promise.resolve({data:recipeTotalCount,error:null});
     const [pageResult,countResult]=await Promise.all([pageRequest,countRequest]);
     if(requestId!==recipeRequestId)return;
@@ -123,6 +129,8 @@ async function loadData(){
   else if(view==='all')renderAll(search.value.trim().toLowerCase());
 }
 window.ccReloadRecipes=()=>loadRecipePage({offset:recipeOffset,refreshCount:true});window.ccRecipePageOffset=()=>recipeOffset;
+window.ccSetLibraryFilter=(field,value)=>{libraryFilter={field:String(field||''),value:String(value||'')};try{sessionStorage.setItem('ccLibraryFilterState',JSON.stringify(libraryFilter))}catch{}loadRecipePage({offset:0,refreshCount:true}).catch(e=>showUiError(e.message,'Could not filter recipes'));};
+window.addEventListener('cc:library-filter-change',e=>window.ccSetLibraryFilter(e.detail?.field,e.detail?.value));
 function recipeCard(r){const tags=Array.isArray(r.dietary_tags)?r.dietary_tags:[];return `<article class="card" data-id="${r.id}"><div class="card-image" aria-hidden="true"></div><div class="card-body"><span class="tag">${esc(r.cuisine||'Uncategorised')}</span><h3>${esc(r.name)}</h3><div class="meta">${esc([r.course||'Recipe',r.recipe_type].filter(Boolean).join(' · '))} · ${stars(r.rating)}</div>${tags.length?`<div class="meta">${esc(tags.join(' · '))}</div>`:''}<div class="created-by">Added by: <strong>${esc(r.creator_name||'')}</strong></div></div></article>`}
 function recipePager(){
   const totalPages=Math.max(1,Math.ceil(recipeTotalCount/RECIPE_PAGE_SIZE));
