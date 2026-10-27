@@ -63,6 +63,20 @@ export function checkRecipeQuality(recipe, {mode='single'}={}) {
   if(repeatedFragments(description,ingredients.join('\n'),method,notes)===0) score+=5; else reasons.push('repeated_lines');
   const titleLooksContaminated = name.length>70 || /\b(?:ingredients?|method|directions?|instructions?)\b/i.test(name);
   if(titleLooksContaminated) reasons.push('title_contains_recipe_content');
+  // A source credit/byline parsed as the recipe name is a high-confidence sign
+  // that extraction selected page furniture instead of the recipe title.
+  // Keep this narrow: ordinary titles such as "By the Sea" should not match.
+  const titleLooksLikeCredit = /^(?:credit|credi\s*:|credits?\s*:|recipe\s+by|author\s*:|by\s+[A-Z][\p{L}'’-]+(?:\s+[A-Z][\p{L}'’-]+){1,3}\s*$)/iu.test(name);
+  if(titleLooksLikeCredit) reasons.push('title_looks_like_credit_or_byline');
+  // Promotional venue/about-us copy in the description is not a recipe
+  // description. Use a multi-signal check so one common word cannot reject a
+  // legitimate recipe description.
+  const promotionalSignals = [
+    /\b(?:tavern|restaurant|hotel|cafe|café|venue)\b/i,
+    /\b(?:oldest|welcomed|generations of families|business people|tourists)\b/i,
+    /\b(?:house wine|folk music|shopping|during their walks)\b/i
+  ].filter(rx=>rx.test(description)).length;
+  if(promotionalSignals>=2) reasons.push('description_looks_like_venue_promotion');
   // Only flag a duplicated ingredient when it looks like a complete ingredient
   // entry. Short ingredient names such as "Ginger-Garlic", "salt" or "onion"
   // naturally appear in cooking instructions and are not section contamination.
