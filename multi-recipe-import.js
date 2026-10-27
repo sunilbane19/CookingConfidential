@@ -11,6 +11,12 @@ import { parseDocx } from './docx-parser.js?v=1.0.14';
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
 const sb=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY);
+let ccLegacyDocstreamPromise;
+async function loadLegacyDocstream(){
+ if(window.officeParser&&typeof window.officeParser.parseOffice==='function')return window.officeParser;
+ if(!ccLegacyDocstreamPromise)ccLegacyDocstreamPromise=new Promise((resolve,reject)=>{const script=document.createElement('script');script.src='https://cdn.jsdelivr.net/gh/joseespana/docstream@master/docs/dist/officeparser.browser.js';script.onload=()=>window.officeParser&&typeof window.officeParser.parseOffice==='function'?resolve(window.officeParser):reject(new Error('Docstream loaded but its parser API was not available.'));script.onerror=()=>reject(new Error('Could not load Docstream for the legacy Word document.'));document.head.appendChild(script)}).catch(e=>{ccLegacyDocstreamPromise=null;throw e});
+ return ccLegacyDocstreamPromise;
+}
 async function imageReviewDiag(id,stage,details={}){try{const p=sb.from('cc_extraction_diagnostics').insert({import_item_id:Number(id),stage:`image_${stage}`,details});await Promise.race([p,new Promise((_,reject)=>setTimeout(()=>reject(new Error('diagnostic timeout')),3000))])}catch(e){console.warn('CC image diagnostic write failed',e)}}
 const dialog=document.querySelector('#detailDialog');
 const esc=s=>String(s??'').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));
@@ -200,7 +206,7 @@ async function reviewImageImport(id){
     const q=checkRecipeQuality(recipe,{mode:'single'});
     await imageReviewDiag(id,'quality_result',{good:q.good,score:q.score,reasons:q.reasons,metrics:q.metrics});
     if(q.good){
-      const mod=await import('./import-review-fix.js?v=1.4.108');
+      const mod=await import('./import-review-fix.js?v=1.4.109');
       await imageReviewDiag(id,'normal_review');
       return mod.reviewImportFixed(id);
     }
@@ -222,7 +228,7 @@ async function reviewImageImport(id){
         // Keep existing image OCR as a fallback only; normal review remains available.
         const item=await getItem(id);
         await sb.from('cc_import_items').update({extracted_text:JSON.stringify({recipe:r,raw_text:(r.ingredients||[]).join('\n')+'\n'+(r.method||[]).join('\n')}),extraction_status:'ready',review_status:'pending'}).eq('id',id);
-        const mod=await import('./import-review-fix.js?v=1.4.108'); return mod.reviewImportFixed(id);
+        const mod=await import('./import-review-fix.js?v=1.4.109'); return mod.reviewImportFixed(id);
       }
       await imageReviewDiag(id,'ocr_fallback_rescue',{reason:'quality_gate_failed'});
       const rescue=await import('./rescue-ocr.js?v=1.1.1'); return rescue.rescueImport(id);
@@ -335,7 +341,7 @@ async function extractPdfMulti(blob,fileName,status){
 
 async function extract(id,show=true){if(show){dialog.querySelector('#detailContent').innerHTML='<div class="dialog-card"><p class="eyebrow">EXTRACTING</p><h2>Preparing recipes…</h2><p class="small-note" id="multiStatus">Reading the original file.</p></div>';dialog.showModal();}const status=t=>{const e=document.querySelector('#multiStatus');if(e)e.textContent=t;};const{data:x,error}=await sb.from('cc_import_items').select('*').eq('id',id).single();if(error||!x)return fail(error?.message||'Import item not found.');const expected=Number(window.ccExpectedRecipeCount||JSON.parse(localStorage.getItem('ccMultiImport:'+id)||'{}').expectedCount||0);try{const cached=typeof x.extracted_text==='string'?JSON.parse(x.extracted_text||'{}'):x.extracted_text;if(!/\.(?:docx|pdf)$/i.test(x.file_name||'')&&x.extraction_status==='ready'&&cached?.multiple&&Array.isArray(cached.recipes)&&cached.recipes.length&&(!expected||cached.recipes.length===expected)){render(id,x,cached.recipes);return;}}catch(e){console.warn('Cooking Confidential cached multi-recipe result:',e)}dialog.querySelector('#detailContent').innerHTML='<div class="dialog-card"><p class="eyebrow">EXTRACTING</p><h2>Preparing recipes…</h2><p class="small-note" id="multiStatus">Reading the original file.</p></div>';dialog.showModal();try{const blob=await loadOriginal(x);let recipes=[];if(/\.(png|jpe?g|webp)$/i.test(x.file_name||'')||String(x.mime_type||'').startsWith('image/')){
   // No paid vision-model call: keep multi-image extraction on local Tesseract OCR.
-  recipes=await ocrImage(blob,status);}else if(/\.docx$/i.test(x.file_name||'')){status('Separating recipes, then using the standard DOCX parser…');const arrayBuffer=await blob.arrayBuffer();const html=(await mammoth.convertToHtml({arrayBuffer},{ignoreEmptyParagraphs:false})).value||'';recipes=parseDocxMulti(html,x.file_name||'Imported document',expected);}else if(/\.pdf$/i.test(x.file_name||'')||String(x.mime_type||'').toLowerCase().includes('application/pdf')){recipes=await extractPdfMulti(blob,x.file_name||'Imported PDF',status);}else if((x.mime_type||'').startsWith('text/')){recipes=parseTextMulti(await blob.text(),x.file_name||'Imported document');if(!recipes.length){const r=makeRecipe(x.file_name||'Imported recipe');r.ingredients=cleanIngredientLines(await blob.text());recipes=[r];}}else throw Error('This multi-recipe importer currently supports images, DOCX and text documents.');if(!recipes.length)throw Error('No recipes could be detected.');recipes=recipes.map(r=>{
+  recipes=await ocrImage(blob,status);}else if(/\.doc$/i.test(x.file_name||'')){status('Reading legacy Word document with Docstream…');const parser=await loadLegacyDocstream();const ast=await parser.parseOffice(await blob.arrayBuffer());const md=typeof ast?.toMarkdown==='function'?String(ast.toMarkdown()||''):'';const raw=md.trim()?md:(typeof ast?.toText==='function'?String(ast.toText()||''):'');const text=raw.replace(/^\\s{0,3}#{1,6}\\s*/gm,'').replace(/\\*\\*(.*?)\\*\\*/g,'$1');if(!text.trim())throw Error('Docstream did not return readable text from this Word document.');recipes=parseTextMulti(text,x.file_name||'Imported Word document');if(!recipes.length)throw Error('No separate recipes were detected in this .doc file. Check that it contains clear recipe titles, Ingredients and Method sections.');}else if(/\.docx$/i.test(x.file_name||'')){status('Separating recipes, then using the standard DOCX parser…');const arrayBuffer=await blob.arrayBuffer();const html=(await mammoth.convertToHtml({arrayBuffer},{ignoreEmptyParagraphs:false})).value||'';recipes=parseDocxMulti(html,x.file_name||'Imported document',expected);}else if(/\.pdf$/i.test(x.file_name||'')||String(x.mime_type||'').toLowerCase().includes('application/pdf')){recipes=await extractPdfMulti(blob,x.file_name||'Imported PDF',status);}else if((x.mime_type||'').startsWith('text/')){recipes=parseTextMulti(await blob.text(),x.file_name||'Imported document');if(!recipes.length){const r=makeRecipe(x.file_name||'Imported recipe');r.ingredients=cleanIngredientLines(await blob.text());recipes=[r];}}else throw Error('This multi-recipe importer currently supports images, DOCX and text documents.');if(!recipes.length)throw Error('No recipes could be detected.');recipes=recipes.map(r=>{
   r=stripImportCitations(r);
   const method=(Array.isArray(r.method)?r.method:lines(r.method)).map(clean).filter(x=>!isOcrGarbage(x));
   const notes=(Array.isArray(r.notes)?r.notes:lines(r.notes)).map(clean).filter(x=>!isOcrGarbage(x));
