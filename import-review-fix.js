@@ -220,23 +220,6 @@ async function showReview(x,id){
   await extractionDiag(id,'show_review_dialog_shown',{});
 }
 
-let ccLegacyDocstreamPromise;
-async function loadLegacyDocstream(){
- if(window.officeParser&&typeof window.officeParser.parseOffice==='function')return window.officeParser;
- if(!ccLegacyDocstreamPromise)ccLegacyDocstreamPromise=new Promise((resolve,reject)=>{const script=document.createElement('script');script.src='https://cdn.jsdelivr.net/gh/joseespana/docstream@master/docs/dist/officeparser.browser.js';script.onload=()=>window.officeParser&&typeof window.officeParser.parseOffice==='function'?resolve(window.officeParser):reject(new Error('Docstream parser API was unavailable.'));script.onerror=()=>reject(new Error('Could not load the legacy Word parser. Check your internet connection.'));document.head.appendChild(script)}).catch(e=>{ccLegacyDocstreamPromise=null;throw e});
- return ccLegacyDocstreamPromise;
-}
-function normalizeLegacyDocSections(value){
- let t=String(value||'').replace(/\r/g,'').replace(/\u0000/g,' ').replace(/^\s{0,3}#{1,6}\s*/gm,'').replace(/\*\*(.*?)\*\*/g,'$1').replace(/__(.*?)__/g,'$1').replace(/HYPERLINK\s+"[^"]*"/gi,'').replace(/https?:\/\/\S+/gi,'');
- const heads='General Ingredients|Ingredients|Description|Method|Directions|Instructions|Preparation|Steps|Notes|Servings|Contents|Recipe';
- t=t.replace(new RegExp('\\s+(?=('+heads+')\\s*:?)','gi'),'\n').replace(new RegExp('(^|\\n)\\s*('+heads+')\\s*:?\\s*','gi'),'$1$2:\n');
- const out=[];let section='';const hr=/^(description|general ingredients|ingredients|method|directions|instructions|preparation|steps|notes|servings|contents|recipe)\s*:?\s*(.*)$/i;
- for(const src of t.split('\n')){let line=src.replace(/[ \t]+/g,' ').trim();if(!line)continue;const m=line.match(hr);if(m){section=m[1].toLowerCase();out.push(m[1]+':');line=m[2].trim();if(!line)continue}
- if(/ingredients/.test(section))line=line.replace(/([A-Za-z)])(?=\d+(?:\s|[½¼¾⅓⅔⅛⅜⅝⅞]))/g,'$1\n').replace(/([A-Za-z)])(?=[½¼¾⅓⅔⅛⅜⅝⅞])/g,'$1\n').replace(/\s+(?=(?:[-*•·]\s*)?\d+\s*(?:\d+\/\d+|[½¼¾⅓⅔⅛⅜⅝⅞])?\s*(?:cups?|tbsp\w*|tsp\w*|tablespoons?|teaspoons?|gms?|grams?|kg|ml|litres?|liters?|oz|lbs?|pounds?|cloves?|medium|large|small|inch|eggs?|pieces?|slices?|sticks?|pinch|bunch|sprigs?)\b)/gi,'\n');
- if(/^(method|directions|instructions|preparation|steps)$/.test(section))line=line.replace(/([.!?])\s*(?=\d{1,2}[.)]\s*[A-Z])/g,'$1\n');
- out.push(...line.split('\n').map(v=>v.replace(/^\s*(?:[-*+•·]|\d+[.)])\s*/,'').trim()).filter(Boolean));}
- return out.join('\n').replace(/\n{3,}/g,'\n\n').trim();
-}
 function legacyDocStoredText(item){
   const value=item?.extracted_text;
   if(typeof value!=='string')return '';
@@ -282,29 +265,112 @@ function parseLegacyDocRecipe(text,fileName){
   if(ingredients.length<3||method.join(' ').length<35)return null;
   return {name:title||fileTitle,description,ingredients,method,personal_notes:notes.join('\n'),servings:'',cuisine:'',course:''};
 }
-async function showLegacyDocWithQualityGate(x,id,recipe,rawText,stageName){
- let quality;
- try{quality=checkRecipeQuality(recipe,{mode:'single'});await extractionDiag(id,'legacy_doc_quality_gate_result',{stage:stageName,good:quality.good,score:quality.score,reasons:quality.reasons,metrics:quality.metrics});}
- catch(error){await extractionDiag(id,'legacy_doc_quality_gate_error',{stage:stageName,message:error?.message||String(error)});try{const rescue=await import('./rescue-ocr.js?v=1.1.1');return await rescue.rescueImport(id)}catch(e){return window.ccShowError('The Word import could not be validated and Rescue Editor could not open: '+(e?.message||String(e)),'Rescue Editor unavailable')}}
- if(!quality.good){await extractionDiag(id,'rescue_editor_fallback',{stage:'legacy_doc_quality_gate_failed',source_stage:stageName,quality});try{const rescue=await import('./rescue-ocr.js?v=1.1.1');return await rescue.rescueImport(id)}catch(e){return window.ccShowError('The Word import did not pass the recipe quality check and Rescue Editor could not open: '+(e?.message||String(e)),'Rescue Editor unavailable')}}
- return await showReview({...x,extraction_status:'ready',extracted_text:JSON.stringify({recipe,raw_text:rawText})},id);
+let ccDocstreamLoadPromise;
+async function loadDocstreamBrowser(){
+  if(window.officeParser&&typeof window.officeParser.parseOffice==='function')return window.officeParser;
+  if(!ccDocstreamLoadPromise){
+    ccDocstreamLoadPromise=new Promise((resolve,reject)=>{
+      const script=document.createElement('script');
+      script.src='https://cdn.jsdelivr.net/gh/joseespana/docstream@master/docs/dist/officeparser.browser.js';
+      script.onload=()=>window.officeParser&&typeof window.officeParser.parseOffice==='function'?resolve(window.officeParser):reject(new Error('Docstream loaded but its parser API was not available.'));
+      script.onerror=()=>reject(new Error('Could not load the legacy Word parser. Check your internet connection and try again.'));
+      document.head.appendChild(script);
+    }).catch(error=>{ccDocstreamLoadPromise=null;throw error});
+  }
+  return ccDocstreamLoadPromise;
 }
-async function reviewLegacyDoc(x,id){
- try{
-  await extractionDiag(id,'legacy_docstream_review_start',{file_name:x.file_name,extraction_status:x.extraction_status,review_status:x.review_status});
-  const text=await extractLegacyDocText(x),recipe=parseLegacyDocRecipe(text,x.file_name);
-  if(recipe){await extractionDiag(id,'legacy_docstream_review_structured',{ingredients:recipe.ingredients.length,method_length:recipe.method.join(' ').length,parser:'docstream+legacy-section-parser'});return await showLegacyDocWithQualityGate(x,id,recipe,text,'docstream_review')}
-  await extractionDiag(id,'legacy_docstream_review_structure_incomplete',{text_length:text.length,preview:text.slice(0,1600)});
- }catch(error){await extractionDiag(id,'legacy_docstream_review_failed',{message:error?.message||String(error)})}
- try{
-  const stored=legacyDocStoredText(x),recipe=parseLegacyDocRecipe(stored,x.file_name);
-  if(recipe){await extractionDiag(id,'legacy_doc_stored_text_structured_fallback',{parser:'stored-extracted-text',ingredients:recipe.ingredients.length,method_length:recipe.method.join(' ').length});return await showLegacyDocWithQualityGate(x,id,recipe,stored,'stored_text_fallback')}
-  await extractionDiag(id,'legacy_doc_stored_text_structure_incomplete',{text_length:stored.length,preview:stored.slice(0,1600)});
- }catch(error){await extractionDiag(id,'legacy_doc_stored_text_fallback_failed',{message:error?.message||String(error)})}
- return window.ccShowError('The Word text could not be structured reliably. Please open Rescue Editor for this file.','Word extraction needs review');
+function normalizeLegacyDocSections(value){
+  let t=String(value||'').replace(/\r/g,'').replace(/\u0000/g,' ');
+  t=t.replace(/^\s{0,3}#{1,6}\s*/gm,'').replace(/\*\*(.*?)\*\*/g,'$1').replace(/__(.*?)__/g,'$1');
+  t=t.replace(/HYPERLINK\s+"[^"]*"/gi,'').replace(/https?:\/\/\S+/gi,'');
+  const headings='General Ingredients|Ingredients|Description|Method|Directions|Instructions|Preparation|Steps|Notes|Servings|Contents|Recipe';
+  // Normalize heading boundaries without depending on Docstream's line-break fidelity.
+  t=t.replace(new RegExp('\\s+(?=('+headings+')\\s*:?)','gi'),'\n');
+  t=t.replace(new RegExp('(^|\\n)\\s*('+headings+')\\s*:?\\s*','gi'),'$1$2:\n');
+  t=t.replace(/^\s*(?:Contents|Recipe)\s*:\s*$/gim,'');
+  const out=[];let section='';
+  const headingRe=/^(description|general ingredients|ingredients|method|directions|instructions|preparation|steps|notes|servings|contents|recipe)\s*:?\s*(.*)$/i;
+  for(const sourceLine of t.split('\n')){
+    let line=sourceLine.replace(/[ \t]+/g,' ').trim();
+    if(!line)continue;
+    const match=line.match(headingRe);
+    if(match){
+      section=match[1].toLowerCase();
+      out.push(match[1]+':');
+      line=match[2].trim();
+      if(!line)continue;
+    }
+    if(/ingredients/.test(section)){
+      // Split attached quantities: coconut2 -> coconut / 2, cloves4 -> cloves / 4.
+      line=line
+        .replace(/([A-Za-z)])(?=\d+(?:\s|[½¼¾⅓⅔⅛⅜⅝⅞]))/g,'$1\n')
+        .replace(/([A-Za-z)])(?=[½¼¾⅓⅔⅛⅜⅝⅞])/g,'$1\n')
+        .replace(/\s+(?=(?:[-*•·]\s*)?\d+\s*(?:\d+\/\d+|[½¼¾⅓⅔⅛⅜⅝⅞])?\s*(?:cups?|tbsp\w*|tsp\w*|tablespoons?|teaspoons?|gms?|grams?|kg|ml|litres?|liters?|oz|lbs?|pounds?|cloves?|medium|large|small|inch|eggs?|pieces?|slices?|sticks?|pinch|bunch|sprigs?)\b)/gi,'\n')
+        .replace(/(?<=[A-Za-z)])(?=(?:salt|pepper|garlic|ginger|onions?|tomatoes|coconut|coriander|cumin|turmeric|chill(?:i|ies)|oil|water)\b)/gi,'\n');
+    }
+    if(/^(method|directions|instructions|preparation|steps)$/.test(section)){
+      // Split numbered method steps even when Word removed spaces before the number.
+      line=line.replace(/([.!?])\s*(?=\d{1,2}[.)]\s*[A-Z])/g,'$1\n')
+               .replace(/([a-z)])(?=\d{1,2}[.)]\s*[A-Z])/g,'$1\n');
+    }
+    out.push(...line.split('\n').map(v=>v.replace(/^\s*(?:[-*+•·]|\d+[.)])\s*/,'').replace(/[ \t]+/g,' ').trim()).filter(Boolean));
+  }
+  return out.join('\n').replace(/\n{3,}/g,'\n\n').trim();
 }
-const REVIEW_MODULE_VERSION='1.4.135';
-export async function reviewImportFixed(id){window.ccImportReviewActive=true;await extractionDiag(id,'review_module_version',{version:REVIEW_MODULE_VERSION});window.ccReturnToImportInbox=true;importDialog?.close();detailDialog.querySelector('#detailContent').innerHTML='<div class="dialog-card"><p class="eyebrow">REVIEW IMPORT</p><h2>Preparing recipe…</h2><p class="small-note">Reading the selected upload. This may take a few seconds.</p></div>';detailDialog.showModal();let{data:x,error}=await supabase.from('cc_import_items').select('*').eq('id',id).single();if(error||!x){detailDialog.close();return window.ccShowError(error?.message||'Import item could not be loaded.','Could not load import')}const displayName=x.file_name||x.source_url||'Recipe import';await extractionDiag(id,'review_open',{file_name:x.file_name||null,mime_type:x.mime_type||null,extraction_status:x.extraction_status,review_status:x.review_status,has_scanned_pdf:typeof x.extracted_text==='string'&&x.extracted_text.includes('"scanned_pdf":true')});detailDialog.querySelector('#detailContent').innerHTML='<div class="dialog-card import-preparing"><p class="eyebrow">REVIEW IMPORT</p><h2>Preparing your recipe</h2><p class="small-note">Reading <strong>'+esc(displayName)+'</strong>.</p><div style="margin:18px 0 8px;padding:12px 14px;border:1px solid rgba(120,70,50,.18);border-radius:10px;background:rgba(120,70,50,.05);font-size:14px;line-height:1.5;color:#5d514a"><strong>Almost there.</strong><br>Your recipe is being extracted now.</div><p class="small-note import-status" style="margin-top:10px">Please keep this window open while the recipe is extracted.</p></div>';const image=/\.(png|jpe?g|webp)$/i.test(x.file_name||'')||String(x.mime_type||'').startsWith('image/');if(image){detailDialog.close();try{const mod=await import('./generic-image-review.js?v=1.2.0');if(typeof mod.reviewImage==='function')return mod.reviewImage(id);throw new Error('Image review function is unavailable.')}catch(e){console.error('[CC image trace] explicit Review routing failed',{id,message:e?.message,stack:e?.stack});return window.ccShowError(e.message||'Could not open image review.','Could not open image review')}}const pdf=/\.pdf$/i.test(x.file_name||'')||x.mime_type==='application/pdf';if(/\.doc$/i.test(x.file_name||'')&&x.review_status!=='approved')return reviewLegacyDoc(x,id);if(x.extraction_status==='pending'||x.extraction_status==='processing'){await extractionDiag(id,'before_invoke_extract',{status:x.extraction_status,pdf});const{error:fx}=await invokeExtract(id);if(fx){await extractionDiag(id,'invoke_extract_failed',{message:fx.message||null,status:fx.status||null});let detail=fx.message||'The recipe could not be extracted.';try{const ctx=fx.context;const body=ctx?.json?await ctx.json():ctx?.text?await ctx.text():null;if(body)detail=typeof body==='string'?body:(body.error||body.message||JSON.stringify(body))}catch{}if(!pdf){return window.ccShowError(detail,'Recipe extraction failed')}try{const mod=await import('./scanned-pdf-ocr.js?v=1.0.89');await extractionDiag(id,'legacy_scanned_pdf_invoked',{module:'scanned-pdf-ocr.js'});const out=await mod.ocrScannedPdf(id,x);x=out.item;const rr=out.recipe||{};if(!Array.isArray(rr.ingredients)||rr.ingredients.length<3){const rescue=await import('./rescue-ocr.js?v=1.1.1');return rescue.rescueImport(id)}}catch(e){try{const rescue=await import('./rescue-ocr.js?v=1.1.1');return rescue.rescueImport(id)}catch(_){return window.ccShowError(e.message||'The scanned PDF could not be read.','Scanned PDF could not be read')}}}else{await extractionDiag(id,'invoke_extract_succeeded',{});const q=await supabase.from('cc_import_items').select('*').eq('id',id).single();if(q.error)return window.ccShowError(q.error.message,'Could not refresh import');x=q.data;await extractionDiag(id,'after_invoke_refresh',{extraction_status:x.extraction_status,source_title:x.source_title,has_scanned_pdf:typeof x.extracted_text==='string'&&x.extracted_text.includes('"scanned_pdf":true'),extracted_length:String(x.extracted_text||'').length})}}// x is already current here: the initial read is sufficient for ready items, and
+async function extractLegacyDocText(item){
+  if(!item?.file_path)throw new Error('The original .doc file is not attached to this import.');
+  const signed=await getCachedSignedUrl(supabase,'cooking-confidential',item.file_path);
+  const response=await fetch(signed);
+  if(!response.ok)throw new Error('Could not download the original .doc file for parsing.');
+  const buffer=await (await response.blob()).arrayBuffer();
+  const parser=await loadDocstreamBrowser();
+  const ast=await parser.parseOffice(buffer);
+  // Prefer Markdown because it preserves headings, list boundaries and paragraph
+  // breaks. Plain toText() can concatenate "Ingredients" with the first ingredient
+  // and collapse Contents/Recipe labels into the method for some legacy .doc files.
+  const markdown=typeof ast?.toMarkdown==='function'?String(ast.toMarkdown()||''):'';
+  const plain=typeof ast?.toText==='function'?String(ast.toText()||''):'';
+  const source=markdown.trim()?markdown:plain;const text=normalizeLegacyDocSections(source);
+  if(!text)throw new Error('Docstream could not extract readable text from this .doc file.');
+  await extractionDiag(item.id,'legacy_docstream_text_extracted',{parser:'docstream-browser',format:markdown.trim()?'markdown':'plain-text-fallback',type:ast.type||'doc',text_length:text.length,plain_text_length:plain.length});
+  return text;
+}
+
+const REVIEW_MODULE_VERSION='1.4.136';
+export async function reviewImportFixed(id){window.ccImportReviewActive=true;await extractionDiag(id,'review_module_version',{version:REVIEW_MODULE_VERSION});window.ccReturnToImportInbox=true;importDialog?.close();detailDialog.querySelector('#detailContent').innerHTML='<div class="dialog-card"><p class="eyebrow">REVIEW IMPORT</p><h2>Preparing recipe…</h2><p class="small-note">Reading the selected upload. This may take a few seconds.</p></div>';detailDialog.showModal();let{data:x,error}=await supabase.from('cc_import_items').select('*').eq('id',id).single();if(error||!x){detailDialog.close();return window.ccShowError(error?.message||'Import item could not be loaded.','Could not load import')}const displayName=x.file_name||x.source_url||'Recipe import';await extractionDiag(id,'review_open',{file_name:x.file_name||null,mime_type:x.mime_type||null,extraction_status:x.extraction_status,review_status:x.review_status,has_scanned_pdf:typeof x.extracted_text==='string'&&x.extracted_text.includes('"scanned_pdf":true')});detailDialog.querySelector('#detailContent').innerHTML='<div class="dialog-card import-preparing"><p class="eyebrow">REVIEW IMPORT</p><h2>Preparing your recipe</h2><p class="small-note">Reading <strong>'+esc(displayName)+'</strong>.</p><div style="margin:18px 0 8px;padding:12px 14px;border:1px solid rgba(120,70,50,.18);border-radius:10px;background:rgba(120,70,50,.05);font-size:14px;line-height:1.5;color:#5d514a"><strong>Almost there.</strong><br>Your recipe is being extracted now.</div><p class="small-note import-status" style="margin-top:10px">Please keep this window open while the recipe is extracted.</p></div>';const image=/\.(png|jpe?g|webp)$/i.test(x.file_name||'')||String(x.mime_type||'').startsWith('image/');if(image){detailDialog.close();try{const mod=await import('./generic-image-review.js?v=1.2.0');if(typeof mod.reviewImage==='function')return mod.reviewImage(id);throw new Error('Image review function is unavailable.')}catch(e){console.error('[CC image trace] explicit Review routing failed',{id,message:e?.message,stack:e?.stack});return window.ccShowError(e.message||'Could not open image review.','Could not open image review')}}const pdf=/\.pdf$/i.test(x.file_name||'')||x.mime_type==='application/pdf';// Legacy .doc files must be read through Docstream on every Review attempt,
+// not only while the import row is pending/processing. Existing rows may already
+// be marked ready by the server extractor even though their structure is unusable.
+// Run the browser parser first and open the normal editor when the recipe sections
+// can be recovered. This path does not mutate the import row or invoke OCR.
+if(/\.doc$/i.test(x.file_name||'')&&x.file_path&&x.review_status!=='approved'){
+  try{
+    await extractionDiag(id,'legacy_docstream_review_start',{file_name:x.file_name,extraction_status:x.extraction_status,review_status:x.review_status});
+    const docText=await extractLegacyDocText(x);
+    const structured=parseLegacyDocRecipe(docText,x.file_name);
+    if(structured){
+      await extractionDiag(id,'legacy_docstream_review_structured',{ingredients:structured.ingredients.length,method_length:structured.method.join(' ').length,parser:'docstream+legacy-section-parser'});
+      return await showReview({...x,extraction_status:'ready',extracted_text:JSON.stringify({recipe:structured,raw_text:docText})},id);
+    }
+    await extractionDiag(id,'legacy_docstream_review_structure_incomplete',{text_length:docText.length,preview:docText.slice(0,1600)});
+  }catch(docError){
+    await extractionDiag(id,'legacy_docstream_review_failed',{message:docError?.message||String(docError)});
+  }
+  // The import may already contain usable extracted text from an earlier attempt.
+  // Do not discard obvious headings and send the user to Rescue Editor just because
+  // the browser parser failed to load or Docstream returned an unusable AST.
+  try{
+    const storedText=legacyDocStoredText(x);
+    const storedRecipe=parseLegacyDocRecipe(storedText,x.file_name);
+    if(storedRecipe){
+      await extractionDiag(id,'legacy_doc_stored_text_structured_fallback',{parser:'stored-extracted-text',ingredients:storedRecipe.ingredients.length,method_length:storedRecipe.method.join(' ').length});
+      return await showReview({...x,extraction_status:'ready',extracted_text:JSON.stringify({recipe:storedRecipe,raw_text:storedText})},id);
+    }
+    await extractionDiag(id,'legacy_doc_stored_text_structure_incomplete',{text_length:storedText.length,preview:storedText.slice(0,1600)});
+  }catch(storedError){
+    await extractionDiag(id,'legacy_doc_stored_text_fallback_failed',{message:storedError?.message||String(storedError)});
+  }
+}
+if(x.extraction_status==='pending'||x.extraction_status==='processing'){await extractionDiag(id,'before_invoke_extract',{status:x.extraction_status,pdf});const{error:fx}=await invokeExtract(id);if(fx){await extractionDiag(id,'invoke_extract_failed',{message:fx.message||null,status:fx.status||null});let detail=fx.message||'The recipe could not be extracted.';try{const ctx=fx.context;const body=ctx?.json?await ctx.json():ctx?.text?await ctx.text():null;if(body)detail=typeof body==='string'?body:(body.error||body.message||JSON.stringify(body))}catch{}if(!pdf){return window.ccShowError(detail,'Recipe extraction failed')}try{const mod=await import('./scanned-pdf-ocr.js?v=1.0.89');await extractionDiag(id,'legacy_scanned_pdf_invoked',{module:'scanned-pdf-ocr.js'});const out=await mod.ocrScannedPdf(id,x);x=out.item;const rr=out.recipe||{};if(!Array.isArray(rr.ingredients)||rr.ingredients.length<3){const rescue=await import('./rescue-ocr.js?v=1.1.1');return rescue.rescueImport(id)}}catch(e){try{const rescue=await import('./rescue-ocr.js?v=1.1.1');return rescue.rescueImport(id)}catch(_){return window.ccShowError(e.message||'The scanned PDF could not be read.','Scanned PDF could not be read')}}}else{await extractionDiag(id,'invoke_extract_succeeded',{});const q=await supabase.from('cc_import_items').select('*').eq('id',id).single();if(q.error)return window.ccShowError(q.error.message,'Could not refresh import');x=q.data;await extractionDiag(id,'after_invoke_refresh',{extraction_status:x.extraction_status,source_title:x.source_title,has_scanned_pdf:typeof x.extracted_text==='string'&&x.extracted_text.includes('"scanned_pdf":true'),extracted_length:String(x.extracted_text||'').length})}}// x is already current here: the initial read is sufficient for ready items, and
   // pending/processing items refresh x themselves after extraction. Avoiding a
   // second identical Supabase read prevents Review from hanging on this path.
   // URL imports must always be re-extracted when Review opens. This prevents
