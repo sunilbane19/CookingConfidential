@@ -318,8 +318,9 @@ function normalizeLegacyDocSections(value){
   return out.join('\n').replace(/\n{3,}/g,'\n\n').trim();
 }
 async function extractLegacyDocText(item){
-  if(!item?.file_path)throw new Error('The original .doc file is not attached to this import.');
-  const signed=await getCachedSignedUrl(supabase,'cooking-confidential',item.file_path);
+  const sourcePath=item?.file_path||item?.original_file_path;
+  if(!sourcePath)throw new Error('The original .doc file path is missing from this import record.');
+  const signed=await getCachedSignedUrl(supabase,'cooking-confidential',sourcePath);
   const response=await fetch(signed);
   if(!response.ok)throw new Error('Could not download the original .doc file for parsing.');
   const buffer=await (await response.blob()).arrayBuffer();
@@ -342,7 +343,7 @@ export async function reviewImportFixed(id){window.ccImportReviewActive=true;awa
 // be marked ready by the server extractor even though their structure is unusable.
 // Run the browser parser first and open the normal editor when the recipe sections
 // can be recovered. This path does not mutate the import row or invoke OCR.
-if(/\.doc$/i.test(x.file_name||'')&&x.file_path&&x.review_status!=='approved'){
+if(/\.doc$/i.test(x.file_name||'')&&x.review_status!=='approved'){
   try{
     await extractionDiag(id,'legacy_docstream_review_start',{file_name:x.file_name,extraction_status:x.extraction_status,review_status:x.review_status});
     const docText=await extractLegacyDocText(x);
