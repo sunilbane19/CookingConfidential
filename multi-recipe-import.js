@@ -1,3 +1,4 @@
+import { stripImportCitations } from './import-citation-cleanup.js?v=1.0.1';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { createWorker } from 'https://esm.sh/tesseract.js@5';
 import * as mammoth from 'https://esm.sh/mammoth@1.6.0';
@@ -5,7 +6,7 @@ import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
 import { createGenericEditor, editorValue, sanitizeRichHtml } from './generic-editor.js?v=1.3.5';
 import { checkRecipeQuality } from './recipe-quality.js?v=1.0.4';
 import { readSourceTextWithVision } from './vision-text-reader.js?v=1.0.0';
-import { parseDocx } from './docx-parser.js?v=1.0.7';
+import { parseDocx } from './docx-parser.js?v=1.0.14';
 
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_EG30cid4BV1Uvr6EeM3f9g_hztA7Wpu';
@@ -74,16 +75,33 @@ function makeRecipe(name){return {name:clean(name)||'Imported recipe',descriptio
 function docxRecipeBlocks(doc){
   const blocks=[]; let current=[];
   const push=()=>{if(current.length){blocks.push(current);current=[];}};
+  const hasIngredientHeading=items=>items.some(item=>/^(?:the\\s+)?ingredients?(?:\\s+(?:list|needed|required))?\\s*:?$/i.test(clean(item.text)));
+  const hasMethodHeading=items=>items.some(item=>/^(?:(?:the\\s+)?(?:method|preparation|instructions?|directions?|steps?)|step[- ]by[- ]step(?:\\s+cooking)?\\s+instructions?)\\s*:?$/i.test(clean(item.text)));
+  const titleLike=item=>{
+    const text=clean(item.text);
+    return item.bold && text.length>=4 && text.length<=85 &&
+      !/[.!?]$/.test(text) &&
+      !/^(?:ingredients?|method|preparation|instructions?|directions?|notes?|description|step[- ]by[- ]step)/i.test(text);
+  };
   for(const el of [...doc.querySelectorAll('h1,h2,h3,h4,h5,h6,p,li')]){
     const text=clean(el.textContent);
     if(!text){if(el.tagName==='P')push();continue;}
-    current.push({text,bold:/^H[1-6]$/.test(el.tagName)||!!el.querySelector('strong,b'),tag:el.tagName.toLowerCase()});
+    const item={text,bold:/^H[1-6]$/.test(el.tagName)||!!el.querySelector('strong,b'),tag:el.tagName.toLowerCase()};
+    // In Word recipe collections, recipe names are often bold paragraphs rather than
+    // headings. Start a new block only after the current block already has both
+    // recipe section markers. A trailing bold promotional title then starts its own
+    // block and is rejected later because it has no Ingredients + Method sections.
+    if(titleLike(item)&&hasIngredientHeading(current)&&hasMethodHeading(current))push();
+    current.push(item);
   }
   push();
   return blocks;
 }
 function looksLikeIngredientTitle(s){
   const x=clean(s);
+  // A title explicitly wrapped in Markdown bold markers in a DOCX is often a pasted
+  // promotional/source heading, not a recipe title (e.g. **Athens Walking Tours **).
+  if(/^\*\*[^*]{2,80}\*\*$/.test(String(s??'').trim()))return true;
   if(!x||GENERIC.test(x))return true;
   if(/^\d+(?:[./]\d+)?\s*(?:tsp|tbsp|cup|cups|oz|lb|lbs|g|kg|ml|l|cl|pinch|cloves?|sprigs?)\b/i.test(x))return true;
   if(/^(?:half|quarter|one|two|three|four|five)\s+(?:tsp|tbsp|cup|cloves?|sprigs?|oz|lb|lbs)\b/i.test(x))return true;
@@ -96,7 +114,13 @@ function looksLikeIngredientTitle(s){
 function parseDocxMulti(html,file,expectedCount=0){
   const doc=new DOMParser().parseFromString(html,'text/html');
   const blocks=docxRecipeBlocks(doc);
-  const candidates=blocks.filter(b=>b.length>=3&&!looksLikeIngredientTitle(b[0].text));
+  // A multi-recipe document may contain promotional/source sections after the last
+  // recipe. A block is a recipe candidate only when it has explicit recipe section
+  // boundaries (ingredients plus method/preparation). A title and several paragraphs
+  // alone are not sufficient: this is what allowed "Athens Walking Tours" through.
+  const hasIngredientHeading=b=>b.some(item=>/^(?:the\s+)?ingredients?(?:\s+(?:list|needed|required))?\s*:?$/i.test(clean(item.text)));
+  const hasMethodHeading=b=>b.some(item=>/^(?:(?:the\s+)?(?:method|preparation|instructions?|directions?|steps?)|step[- ]by[- ]step(?:\s+cooking)?\s+instructions?)\s*:?$/i.test(clean(item.text)));
+  const candidates=blocks.filter(b=>b.length>=3&&!looksLikeIngredientTitle(b[0].text)&&hasIngredientHeading(b)&&hasMethodHeading(b));
   const separated=[];
   if(candidates.length>=2){
     for(const block of candidates){
@@ -106,11 +130,14 @@ function parseDocxMulti(html,file,expectedCount=0){
         return '<'+tag+'>'+(item.bold&&tag==='p'?'<strong>'+text+'</strong>':text)+'</'+tag+'>';
       }).join('');
       const parsed=parseDocx(chunk,file+' — '+block[0].text);
-      const recipe=parsed.find(r=>(r.ingredients?.length||0)>0||(r.method?.length||0)>0);
+      const recipe=parsed.find(r=>(r.ingredients?.length||0)>=2&&(r.method?.length||0)>0);
       if(recipe)separated.push(recipe);
     }
   }
-  if(separated.length>=2&&separated.length===candidates.length&&(!expectedCount||separated.length===expectedCount))return separated;
+  // Once multiple explicitly structured recipe blocks have been found, return only
+  // those blocks. Never fall back to whole-document parsing: that can reintroduce a
+  // trailing promotional section as a phantom recipe.
+  if(separated.length>=2&&(!expectedCount||separated.length<=expectedCount))return separated;
   return parseDocx(html,file);
 }
 function ocrLines(words){const valid=words.filter(w=>w.text?.trim()&&Number(w.confidence||0)>=25);if(!valid.length)return[];const medH=valid.map(w=>w.bbox.y1-w.bbox.y0).sort((a,b)=>a-b)[Math.floor(valid.length/2)]||20,rows=[];for(const w of [...valid].sort((a,b)=>a.bbox.y0-b.bbox.y0||a.bbox.x0-b.bbox.x0)){const cy=(w.bbox.y0+w.bbox.y1)/2;let row=rows.find(r=>Math.abs(r.cy-cy)<Math.max(8,medH*.55));if(!row){row={cy,words:[]};rows.push(row);}row.words.push(w);}return rows.map(r=>{r.words.sort((a,b)=>a.bbox.x0-b.bbox.x0);return {text:clean(r.words.map(w=>w.text).join(' ')),x0:Math.min(...r.words.map(w=>w.bbox.x0)),x1:Math.max(...r.words.map(w=>w.bbox.x1)),y0:Math.min(...r.words.map(w=>w.bbox.y0)),y1:Math.max(...r.words.map(w=>w.bbox.y1)),height:Math.max(...r.words.map(w=>w.bbox.y1-w.bbox.y0))};}).filter(r=>r.text.length>1);}
@@ -139,7 +166,7 @@ function parseTextMulti(text,file){
     else if(mode==='notes')current.notes.push(s);
   }
   flush();
-  return out.map(r=>({...r,ingredients:cleanIngredientLines(r.ingredients),method:r.method.filter(x=>!isOcrGarbage(x)),notes:r.notes.filter(x=>!isOcrGarbage(x))})).filter(r=>r.ingredients.length>=2);
+  return out.map(r=>({...r,ingredients:cleanIngredientLines(r.ingredients),method:r.method.filter(x=>!isOcrGarbage(x)),notes:r.notes.filter(x=>!isOcrGarbage(x))})).filter(r=>r.ingredients.length>=2&&r.method.length>=1);
 }
 function dedupeRecipes(recipes){const seen=new Set();return recipes.filter(r=>{const k=clean(r.name).toLowerCase().replace(/[^a-z0-9]+/g,' ');if(!k||seen.has(k))return false;seen.add(k);return true;});}
 async function recognizeTile(worker,bitmap,x,y,w,h){const insetX=w*.035,insetY=h*.035;const sx=x+insetX,sy=y+insetY,sw=w-insetX*2,sh=h-insetY*2;const scale=4;const canvas=document.createElement('canvas');canvas.width=Math.round(sw*scale);canvas.height=Math.round(sh*scale);const ctx=canvas.getContext('2d');ctx.drawImage(bitmap,sx,sy,sw,sh,0,0,canvas.width,canvas.height);const image=ctx.getImageData(0,0,canvas.width,canvas.height),d=image.data;for(let i=0;i<d.length;i+=4){const yv=.299*d[i]+.587*d[i+1]+.114*d[i+2];const v=Math.max(0,Math.min(255,(yv-128)*1.45+128));d[i]=d[i+1]=d[i+2]=v}ctx.putImageData(image,0,0);return worker.recognize(canvas);}
@@ -173,7 +200,7 @@ async function reviewImageImport(id){
     const q=checkRecipeQuality(recipe,{mode:'single'});
     await imageReviewDiag(id,'quality_result',{good:q.good,score:q.score,reasons:q.reasons,metrics:q.metrics});
     if(q.good){
-      const mod=await import('./import-review-fix.js?v=1.4.59');
+      const mod=await import('./import-review-fix.js?v=1.4.108');
       await imageReviewDiag(id,'normal_review');
       return mod.reviewImportFixed(id);
     }
@@ -195,7 +222,7 @@ async function reviewImageImport(id){
         // Keep existing image OCR as a fallback only; normal review remains available.
         const item=await getItem(id);
         await sb.from('cc_import_items').update({extracted_text:JSON.stringify({recipe:r,raw_text:(r.ingredients||[]).join('\n')+'\n'+(r.method||[]).join('\n')}),extraction_status:'ready',review_status:'pending'}).eq('id',id);
-        const mod=await import('./import-review-fix.js?v=1.4.58'); return mod.reviewImportFixed(id);
+        const mod=await import('./import-review-fix.js?v=1.4.108'); return mod.reviewImportFixed(id);
       }
       await imageReviewDiag(id,'ocr_fallback_rescue',{reason:'quality_gate_failed'});
       const rescue=await import('./rescue-ocr.js?v=1.1.1'); return rescue.rescueImport(id);
@@ -309,6 +336,7 @@ async function extractPdfMulti(blob,fileName,status){
 async function extract(id,show=true){if(show){dialog.querySelector('#detailContent').innerHTML='<div class="dialog-card"><p class="eyebrow">EXTRACTING</p><h2>Preparing recipes…</h2><p class="small-note" id="multiStatus">Reading the original file.</p></div>';dialog.showModal();}const status=t=>{const e=document.querySelector('#multiStatus');if(e)e.textContent=t;};const{data:x,error}=await sb.from('cc_import_items').select('*').eq('id',id).single();if(error||!x)return fail(error?.message||'Import item not found.');const expected=Number(window.ccExpectedRecipeCount||JSON.parse(localStorage.getItem('ccMultiImport:'+id)||'{}').expectedCount||0);try{const cached=typeof x.extracted_text==='string'?JSON.parse(x.extracted_text||'{}'):x.extracted_text;if(!/\.(?:docx|pdf)$/i.test(x.file_name||'')&&x.extraction_status==='ready'&&cached?.multiple&&Array.isArray(cached.recipes)&&cached.recipes.length&&(!expected||cached.recipes.length===expected)){render(id,x,cached.recipes);return;}}catch(e){console.warn('Cooking Confidential cached multi-recipe result:',e)}dialog.querySelector('#detailContent').innerHTML='<div class="dialog-card"><p class="eyebrow">EXTRACTING</p><h2>Preparing recipes…</h2><p class="small-note" id="multiStatus">Reading the original file.</p></div>';dialog.showModal();try{const blob=await loadOriginal(x);let recipes=[];if(/\.(png|jpe?g|webp)$/i.test(x.file_name||'')||String(x.mime_type||'').startsWith('image/')){
   // No paid vision-model call: keep multi-image extraction on local Tesseract OCR.
   recipes=await ocrImage(blob,status);}else if(/\.docx$/i.test(x.file_name||'')){status('Separating recipes, then using the standard DOCX parser…');const arrayBuffer=await blob.arrayBuffer();const html=(await mammoth.convertToHtml({arrayBuffer},{ignoreEmptyParagraphs:false})).value||'';recipes=parseDocxMulti(html,x.file_name||'Imported document',expected);}else if(/\.pdf$/i.test(x.file_name||'')||String(x.mime_type||'').toLowerCase().includes('application/pdf')){recipes=await extractPdfMulti(blob,x.file_name||'Imported PDF',status);}else if((x.mime_type||'').startsWith('text/')){recipes=parseTextMulti(await blob.text(),x.file_name||'Imported document');if(!recipes.length){const r=makeRecipe(x.file_name||'Imported recipe');r.ingredients=cleanIngredientLines(await blob.text());recipes=[r];}}else throw Error('This multi-recipe importer currently supports images, DOCX and text documents.');if(!recipes.length)throw Error('No recipes could be detected.');recipes=recipes.map(r=>{
+  r=stripImportCitations(r);
   const method=(Array.isArray(r.method)?r.method:lines(r.method)).map(clean).filter(x=>!isOcrGarbage(x));
   const notes=(Array.isArray(r.notes)?r.notes:lines(r.notes)).map(clean).filter(x=>!isOcrGarbage(x));
   const kept=[];
