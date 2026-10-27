@@ -285,8 +285,8 @@ function parseLegacyDocRecipe(text,fileName){
 async function showLegacyDocWithQualityGate(x,id,recipe,rawText,stageName){
  let quality;
  try{quality=checkRecipeQuality(recipe,{mode:'single'});await extractionDiag(id,'legacy_doc_quality_gate_result',{stage:stageName,good:quality.good,score:quality.score,reasons:quality.reasons,metrics:quality.metrics});}
- catch(error){await extractionDiag(id,'legacy_doc_quality_gate_error',{stage:stageName,message:error?.message||String(error)});try{const rescue=await import('./rescue-ocr.js?v=1.1.11');return await rescue.rescueImport(id)}catch(e){return window.ccShowError('The Word import could not be validated and Rescue Editor could not open: '+(e?.message||String(e)),'Rescue Editor unavailable')}}
- if(!quality.good){await extractionDiag(id,'rescue_editor_fallback',{stage:'legacy_doc_quality_gate_failed',source_stage:stageName,quality});try{const rescue=await import('./rescue-ocr.js?v=1.1.11');return await rescue.rescueImport(id)}catch(e){return window.ccShowError('The Word import did not pass the recipe quality check and Rescue Editor could not open: '+(e?.message||String(e)),'Rescue Editor unavailable')}}
+ catch(error){await extractionDiag(id,'legacy_doc_quality_gate_error',{stage:stageName,message:error?.message||String(error)});try{const rescue=await import('./rescue-ocr.js?v=1.1.1');return await rescue.rescueImport(id)}catch(e){return window.ccShowError('The Word import could not be validated and Rescue Editor could not open: '+(e?.message||String(e)),'Rescue Editor unavailable')}}
+ if(!quality.good){await extractionDiag(id,'rescue_editor_fallback',{stage:'legacy_doc_quality_gate_failed',source_stage:stageName,quality});try{const rescue=await import('./rescue-ocr.js?v=1.1.1');return await rescue.rescueImport(id)}catch(e){return window.ccShowError('The Word import did not pass the recipe quality check and Rescue Editor could not open: '+(e?.message||String(e)),'Rescue Editor unavailable')}}
  return await showReview({...x,extraction_status:'ready',extracted_text:JSON.stringify({recipe,raw_text:rawText})},id);
 }
 async function reviewLegacyDoc(x,id){
