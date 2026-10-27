@@ -2,8 +2,8 @@ const clean=s=>String(s??'').replace(/[\u0000-\u001F\u007F\uFFFD]/g,' ').replace
 
 const GENERIC=/^(recipe|recipes|ingredients?|ingredient list|the ingredients|method|the method|directions?|the directions|instructions?|the instructions|preparation|the preparation|steps?|the steps|contents?|index|introduction|description|overview|component breakdown|step[- ]by[- ]step execution plan|notes?|tips?|storage|serving suggestions?|servings?|yield)[:.]?$/i;
 const SECTION={
-  ingredients:/^(?:the\s+)?ingredients?(?:\s+(?:list|profile|section))?\s*:?$/i,
-  method:/^(?:the\s+)?(?:instructions?|method|directions?|preparation|steps?|stages?|step[- ]by[- ]step(?: execution)?(?: guide| instructions?)?)\s*:?$/i,
+  ingredients:/^(?:(?:the\s+)?ingredients?(?:\s+(?:list|profile|section|needed|required))?|ingredient\s+list|ingredients\s+list)\s*:?$/i,
+  method:/^(?:(?:the\s+)?(?:instructions?|method|directions?|preparation|steps?|stages?)|step[- ]by[- ]step(?:\s+(?:execution\s+)?(?:guide|instructions?))?|step[- ]by[- ]step\s+cooking\s+instructions|cooking\s+instructions|cooking\s+method|how\s+to\s+make|procedure)\s*:?$/i,
   notes:/^(?:the\s+)?(?:notes?|storage|serving suggestions?)\s*:?$/i
 };
 const COMPONENT=/^(?:\d+[.)]?\s*)?(?:the\b.*\b(?:marinade|glaze|sauce|rub|dressing|paste|filling|stuffing|topping|mixture|aromatics?|seasoning|spice blend|velveting|brine|batter|coating|garnish|cooking|chicken|beef|pork|fish|vegetables?)\b|for\b.*\b(?:cooking|serving|garnish|sauce|chicken|beef|pork|fish|vegetables?)\b)$/i;
@@ -12,10 +12,14 @@ const UNIT=/\b(?:g|gm|kg|mg|ml|l|oz|lb|lbs|tsp|tbsp|cup|cups|pint|pints|quart|qu
 const NUMBER=/\b\d+(?:[.,]\d+)?(?:\s*[½¼¾⅓⅔⅛⅜⅝⅞])?\b/;
 const META=/^(?:prep|preparation|cook|cooking|steam|steaming|chill|chilling|fry|frying|rest|resting|freeze|freezing|yield|makes?|serves?|servings?|total|active|inactive|time|difficulty|cuisine|course)\b/i;
 
+function stripCitationArtifacts(s){return String(s||'').replace(/[ \t]*\[\s*\d+(?:\s*[,;]\s*\d+)+\s*\]/g,'').replace(/[ \t]{2,}/g,' ');}
+
 function cleanRecipeText(s){
   return clean(s)
+    .replace(/\s*\[\s*\d+(?:\s*[,;]\s*\d+)+\s*\]\s*/g,' ')
     .replace(/\s*\[(?:\s*\d+\s*(?:,\s*\d+\s*)*)\]\s*/g,' ')
     .replace(/\s*\[(?:\s*\d+\s*(?:-\s*\d+)?\s*)\]\s*/g,' ')
+    .replace(/^u>\s*/i,'')
     .replace(/\s{2,}/g,' ')
     .trim();
 }
@@ -104,7 +108,7 @@ function escHtml(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt
 export function parseDocx(html,fileName='Imported document'){
   const doc=new DOMParser().parseFromString(html,'text/html');
   const nodes=[...doc.querySelectorAll('h1,h2,h3,h4,h5,h6,p,li')]
-    .flatMap(e=>expandedLines(e.textContent||'').map(text=>({raw:text,text,tag:e.tagName.toLowerCase(),html:safeInlineHtml(e.innerHTML),listType:e.parentElement?.tagName?.toLowerCase()||''})))
+    .flatMap(e=>expandedLines(e.textContent||'').map(text=>({raw:text,text,tag:e.tagName.toLowerCase(),bold:/^H[1-6]$/.test(e.tagName)||!!e.querySelector('strong,b'),html:safeInlineHtml(e.innerHTML),listType:e.parentElement?.tagName?.toLowerCase()||''})))
     .filter(n=>n.text);
   if(!nodes.length)return[];
 
@@ -142,12 +146,24 @@ export function parseDocx(html,fileName='Imported document'){
     const sourceTitle=nodes[start].text;
     const r=makeRecipe(embeddedTitle(sourceTitle)||sourceTitle);
     let current='';
+    const description=[];
     const rich={ingredients:[],method:[],notes:[]};
     for(const n of nodes.slice(start+1,end)){
       const t=cleanRecipeText(n.text);
       if(SECTION.ingredients.test(t)){current='ingredients';continue;}
       if(SECTION.method.test(t)){current='method';continue;}
       if(SECTION.notes.test(t)){current='notes';continue;}
+      // In multi-recipe Word documents, bold standalone headings after a completed
+      // method often introduce source/promotional material rather than another step.
+      // Route that heading and following prose to Notes, until another recognized
+      // recipe section begins. Do not trigger for numbered or imperative cooking steps.
+      const isStandaloneHeading=(n.tag&&/^h[1-6]$/.test(n.tag)||n.bold)&&t.length<=70&&!/[.!?]$/.test(t);
+      const looksLikeStep=/^(?:step\s*\d+|\d+[.)]\s+|(?:mix|add|heat|bake|cook|stir|pour|place|remove|cover|serve|grill|cut|drain|blend|whisk|combine|bring|allow|leave|roll|fold|preheat|season|marinate|fry|simmer|boil|peel|chop)\b)/i.test(t);
+      if(current==='method'&&isStandaloneHeading&&!looksLikeStep&&t.split(/\s+/).length<=7){
+        current='notes';
+        r.notes.push(t);rich.notes.push(n);
+        continue;
+      }
       if(isGarbage(t))continue;
 
       // Inline Note:/Notes:/Tip: paragraphs commonly occur at the end of a
@@ -176,6 +192,7 @@ export function parseDocx(html,fileName='Imported document'){
         continue;
       }
 
+      if(!current){description.push(t);continue;}
       if(current==='ingredients'){
         if(COMPONENT.test(t)){r.ingredients.push(t);rich.ingredients.push(n);continue;}
         if(!STEP.test(t)){r.ingredients.push(t);rich.ingredients.push(n);}
@@ -185,12 +202,13 @@ export function parseDocx(html,fileName='Imported document'){
         r.notes.push(t);rich.notes.push(n);
       }
     }
+    r.description=[...new Set(description)].filter(Boolean).join('\n');
     r.ingredients=[...new Set(r.ingredients)].filter(Boolean);
     r.method=[...new Set(r.method)].filter(Boolean);
     r.notes=[...new Set(r.notes)].filter(Boolean);
-    r.ingredientsHtml=richSection(rich.ingredients);
-    r.methodHtml=richSection(rich.method);
-    r.notesHtml=richSection(rich.notes);
+    r.ingredientsHtml=stripCitationArtifacts(richSection(rich.ingredients));
+    r.methodHtml=stripCitationArtifacts(richSection(rich.method));
+    r.notesHtml=stripCitationArtifacts(richSection(rich.notes));
     if(r.ingredients.length||r.method.length)recipes.push(r);
   }
 
