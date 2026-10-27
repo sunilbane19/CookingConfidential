@@ -1,7 +1,7 @@
 import { supabase } from './supabase-client-legacy.js?v=1.0.0';
 import * as mammoth from 'https://esm.sh/mammoth@1.6.0';
 import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
-import { checkRecipeQuality } from './recipe-quality.js?v=1.0.8';
+import { checkRecipeQuality } from './recipe-quality.js?v=1.0.9';
 import { readSourceTextWithVision } from './vision-text-reader.js?v=1.0.0';
 import { createGenericEditor, editorValue, sanitizeRichHtml as sanitizeGenericRichHtml } from './generic-editor.js?v=1.3.10';
 import { parseDocx } from './docx-parser.js?v=1.0.14';
@@ -237,33 +237,73 @@ function normalizeLegacyDocSections(value){
  out.push(...line.split('\n').map(v=>v.replace(/^\s*(?:[-*+•·]|\d+[.)])\s*/,'').trim()).filter(Boolean));}
  return out.join('\n').replace(/\n{3,}/g,'\n\n').trim();
 }
+function legacyDocStoredText(item){
+  const value=item?.extracted_text;
+  if(typeof value!=='string')return '';
+  try{
+    const parsed=JSON.parse(value);
+    if(typeof parsed==='string')return parsed;
+    for(const key of ['raw_text','text','extracted_text','content','markdown','plain_text']){
+      if(typeof parsed?.[key]==='string'&&parsed[key].trim())return parsed[key];
+    }
+    const recipe=parsed?.recipe&&typeof parsed.recipe==='object'?parsed.recipe:parsed;
+    if(recipe&&typeof recipe==='object'){
+      const lines=[];
+      if(recipe.name)lines.push(String(recipe.name));
+      if(recipe.description)lines.push('Description:',String(recipe.description));
+      if(Array.isArray(recipe.ingredients)){lines.push('Ingredients:',...recipe.ingredients.map(v=>typeof v==='string'?v:[v?.quantity,v?.unit,v?.name].filter(Boolean).join(' ')));}
+      else if(typeof recipe.ingredients==='string')lines.push('Ingredients:',recipe.ingredients);
+      const method=Array.isArray(recipe.method)?recipe.method:typeof recipe.method==='string'?[recipe.method]:[];
+      if(method.length)lines.push('Preparation:',...method);
+      if(recipe.personal_notes||recipe.notes)lines.push('Notes:',String(recipe.personal_notes||recipe.notes));
+      if(lines.length>1)return lines.join('\\n');
+    }
+  }catch{}
+  return value;
+}
 function parseLegacyDocRecipe(text,fileName){
- const lines=String(text||'').replace(/\r/g,'').split('\n').map(v=>v.replace(/^\s*(?:[-*+•·]|\d+[.)])\s*/,'').replace(/[ \t]+/g,' ').trim()).filter(Boolean);
- const ii=lines.findIndex(v=>/^(?:general\s+)?ingredients?\s*:?\s*$/i.test(v));if(ii<0)return null;
- const mi=lines.findIndex((v,i)=>i>ii&&/^(?:method|directions?|instructions?|preparation|steps?)\s*:?\s*$/i.test(v));if(mi<0)return null;
- const ni=lines.findIndex((v,i)=>i>mi&&/^(?:notes?|servings?)\s*:?\s*$/i.test(v));
- const fileTitle=String(fileName||'Imported recipe').replace(/\.doc$/i,'').replace(/[_-]+/g,' ').trim(),before=lines.slice(0,ii).filter(v=>!/^description\s*:?\s*$/i.test(v)),title=before[0]||fileTitle;
- const ingredients=lines.slice(ii+1,mi).filter(v=>v&&!/^description\s*:?\s*$/i.test(v)),method=lines.slice(mi+1,ni<0?lines.length:ni).filter(Boolean),notes=ni<0?[]:lines.slice(ni+1);
- if(ingredients.length<3||method.join(' ').length<35)return null;
- return {name:title,description:before.filter(v=>v!==title).join(' '),ingredients,method,personal_notes:notes.join('\n'),servings:'',cuisine:'',course:''};
+  const lines=String(text||'').replace(/\r/g,'').split('\n').map(v=>String(v).replace(/^\s*(?:[-*+•·]|\d+[.)])\s*/,'').replace(/[ \t]+/g,' ').trim()).filter(Boolean);
+  const heading=/^(?:general\s+)?ingredients?\s*:?\s*$/i;
+  const methodHeading=/^(?:method|directions?|instructions?|preparation|steps?)\s*:?\s*$/i;
+  const descriptionHeading=/^description\s*:?\s*$/i;
+  const notesHeading=/^(?:notes?|servings?)\s*:?\s*$/i;
+  const ii=lines.findIndex(v=>heading.test(v));
+  if(ii<0)return null;
+  const mi=lines.findIndex((v,i)=>i>ii&&methodHeading.test(v));
+  if(mi<0)return null;
+  const ni=lines.findIndex((v,i)=>i>mi&&notesHeading.test(v));
+  const before=lines.slice(0,ii).filter(v=>!descriptionHeading.test(v));
+  const fileTitle=String(fileName||'Imported recipe').replace(/\.doc$/i,'').replace(/[_-]+/g,' ').trim();
+  const title=titleQuality(fileTitle)>=.68?fileTitle:(before[0]||fileTitle);
+  const description=before.filter(v=>v!==title).join(' ').trim();
+  const ingredients=lines.slice(ii+1,mi).filter(v=>!descriptionHeading.test(v)&&!/^ingredients?\s*:?\s*$/i.test(v)).map(v=>v.replace(/^[-*•·]\s*/,'').trim()).filter(Boolean);
+  const method=lines.slice(mi+1,ni>=0?ni:lines.length).filter(v=>!methodHeading.test(v)&&!descriptionHeading.test(v)).map(v=>v.replace(/^\d+[.)]\s*/,'').trim()).filter(Boolean);
+  const notes=ni>=0?lines.slice(ni+1).filter(Boolean):[];
+  if(ingredients.length<3||method.join(' ').length<35)return null;
+  return {name:title||fileTitle,description,ingredients,method,personal_notes:notes.join('\n'),servings:'',cuisine:'',course:''};
+}
+async function showLegacyDocWithQualityGate(x,id,recipe,rawText,stageName){
+ let quality;
+ try{quality=checkRecipeQuality(recipe,{mode:'single'});await extractionDiag(id,'legacy_doc_quality_gate_result',{stage:stageName,good:quality.good,score:quality.score,reasons:quality.reasons,metrics:quality.metrics});}
+ catch(error){await extractionDiag(id,'legacy_doc_quality_gate_error',{stage:stageName,message:error?.message||String(error)});try{const rescue=await import('./rescue-ocr.js?v=1.1.1');return await rescue.rescueImport(id)}catch(e){return window.ccShowError('The Word import could not be validated and Rescue Editor could not open: '+(e?.message||String(e)),'Rescue Editor unavailable')}}
+ if(!quality.good){await extractionDiag(id,'rescue_editor_fallback',{stage:'legacy_doc_quality_gate_failed',source_stage:stageName,quality});try{const rescue=await import('./rescue-ocr.js?v=1.1.1');return await rescue.rescueImport(id)}catch(e){return window.ccShowError('The Word import did not pass the recipe quality check and Rescue Editor could not open: '+(e?.message||String(e)),'Rescue Editor unavailable')}}
+ return await showReview({...x,extraction_status:'ready',extracted_text:JSON.stringify({recipe,raw_text:rawText})},id);
 }
 async function reviewLegacyDoc(x,id){
  try{
-  await extractionDiag(id,'legacy_docstream_review_start',{file_name:x.file_name});
-  if(!x.file_path)throw new Error('The original .doc file is not attached to this import.');
-  const signed=await getCachedSignedUrl(supabase,'cooking-confidential',x.file_path),response=await fetch(signed);
-  if(!response.ok)throw new Error('Could not download the original .doc file for parsing.');
-  const parser=await loadLegacyDocstream(),ast=await parser.parseOffice(await (await response.blob()).arrayBuffer());
-  const md=typeof ast?.toMarkdown==='function'?String(ast.toMarkdown()||''):'',plain=typeof ast?.toText==='function'?String(ast.toText()||''):'';
-  const text=normalizeLegacyDocSections(md.trim()?md:plain);if(!text)throw new Error('Docstream could not extract readable text from this .doc file.');
-  const recipe=parseLegacyDocRecipe(text,x.file_name);if(!recipe)throw new Error('Word text was read, but the Ingredients and Method sections could not be identified reliably.');
-  const q=checkRecipeQuality(recipe,{mode:'single'});await extractionDiag(id,'legacy_doc_quality_gate_result',{good:q.good,score:q.score,reasons:q.reasons});
-  if(!q.good)throw new Error('The extracted recipe did not pass the quality check. Please use Rescue Editor for this file.');
-  return showReview({...x,extraction_status:'ready',extracted_text:JSON.stringify({recipe,raw_text:text})},id);
- }catch(e){await extractionDiag(id,'legacy_docstream_review_failed',{message:e?.message||String(e)});return window.ccShowError(e?.message||'Could not read this legacy Word document.','Word extraction failed')}
+  await extractionDiag(id,'legacy_docstream_review_start',{file_name:x.file_name,extraction_status:x.extraction_status,review_status:x.review_status});
+  const text=await extractLegacyDocText(x),recipe=parseLegacyDocRecipe(text,x.file_name);
+  if(recipe){await extractionDiag(id,'legacy_docstream_review_structured',{ingredients:recipe.ingredients.length,method_length:recipe.method.join(' ').length,parser:'docstream+legacy-section-parser'});return await showLegacyDocWithQualityGate(x,id,recipe,text,'docstream_review')}
+  await extractionDiag(id,'legacy_docstream_review_structure_incomplete',{text_length:text.length,preview:text.slice(0,1600)});
+ }catch(error){await extractionDiag(id,'legacy_docstream_review_failed',{message:error?.message||String(error)})}
+ try{
+  const stored=legacyDocStoredText(x),recipe=parseLegacyDocRecipe(stored,x.file_name);
+  if(recipe){await extractionDiag(id,'legacy_doc_stored_text_structured_fallback',{parser:'stored-extracted-text',ingredients:recipe.ingredients.length,method_length:recipe.method.join(' ').length});return await showLegacyDocWithQualityGate(x,id,recipe,stored,'stored_text_fallback')}
+  await extractionDiag(id,'legacy_doc_stored_text_structure_incomplete',{text_length:stored.length,preview:stored.slice(0,1600)});
+ }catch(error){await extractionDiag(id,'legacy_doc_stored_text_fallback_failed',{message:error?.message||String(error)})}
+ return window.ccShowError('The Word text could not be structured reliably. Please open Rescue Editor for this file.','Word extraction needs review');
 }
-
-const REVIEW_MODULE_VERSION='1.4.109';
+const REVIEW_MODULE_VERSION='1.4.135';
 export async function reviewImportFixed(id){window.ccImportReviewActive=true;await extractionDiag(id,'review_module_version',{version:REVIEW_MODULE_VERSION});window.ccReturnToImportInbox=true;importDialog?.close();detailDialog.querySelector('#detailContent').innerHTML='<div class="dialog-card"><p class="eyebrow">REVIEW IMPORT</p><h2>Preparing recipe…</h2><p class="small-note">Reading the selected upload. This may take a few seconds.</p></div>';detailDialog.showModal();let{data:x,error}=await supabase.from('cc_import_items').select('*').eq('id',id).single();if(error||!x){detailDialog.close();return window.ccShowError(error?.message||'Import item could not be loaded.','Could not load import')}const displayName=x.file_name||x.source_url||'Recipe import';await extractionDiag(id,'review_open',{file_name:x.file_name||null,mime_type:x.mime_type||null,extraction_status:x.extraction_status,review_status:x.review_status,has_scanned_pdf:typeof x.extracted_text==='string'&&x.extracted_text.includes('"scanned_pdf":true')});detailDialog.querySelector('#detailContent').innerHTML='<div class="dialog-card import-preparing"><p class="eyebrow">REVIEW IMPORT</p><h2>Preparing your recipe</h2><p class="small-note">Reading <strong>'+esc(displayName)+'</strong>.</p><div style="margin:18px 0 8px;padding:12px 14px;border:1px solid rgba(120,70,50,.18);border-radius:10px;background:rgba(120,70,50,.05);font-size:14px;line-height:1.5;color:#5d514a"><strong>Almost there.</strong><br>Your recipe is being extracted now.</div><p class="small-note import-status" style="margin-top:10px">Please keep this window open while the recipe is extracted.</p></div>';const image=/\.(png|jpe?g|webp)$/i.test(x.file_name||'')||String(x.mime_type||'').startsWith('image/');if(image){detailDialog.close();try{const mod=await import('./generic-image-review.js?v=1.2.0');if(typeof mod.reviewImage==='function')return mod.reviewImage(id);throw new Error('Image review function is unavailable.')}catch(e){console.error('[CC image trace] explicit Review routing failed',{id,message:e?.message,stack:e?.stack});return window.ccShowError(e.message||'Could not open image review.','Could not open image review')}}const pdf=/\.pdf$/i.test(x.file_name||'')||x.mime_type==='application/pdf';if(/\.doc$/i.test(x.file_name||'')&&x.review_status!=='approved')return reviewLegacyDoc(x,id);if(x.extraction_status==='pending'||x.extraction_status==='processing'){await extractionDiag(id,'before_invoke_extract',{status:x.extraction_status,pdf});const{error:fx}=await invokeExtract(id);if(fx){await extractionDiag(id,'invoke_extract_failed',{message:fx.message||null,status:fx.status||null});let detail=fx.message||'The recipe could not be extracted.';try{const ctx=fx.context;const body=ctx?.json?await ctx.json():ctx?.text?await ctx.text():null;if(body)detail=typeof body==='string'?body:(body.error||body.message||JSON.stringify(body))}catch{}if(!pdf){return window.ccShowError(detail,'Recipe extraction failed')}try{const mod=await import('./scanned-pdf-ocr.js?v=1.0.89');await extractionDiag(id,'legacy_scanned_pdf_invoked',{module:'scanned-pdf-ocr.js'});const out=await mod.ocrScannedPdf(id,x);x=out.item;const rr=out.recipe||{};if(!Array.isArray(rr.ingredients)||rr.ingredients.length<3){const rescue=await import('./rescue-ocr.js?v=1.1.1');return rescue.rescueImport(id)}}catch(e){try{const rescue=await import('./rescue-ocr.js?v=1.1.1');return rescue.rescueImport(id)}catch(_){return window.ccShowError(e.message||'The scanned PDF could not be read.','Scanned PDF could not be read')}}}else{await extractionDiag(id,'invoke_extract_succeeded',{});const q=await supabase.from('cc_import_items').select('*').eq('id',id).single();if(q.error)return window.ccShowError(q.error.message,'Could not refresh import');x=q.data;await extractionDiag(id,'after_invoke_refresh',{extraction_status:x.extraction_status,source_title:x.source_title,has_scanned_pdf:typeof x.extracted_text==='string'&&x.extracted_text.includes('"scanned_pdf":true'),extracted_length:String(x.extracted_text||'').length})}}// x is already current here: the initial read is sufficient for ready items, and
   // pending/processing items refresh x themselves after extraction. Avoiding a
   // second identical Supabase read prevents Review from hanging on this path.
