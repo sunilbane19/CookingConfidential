@@ -257,6 +257,17 @@ function parseLegacyDocRecipe(text,fileName){
   const ni=lines.findIndex((v,i)=>i>mi&&notesHeading.test(v));
   const before=lines.slice(0,ii).filter(v=>!descriptionHeading.test(v));
   const fileTitle=String(fileName||'Imported recipe').replace(/\.doc$/i,'').replace(/[_-]+/g,' ').trim();
+  const titleQuality=value=>{
+    const v=String(value||'').replace(/\\s+/g,' ').trim();
+    if(!v||v.length<3||v.length>160)return 0;
+    const letters=(v.match(/[A-Za-zÀ-ÖØ-öø-ÿ]/g)||[]).length;
+    const words=v.split(/\\s+/).filter(Boolean);
+    let score=letters/Math.max(1,v.length);
+    if(words.length>=2)score+=.18;
+    if(/[A-Za-zÀ-ÖØ-öø-ÿ].*[A-Za-zÀ-ÖØ-öø-ÿ]/.test(v))score+=.08;
+    if(/[,:;()\\[\\]{}]/.test(v))score-=.08;
+    return score;
+  };
   const title=titleQuality(fileTitle)>=.68?fileTitle:(before[0]||fileTitle);
   const description=before.filter(v=>v!==title).join(' ').trim();
   const ingredients=lines.slice(ii+1,mi).filter(v=>!descriptionHeading.test(v)&&!/^ingredients?\s*:?\s*$/i.test(v)).map(v=>v.replace(/^[-*•·]\s*/,'').trim()).filter(Boolean);
@@ -337,7 +348,7 @@ async function extractLegacyDocText(item){
   return text;
 }
 
-const REVIEW_MODULE_VERSION='1.4.137';
+const REVIEW_MODULE_VERSION='1.4.138';
 export async function reviewImportFixed(id){window.ccImportReviewActive=true;await extractionDiag(id,'review_module_version',{version:REVIEW_MODULE_VERSION});window.ccReturnToImportInbox=true;importDialog?.close();detailDialog.querySelector('#detailContent').innerHTML='<div class="dialog-card"><p class="eyebrow">REVIEW IMPORT</p><h2>Preparing recipe…</h2><p class="small-note">Reading the selected upload. This may take a few seconds.</p></div>';detailDialog.showModal();let{data:x,error}=await supabase.from('cc_import_items').select('*').eq('id',id).single();if(error||!x){detailDialog.close();return window.ccShowError(error?.message||'Import item could not be loaded.','Could not load import')}const displayName=x.file_name||x.source_url||'Recipe import';await extractionDiag(id,'review_open',{file_name:x.file_name||null,mime_type:x.mime_type||null,extraction_status:x.extraction_status,review_status:x.review_status,has_scanned_pdf:typeof x.extracted_text==='string'&&x.extracted_text.includes('"scanned_pdf":true')});detailDialog.querySelector('#detailContent').innerHTML='<div class="dialog-card import-preparing"><p class="eyebrow">REVIEW IMPORT</p><h2>Preparing your recipe</h2><p class="small-note">Reading <strong>'+esc(displayName)+'</strong>.</p><div style="margin:18px 0 8px;padding:12px 14px;border:1px solid rgba(120,70,50,.18);border-radius:10px;background:rgba(120,70,50,.05);font-size:14px;line-height:1.5;color:#5d514a"><strong>Almost there.</strong><br>Your recipe is being extracted now.</div><p class="small-note import-status" style="margin-top:10px">Please keep this window open while the recipe is extracted.</p></div>';const image=/\.(png|jpe?g|webp)$/i.test(x.file_name||'')||String(x.mime_type||'').startsWith('image/');if(image){detailDialog.close();try{const mod=await import('./generic-image-review.js?v=1.2.0');if(typeof mod.reviewImage==='function')return mod.reviewImage(id);throw new Error('Image review function is unavailable.')}catch(e){console.error('[CC image trace] explicit Review routing failed',{id,message:e?.message,stack:e?.stack});return window.ccShowError(e.message||'Could not open image review.','Could not open image review')}}const pdf=/\.pdf$/i.test(x.file_name||'')||x.mime_type==='application/pdf';// Legacy .doc files must be read through Docstream on every Review attempt,
 // not only while the import row is pending/processing. Existing rows may already
 // be marked ready by the server extractor even though their structure is unusable.
