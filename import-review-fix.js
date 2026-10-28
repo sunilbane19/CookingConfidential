@@ -167,7 +167,7 @@ async function showReview(x,id){
       ]},
       {group:[
         {label:'Recipe type',name:'recipe_type',value:r.recipe_type||'',type:'select',options:types,allowCustom:true},
-        {label:'Dietary / suitability',name:'dietary_tags',value:Array.isArray(r.dietary_tags)?r.dietary_tags:[],type:'multiselect',options:dietaryOptions}
+        {label:'Dietary / suitability',name:'dietary_tags',value:Array.isArray(r.dietary_tags)?r.dietary_tags:[],type:'multiselect',options:dietaryOptions,className:'cc-import-dietary-field'}
       ]},
       {label:'Servings',name:'servings',value:r.servings||''},
       {label:'Ingredients',name:'ingredients',value:r.ingredientsHtml||ingredientHtml,type:'richtext'},
