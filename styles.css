@@ -269,3 +269,11 @@ dialog .dialog-card{box-sizing:border-box;max-width:100%;min-width:0;overflow-x:
 #detailContent #ccGenericEditorForm .two-col>.cc-multi-field{row-gap:0!important;}
 #detailContent #ccGenericEditorForm .two-col>.cc-multi-field .cc-multi-trigger{height:49px!important;min-height:49px!important;}
 @media(max-width:760px){#detailContent #ccGenericEditorForm .two-col>.cc-multi-field{margin-top:16px!important;}}
+
+/* Import-editor-only dietary alignment, verified on Staging. */
+#detailContent #ccGenericEditorForm .two-col > .cc-import-dietary-field {
+  margin-top: 16px !important;
+}
+#detailContent #ccGenericEditorForm .two-col > .cc-import-dietary-field > .cc-multi-field-label {
+  margin-bottom: 7px !important;
+}
