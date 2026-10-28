@@ -210,7 +210,6 @@ async function showReview(x,id){
       const u=await supabase.from('cc_import_items').update({recipe_id:savedId,review_status:'approved',extraction_status:'ready'}).eq('id',id);
       if(u.error)return window.ccShowError(u.error.message,'Could not update import status');
       detailDialog.close();
-      window.location.reload();
     }
   });
   if(window.ccMountImagePicker)window.ccMountImagePicker(editor,r.name||'');
