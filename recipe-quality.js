@@ -3,7 +3,7 @@
 // has produced recipe fields. It does not rewrite content.
 const words = s => String(s ?? '').trim().split(/\s+/).filter(Boolean);
 const letters = s => (String(s ?? '').match(/[A-Za-zÀ-ÖØ-öø-ÿ]/g) || []).length;
-const junkChars = s => (String(s ?? '').match(/[\uFFFD©®™|¦]{1,}/g) || []).length;
+const junkChars = s => (String(s ?? '').match(/[\uFFFD©®™¦]{1,}/g) || []).length;
 
 // Check repeated lines within each recipe section, not across sections.
 // A title repeated as the first line of a method is common source material
