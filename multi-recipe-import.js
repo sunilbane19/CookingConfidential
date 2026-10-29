@@ -89,20 +89,40 @@ function docxRecipeBlocks(doc){
       !/[.!?]$/.test(text) &&
       !/^(?:ingredients?|method|preparation|instructions?|directions?|notes?|description|step[- ]by[- ]step)/i.test(text);
   };
-  for(const el of [...doc.querySelectorAll('h1,h2,h3,h4,h5,h6,p,li')]){
+  const elements=[...doc.querySelectorAll('h1,h2,h3,h4,h5,h6,p,li')];
+  for(let idx=0;idx<elements.length;idx++){
+    const el=elements[idx];
     const text=clean(el.textContent);
     if(!text){if(el.tagName==='P')push();continue;}
     const item={text,bold:/^H[1-6]$/.test(el.tagName)||!!el.querySelector('strong,b'),tag:el.tagName.toLowerCase()};
-    // In Word recipe collections, recipe names are often bold paragraphs rather than
-    // headings. Start a new block only after the current block already has both
-    // recipe section markers. A trailing bold promotional title then starts its own
-    // block and is rejected later because it has no Ingredients + Method sections.
+    // Some cookbooks put the actual recipe name in a plain paragraph and the
+    // translated name/yield in the following bold paragraph, e.g.
+    // "Saoi Mutton" then "Mutton Gravy | Serves 4–6". Treat the plain line as
+    // the recipe boundary when that immediately-following subtitle pattern exists.
+    const next=elements[idx+1];
+    const nextText=clean(next?.textContent);
+    const nextIsYieldSubtitle=!!next&&(/^H[1-6]$/.test(next.tagName)||!!next.querySelector('strong,b'))&&
+      /(?:\\||[–—-])\\s*(?:serves?|servings?|makes?|yield)\\b/i.test(nextText);
+    if(!item.bold&&nextIsYieldSubtitle&&text.length>=3&&text.length<=85&&!/[.!?]$/.test(text))item.bold=true;
+    // Start a new block only after the current block already has both recipe
+    // section markers. The title and its yield subtitle then stay in the same block.
     if(titleLike(item)&&hasIngredientHeading(current)&&hasMethodHeading(current))push();
     current.push(item);
   }
   push();
   return blocks;
 }
+function splitRecipeTitleYield(recipe){
+  if(!recipe||typeof recipe.name!=='string')return recipe;
+  const name=clean(recipe.name);
+  const match=name.match(/^(.+?)\s+(serves?|servings?|makes?|yield)\s+(.+)$/i);
+  if(match){
+    recipe.name=clean(match[1]);
+    if(!clean(recipe.servings))recipe.servings=clean(match[2]+' '+match[3]);
+  }
+  return recipe;
+}
+
 function looksLikeIngredientTitle(s){
   const x=clean(s);
   // A title explicitly wrapped in Markdown bold markers in a DOCX is often a pasted
@@ -137,7 +157,7 @@ function parseDocxMulti(html,file,expectedCount=0){
       }).join('');
       const parsed=parseDocx(chunk,file+' — '+block[0].text);
       const recipe=parsed.find(r=>(r.ingredients?.length||0)>=2&&(r.method?.length||0)>0);
-      if(recipe)separated.push(recipe);
+      if(recipe)separated.push(splitRecipeTitleYield(recipe));
     }
   }
   // Once multiple explicitly structured recipe blocks have been found, return only
@@ -377,7 +397,7 @@ function editOne(id,x,recipes,i){
       ]},
       {group:[
         {label:'Cuisine',name:'cuisine',value:r.cuisine||''},
-        {label:'Dietary / suitability',name:'dietary_tags',value:Array.isArray(r.dietary_tags)?r.dietary_tags:[],type:'multiselect',options:dietaryOptions}
+        {label:'Dietary / suitability',name:'dietary_tags',value:Array.isArray(r.dietary_tags)?r.dietary_tags:[],type:'multiselect',options:dietaryOptions,className:'cc-multi-field'}
       ]},
       {label:'Servings',name:'servings',value:r.servings||''},
       {label:'Ingredients',name:'ingredients',value:richValue(r.ingredients),type:'richtext'},
