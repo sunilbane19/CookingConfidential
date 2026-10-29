@@ -214,6 +214,14 @@ async function showRecipe(id){
     r=data;
     recipeDetailCache.set(recipeId,r);
   }
+  let creatorName=r.creator_name||creatorNameCache.get(r.created_by)||'';
+  if(!creatorName&&r.created_by){
+    const creatorResult=await supabase.from('cc_members').select('display_name').eq('auth_user_id',r.created_by).maybeSingle();
+    if(!creatorResult.error&&creatorResult.data)creatorName=creatorResult.data.display_name||'';
+    creatorNameCache.set(r.created_by,creatorName);
+  }
+  r={...r,creator_name:creatorName};
+  recipeDetailCache.set(recipeId,r);
   window.ccCurrentRecipe=r;
   const dietaryTags=Array.isArray(r.dietary_tags)?r.dietary_tags.map(tag=>typeof tag==='string'?tag:String(tag?.label||tag?.name||'')).map(tag=>tag.trim()).filter(Boolean):[];
   const dietarySection=dietaryTags.length?'<div class="detail-section"><h4>Dietary / suitability</h4><div>'+dietaryTags.map(tag=>'<span class="tag">'+esc(tag)+'</span>').join(' ')+'</div></div>':'';
