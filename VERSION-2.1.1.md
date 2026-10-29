@@ -1,6 +1,6 @@
 # Cooking Confidential — Version 2.1.1 Targeted Live Patch
 
-**Status:** Closed — deployed and verified by the user  
+**Status:** Closed — deployed and verified by the user; follow-up DOCX parser regression resolved in Version 2.1.2  
 **Date:** 28 October 2026  
 **Live site:** https://cookingconfidential.in/  
 **Repository:** https://github.com/sunilbane19/CookingConfidential  
@@ -40,4 +40,4 @@ This was a deliberately targeted promotion from Staging. No broad Staging-to-Liv
 
 The user reported that this DOCX entered Rescue Editor even though it contains a title, Description, Ingredients, and Method sections. The extracted text is readable, but some ingredient lines appear concatenated in the Rescue Editor view.
 
-**Status: Open, separate from this deployment closeout.** Do not treat the Rescue issue as fixed by this patch. Investigate the DOCX import route and parser section/line-boundary handling, reproduce with the supplied file, and add a regression test before changing parser rules.
+**Status: Closed in Version 2.1.2.** The inline section-label matching expression was corrected and deployed. The user confirmed Mooli Parathas, Manjiri Kolhapur Mutton Masala, and Sabudana Wada now work on Live. See [Version 2.1.2](VERSION-2.1.2.md).
