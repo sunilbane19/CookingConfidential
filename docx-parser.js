@@ -132,6 +132,15 @@ export function parseDocx(html,fileName='Imported document'){
   const candidates=[]; let section='';
   for(let i=0;i<nodes.length;i++){
     const t=nodes[i].text;
+    // Some DOCX files collapse a section label and its first content onto one
+    // line (for example, "Method: Soak the sabudana..."). Recognize the label
+    // before title detection so it cannot be mistaken for recipe content/title.
+    const inlineSection=t.match(/^(ingredients?|method|instructions?|directions?|notes?)\\s*:\\s*(.*)$/i);
+    if(inlineSection){
+      const label=inlineSection[1].toLowerCase();
+      section=/^ingredients?$/.test(label)?'ingredients':/^notes?$/.test(label)?'notes':'method';
+      continue;
+    }
     if(SECTION.ingredients.test(t)){section='ingredients';continue;}
     if(SECTION.method.test(t)){section='method';continue;}
     if(SECTION.notes.test(t)){section='notes';continue;}
@@ -166,7 +175,21 @@ export function parseDocx(html,fileName='Imported document'){
     const description=[];
     const rich={ingredients:[],method:[],notes:[]};
     for(const n of nodes.slice(start+1,end)){
-      const t=cleanRecipeText(n.text);
+      let t=cleanRecipeText(n.text);
+      const inlineSection=t.match(/^(ingredients?|method|instructions?|directions?|notes?)\\s*:\\s*(.*)$/i);
+      if(inlineSection){
+        const label=inlineSection[1].toLowerCase();
+        current=/^ingredients?$/.test(label)?'ingredients':/^notes?$/.test(label)?'notes':'method';
+        t=cleanRecipeText(inlineSection[2]);
+        if(!t)continue;
+        // The section label and its first line shared one Word paragraph.
+        // Keep the content in the selected section rather than losing it.
+        const inlineNode={...n,text:t,html:escHtml(t),tag:'p'};
+        if(current==='ingredients'){r.ingredients.push(t);rich.ingredients.push(inlineNode);}
+        else if(current==='method'){r.method.push(t);rich.method.push(inlineNode);}
+        else {r.notes.push(t);rich.notes.push(inlineNode);}
+        continue;
+      }
       if(SECTION.ingredients.test(t)){current='ingredients';continue;}
       if(SECTION.method.test(t)){current='method';continue;}
       if(SECTION.notes.test(t)){current='notes';continue;}
