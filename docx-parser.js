@@ -135,7 +135,7 @@ export function parseDocx(html,fileName='Imported document'){
     // Some DOCX files collapse a section label and its first content onto one
     // line (for example, "Method: Soak the sabudana..."). Recognize the label
     // before title detection so it cannot be mistaken for recipe content/title.
-    const inlineSection=t.match(/^(ingredients?|method|instructions?|directions?|notes?)\\s*:\\s*(.*)$/i);
+    const inlineSection=t.match(/^(ingredients?|method|instructions?|directions?|notes?)\s*:\s*(.*)$/i);
     if(inlineSection){
       const label=inlineSection[1].toLowerCase();
       section=/^ingredients?$/.test(label)?'ingredients':/^notes?$/.test(label)?'notes':'method';
@@ -176,7 +176,7 @@ export function parseDocx(html,fileName='Imported document'){
     const rich={ingredients:[],method:[],notes:[]};
     for(const n of nodes.slice(start+1,end)){
       let t=cleanRecipeText(n.text);
-      const inlineSection=t.match(/^(ingredients?|method|instructions?|directions?|notes?)\\s*:\\s*(.*)$/i);
+      const inlineSection=t.match(/^(ingredients?|method|instructions?|directions?|notes?)\s*:\s*(.*)$/i);
       if(inlineSection){
         const label=inlineSection[1].toLowerCase();
         current=/^ingredients?$/.test(label)?'ingredients':/^notes?$/.test(label)?'notes':'method';
