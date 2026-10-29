@@ -157,6 +157,20 @@ export function parseDocx(html,fileName='Imported document'){
   });
 
   let heads=recipeHeads;
+  // A common cookbook layout uses a plain first-line recipe title followed by
+  // a bold/italic subtitle such as "Mutton Gravy | Serves 4–6". The subtitle
+  // must not displace the actual title just because it also looks title-like.
+  const firstSectionForSubtitle=nodes.findIndex(n=>SECTION.ingredients.test(n.text)||SECTION.method.test(n.text));
+  if(firstSectionForSubtitle>1){
+    const preSectionCandidates=candidates.filter(idx=>idx<firstSectionForSubtitle);
+    if(preSectionCandidates.length>=2){
+      const first=preSectionCandidates[0], second=preSectionCandidates[1];
+      const subtitle=cleanRecipeText(nodes[second].text);
+      if(second===first+1 && /(?:\||[–—-])\s*(?:serves?|makes?|yield|servings?)\b/i.test(subtitle)){
+        heads=[first];
+      }
+    }
+  }
   if(!heads.length){
     const firstSection=nodes.findIndex(n=>SECTION.ingredients.test(n.text)||SECTION.method.test(n.text));
     if(firstSection>0){

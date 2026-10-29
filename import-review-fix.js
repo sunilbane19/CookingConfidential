@@ -4,7 +4,7 @@ import { getCachedSignedUrl } from './storage-url-cache.js?v=1.0.0';
 import { checkRecipeQuality } from './recipe-quality.js?v=1.0.10';
 import { readSourceTextWithVision } from './vision-text-reader.js?v=1.0.0';
 import { createGenericEditor, editorValue, sanitizeRichHtml as sanitizeGenericRichHtml } from './generic-editor.js?v=1.3.10';
-import { parseDocx } from './docx-parser.js?v=1.0.20';
+import { parseDocx } from './docx-parser.js?v=1.0.21';
 const SUPABASE_URL='https://yiwmtfbqbynimqvwxosu.supabase.co';
 async function extractionDiag(itemId,stage,details={}){try{const p=supabase.from('cc_extraction_diagnostics').insert({import_item_id:Number(itemId),stage,details});await Promise.race([p,new Promise((_,reject)=>setTimeout(()=>reject(new Error('diagnostic timeout')),5000))])}catch(e){console.warn('CC extraction diagnostic write failed',e)}}
 
@@ -364,7 +364,7 @@ async function extractLegacyDocText(item){
   return text;
 }
 
-const REVIEW_MODULE_VERSION='1.4.140';
+const REVIEW_MODULE_VERSION='1.4.147';
 export async function reviewImportFixed(id){window.ccImportReviewActive=true;await extractionDiag(id,'review_module_version',{version:REVIEW_MODULE_VERSION});window.ccReturnToImportInbox=true;importDialog?.close();detailDialog.querySelector('#detailContent').innerHTML='<div class="dialog-card"><p class="eyebrow">REVIEW IMPORT</p><h2>Preparing recipe…</h2><p class="small-note">Reading the selected upload. This may take a few seconds.</p></div>';detailDialog.showModal();let{data:x,error}=await supabase.from('cc_import_items').select('*').eq('id',id).single();if(error||!x){detailDialog.close();return window.ccShowError(error?.message||'Import item could not be loaded.','Could not load import')}const displayName=x.file_name||x.source_url||'Recipe import';await extractionDiag(id,'review_open',{file_name:x.file_name||null,mime_type:x.mime_type||null,extraction_status:x.extraction_status,review_status:x.review_status,has_scanned_pdf:typeof x.extracted_text==='string'&&x.extracted_text.includes('"scanned_pdf":true')});detailDialog.querySelector('#detailContent').innerHTML='<div class="dialog-card import-preparing"><p class="eyebrow">REVIEW IMPORT</p><h2>Preparing your recipe</h2><p class="small-note">Reading <strong>'+esc(displayName)+'</strong>.</p><div style="margin:18px 0 8px;padding:12px 14px;border:1px solid rgba(120,70,50,.18);border-radius:10px;background:rgba(120,70,50,.05);font-size:14px;line-height:1.5;color:#5d514a"><strong>Almost there.</strong><br>Your recipe is being extracted now.</div><p class="small-note import-status" style="margin-top:10px">Please keep this window open while the recipe is extracted.</p></div>';const image=/\.(png|jpe?g|webp)$/i.test(x.file_name||'')||String(x.mime_type||'').startsWith('image/');if(image){detailDialog.close();try{const mod=await import('./generic-image-review.js?v=1.2.0');if(typeof mod.reviewImage==='function')return mod.reviewImage(id);throw new Error('Image review function is unavailable.')}catch(e){console.error('[CC image trace] explicit Review routing failed',{id,message:e?.message,stack:e?.stack});return window.ccShowError(e.message||'Could not open image review.','Could not open image review')}}const pdf=/\.pdf$/i.test(x.file_name||'')||x.mime_type==='application/pdf';// Legacy .doc files must be read through Docstream on every Review attempt,
 // not only while the import row is pending/processing. Existing rows may already
 // be marked ready by the server extractor even though their structure is unusable.
@@ -532,6 +532,29 @@ if(!quality.good && pdf){
       if(!refreshed.error){x=refreshed.data;const pj=typeof x.extracted_text==='string'?JSON.parse(x.extracted_text||'{}'):x.extracted_text;const pr=pj?.recipe&&typeof pj.recipe==='object'?pj.recipe:pj;quality=checkRecipeQuality(pr,{mode:pdf?'scanned_pdf':'single'});}
     }
   }catch(e){console.warn('Cooking Confidential PDF Vision fallback failed:',e)}
+}
+if(!quality.good && /\.docx$/i.test(x.file_name||'') && (x.file_path||x.original_file_path)){
+  try{
+    await extractionDiag(id,'docx_quality_gate_fallback_start',{reasons:quality.reasons||[],metrics:quality.metrics||{}});
+    const sourcePath=x.file_path||x.original_file_path;
+    const signed=await getCachedSignedUrl(supabase,'cooking-confidential',sourcePath);
+    const response=await fetch(signed);
+    if(!response.ok)throw new Error('Could not download original DOCX (HTTP '+response.status+').');
+    const buffer=await (await response.blob()).arrayBuffer();
+    const converted=await mammoth.convertToHtml({arrayBuffer:buffer});
+    const candidates=parseDocx(converted.value||'',x.file_name||'Imported document');
+    const recovered=candidates.find(v=>(v.ingredients?.length||0)>=3&&String(Array.isArray(v.method)?v.method.join(' '):v.method||'').replace(/<[^>]+>/g,' ').trim().length>=40);
+    if(recovered){
+      const raw=await mammoth.extractRawText({arrayBuffer:buffer});
+      const recoveredItem={...x,extraction_status:'ready',extracted_text:JSON.stringify({recipe:recovered,raw_text:raw.value||''})};
+      await extractionDiag(id,'docx_quality_gate_fallback_success',{ingredient_count:recovered.ingredients.length,method_length:String(Array.isArray(recovered.method)?recovered.method.join(' '):recovered.method||'').length,quality_reasons:quality.reasons||[]});
+      window.ccImportReviewActive=false;
+      return await showReview(recoveredItem,id);
+    }
+    await extractionDiag(id,'docx_quality_gate_fallback_incomplete',{candidate_count:candidates.length,candidates:candidates.map(v=>({name:v.name,ingredient_count:v.ingredients?.length||0,method_length:String(Array.isArray(v.method)?v.method.join(' '):v.method||'').length}))});
+  }catch(docxError){
+    await extractionDiag(id,'docx_quality_gate_fallback_failed',{message:docxError?.message||String(docxError)});
+  }
 }
 if(!quality.good){await extractionDiag(id,'quality_gate_failed',{quality});
   console.warn('Cooking Confidential quality gate sent import to rescue:',quality);
