@@ -28,6 +28,12 @@ function cleanRecipeText(s){
 // characters "\\n" inside a paragraph. Expand both those markers and real line
 // breaks before building the parser's node list so each ingredient/step remains
 // a separate editable line.
+function textWithBreaks(element){
+  const copy=element.cloneNode(true);
+  copy.querySelectorAll('br').forEach(br=>br.replaceWith(copy.ownerDocument.createTextNode('\n')));
+  return copy.textContent||'';
+}
+
 function expandedLines(s){
   return String(s??'').replace(/\\n/g,'\n').split(/\r?\n+/).map(cleanRecipeText).filter(Boolean);
 }
@@ -108,7 +114,18 @@ function escHtml(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt
 export function parseDocx(html,fileName='Imported document'){
   const doc=new DOMParser().parseFromString(html,'text/html');
   const nodes=[...doc.querySelectorAll('h1,h2,h3,h4,h5,h6,p,li')]
-    .flatMap(e=>expandedLines(e.textContent||'').map(text=>({raw:text,text,tag:e.tagName.toLowerCase(),bold:/^H[1-6]$/.test(e.tagName)||!!e.querySelector('strong,b'),html:safeInlineHtml(e.innerHTML),listType:e.parentElement?.tagName?.toLowerCase()||''})))
+    .flatMap(e=>{
+      const lines=expandedLines(textWithBreaks(e));
+      // Word can store multiple lines in one paragraph using soft breaks.
+      // Keep each split line's own text/HTML instead of duplicating the
+      // entire paragraph HTML onto every ingredient line.
+      return lines.map(text=>({
+        raw:text,text,tag:e.tagName.toLowerCase(),
+        bold:/^H[1-6]$/.test(e.tagName)||!!e.querySelector('strong,b'),
+        html:lines.length>1?escHtml(text):safeInlineHtml(e.innerHTML),
+        listType:e.parentElement?.tagName?.toLowerCase()||''
+      }));
+    })
     .filter(n=>n.text);
   if(!nodes.length)return[];
 
