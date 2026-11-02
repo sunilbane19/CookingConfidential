@@ -376,8 +376,37 @@ async function extract(id,show=true){if(show){dialog.querySelector('#detailConte
   return {...r,ingredients:cleanIngredientLines(r.ingredients),method:kept,notes};
 });await sb.from('cc_import_items').update({extracted_text:JSON.stringify({version:7,multiple:true,recipes}),source_title:recipes[0]?.name||x.file_name,extraction_status:'ready',review_status:'pending',error_message:null}).eq('id',id);if(show)render(id,x,recipes);return {item:x,recipes};}catch(e){if(show)fail(e?.message||String(e));throw e;}}
 function fail(msg){dialog.querySelector('#detailContent').innerHTML=`<button class="close" type="button">×</button><p class="eyebrow">IMPORT ERROR</p><h2>Recipe extraction failed</h2><p class="small-note">${esc(msg)}</p>`;dialog.querySelector('.close').onclick=()=>dialog.close();}
-function render(id,x,recipes){const cards=recipes.map((r,i)=>{const reviewed=!!r._reviewed;return `<article class="multi-recipe-card"><label class="multi-select"><input type="checkbox" data-r="${i}" ${reviewed?'checked':''}><span><strong>${esc(r.name)}</strong></span></label><button type="button" class="secondary multi-edit ${reviewed?'reviewed':''}" data-r="${i}">${reviewed?'✓ Reviewed':'Review'}</button></article>`}).join('');dialog.querySelector('#detailContent').innerHTML=`<button class="close" type="button">×</button><p class="eyebrow">MULTI-RECIPE IMPORT</p><h2>${recipes.length} recipes</h2><p class="small-note">Review the recipes below and select the ones you want to save.</p><div class="multi-list">${cards}</div><div class="detail-actions multi-list-actions"><button class="secondary multi-cancel" id="multiCancel">Cancel</button><button class="primary multi-save" id="multiSave">Save selected</button></div>`;dialog.querySelector('.close').onclick=()=>dialog.close();dialog.querySelector('#multiCancel').onclick=()=>dialog.close();
- dialog.querySelectorAll('.multi-edit').forEach(b=>b.onclick=()=>editOne(id,x,recipes,Number(b.dataset.r)));dialog.querySelector('#multiSave').onclick=async()=>{const selected=[...dialog.querySelectorAll('input[data-r]:checked')].map(e=>Number(e.dataset.r));await saveMany(id,x,recipes.filter((_,i)=>selected.includes(i)));};}
+async function existingRecipeNames(){
+ // Use the same paginated search RPC as the visible recipe library so duplicate
+ // checks and the collection always agree on which recipes are currently visible.
+ const names=new Set();let offset=0;const pageSize=24;
+ while(true){
+  const{data,error}=await sb.rpc('cc_search_recipe_cards_staging',{p_search:'',p_favourite_only:false,p_offset:offset,p_limit:pageSize});
+  if(error)throw error;
+  const rows=Array.isArray(data)?data:[];
+  rows.forEach(r=>{const name=clean(r?.name).toLocaleLowerCase();if(name)names.add(name)});
+  if(rows.length<pageSize)break;
+  offset+=pageSize;
+ }
+ return names;
+}
+async function render(id,x,recipes,message=''){
+ const host=dialog.querySelector('#detailContent');
+ host.innerHTML='<div class="dialog-card"><p class="eyebrow">MULTI-RECIPE IMPORT</p><h2>Checking your collection…</h2></div>';
+ let existing=new Set();
+ try{existing=await existingRecipeNames();}catch(e){console.warn('Could not pre-check duplicate recipe names:',e);}
+ recipes=recipes.map(r=>({...r,_duplicate:!r._saved&&existing.has(clean(r.name).toLocaleLowerCase())}));
+ const cards=recipes.map((r,i)=>{
+  const duplicate=!!r._duplicate,saved=!!r._saved,reviewed=!!r._reviewed;
+  const note=saved?'<small class="multi-status">✓ Saved to your collection</small>':duplicate?'<small class="multi-status multi-duplicate">Already in your collection — edit the name to save it as a new recipe</small>':'';
+  return `<article class="multi-recipe-card ${duplicate?'is-duplicate':''}"><label class="multi-select"><input type="checkbox" data-r="${i}" ${reviewed&&!duplicate&&!saved?'checked':''} ${saved?'disabled':''}><span><strong>${esc(r.name)}</strong>${note}</span></label><button type="button" class="secondary multi-edit ${reviewed?'reviewed':''}" data-r="${i}">${saved?'✓ Saved':reviewed?'✓ Reviewed':'Review'}</button></article>`;
+ }).join('');
+ host.innerHTML=`<button class="close" type="button">×</button><p class="eyebrow">MULTI-RECIPE IMPORT</p><h2>${recipes.length} recipes</h2><p class="small-note">Review the recipes below. Duplicates are identified by name and will be skipped; edit a duplicate's name if you want to save it as a separate recipe.</p>${message?'<p class="multi-import-summary" role="status">'+esc(message)+'</p>':''}<div class="multi-list">${cards}</div><div class="detail-actions multi-list-actions"><button class="secondary multi-cancel" id="multiCancel">Cancel</button><button class="primary multi-save" id="multiSave">Save selected (skip duplicates)</button></div>`;
+ host.querySelector('.close').onclick=()=>dialog.close();
+ host.querySelector('#multiCancel').onclick=()=>dialog.close();
+ host.querySelectorAll('.multi-edit').forEach(btn=>btn.onclick=()=>editOne(id,x,recipes,Number(btn.dataset.r)));
+ host.querySelector('#multiSave').onclick=async()=>{const selected=[...host.querySelectorAll('input[data-r]:checked')].map(e=>Number(e.dataset.r));await saveMany(id,x,recipes.filter((_,i)=>selected.includes(i)),recipes);};
+}
 function importImagePicker(form,recipe){const input=form.querySelector('[name="image_url"]');if(!input)return;input.type='hidden';const wrap=document.createElement('div');wrap.className='cc-import-image-picker';wrap.innerHTML='<label>Recipe photo</label><input class="cc-import-image-search" type="text" placeholder="Search by recipe title or keywords"><button type="button" class="secondary cc-import-image-search-btn">Search images</button><div class="cc-import-image-selected"></div><div class="cc-import-image-results"></div>';input.parentElement.replaceWith(wrap);wrap.appendChild(input);const search=wrap.querySelector('.cc-import-image-search'),btn=wrap.querySelector('.cc-import-image-search-btn'),selected=wrap.querySelector('.cc-import-image-selected'),results=wrap.querySelector('.cc-import-image-results');search.value=recipe.name&&recipe.name!=='Imported recipe'?recipe.name:'';btn.disabled=search.value.trim().length<3;const show=()=>{const u=input.value.trim();selected.innerHTML=u?'<p class="small-note">Selected image</p><img src="'+esc(u)+'" class="cc-image-preview" alt="Selected recipe photo">':''};show();async function find(){const q=search.value.trim();if(q.length<3)return;btn.disabled=true;results.innerHTML='<p class="small-note">Searching images…</p>';try{const api='https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch='+encodeURIComponent(q+' food')+'&gsrlimit=5&prop=imageinfo&iiprop=url|mime&iiurlwidth=900&format=json&origin=*';const data=await fetch(api).then(r=>{if(!r.ok)throw Error('Image search failed');return r.json()});const pages=Object.values(data.query?.pages||{}).filter(p=>p.imageinfo?.[0]?.thumburl||p.imageinfo?.[0]?.url).slice(0,5);results.innerHTML=pages.length?pages.map((p,i)=>{const u=p.imageinfo[0].thumburl||p.imageinfo[0].url;return '<button type="button" class="cc-import-image-option" data-u="'+esc(u)+'"><img src="'+esc(u)+'" alt="Food image '+(i+1)+'"><span>Use image '+(i+1)+'</span></button>'}).join(''):'<p class="small-note">No matching images found. Try fewer words.</p>';results.querySelectorAll('.cc-import-image-option').forEach(b=>b.onclick=()=>{input.value=b.dataset.u;show();results.querySelectorAll('.cc-import-image-option').forEach(x=>x.classList.remove('selected'));b.classList.add('selected')})}catch(e){results.innerHTML='<p class="small-note">Could not search images. Please try again.</p>'}finally{btn.disabled=false}}btn.onclick=find;search.addEventListener('input',()=>{btn.disabled=search.value.trim().length<3});search.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();find()}})}
 function richValue(value){return Array.isArray(value)?value.join('\n'):String(value??'');}
 function recipeLineCount(value){const text=richValue(value).replace(/<br\s*\/?>/gi,'\n').replace(/<[^>]+>/g,' ');return text.split(/\n+/).map(x=>x.trim()).filter(Boolean).length}
@@ -428,44 +457,36 @@ function editOne(id,x,recipes,i){
   });
   importImagePicker(editor.form,recipes[i]);
 }
-async function saveMany(id,x,selectedRecipes){
-  const{data:{user}}=await sb.auth.getUser();
-  if(!user)return window.ccShowError?.('Please sign in again.','Sign-in required')||alert('Please sign in again.');
-  if(!selectedRecipes.length)return window.ccShowError?.('Please review and select at least one recipe before saving.','Nothing to save')||alert('Select at least one recipe.');
-
-  const rows=selectedRecipes.map(r=>({name:clean(r.name),description:clean(r.description)||null,cuisine:clean(r.cuisine)||null,course:clean(r.course)||null,recipe_type:clean(r.recipe_type)||'Dish',servings:clean(r.servings)||null,ingredients:Array.isArray(r.ingredients)?r.ingredients:{html:sanitizeRichHtml(r.ingredients||'')},method:Array.isArray(r.method)?r.method.join('\n'):sanitizeRichHtml(r.method||''),personal_notes:Array.isArray(r.notes)?(r.notes.join('\n')||null):(sanitizeRichHtml(r.notes||'')||null),source_type:'file',source_url:null,source_title:x.file_name||null,image_url:clean(r.image_url)||null,created_by:user.id,visibility:'private'}));
-  const{error}=await sb.from('cc_recipes').insert(rows);
+async function saveMany(id,x,selectedRecipes,allRecipes=selectedRecipes){
+ const{data:{user}}=await sb.auth.getUser();
+ if(!user)return window.ccShowError?.('Please sign in again.','Sign-in required')||alert('Please sign in again.');
+ if(!selectedRecipes.length)return window.ccShowError?.('Please review and select at least one recipe before saving.','Nothing to save')||alert('Select at least one recipe.');
+ let existing;
+ try{existing=await existingRecipeNames();}catch(e){return window.ccShowError?.('Could not check your collection for duplicate names. No recipes were saved. Please try again.','Could not check duplicates')||alert('Could not check duplicate names.');}
+ const duplicates=selectedRecipes.filter(r=>existing.has(clean(r.name).toLocaleLowerCase()));
+ const toSave=selectedRecipes.filter(r=>!existing.has(clean(r.name).toLocaleLowerCase()));
+ let savedNames=[],savedRecipes=[],lateDuplicates=[];
+ for(const r of toSave){
+  const row={name:clean(r.name),description:clean(r.description)||null,cuisine:clean(r.cuisine)||null,course:clean(r.course)||null,recipe_type:clean(r.recipe_type)||'Dish',servings:clean(r.servings)||null,ingredients:Array.isArray(r.ingredients)?r.ingredients:{html:sanitizeRichHtml(r.ingredients||'')},method:Array.isArray(r.method)?r.method.join('\n'):sanitizeRichHtml(r.method||''),personal_notes:Array.isArray(r.notes)?(r.notes.join('\n')||null):(sanitizeRichHtml(r.notes||'')||null),source_type:'file',source_url:null,source_title:x.file_name||null,image_url:clean(r.image_url)||null,created_by:user.id,visibility:'private'};
+  const{error}=await sb.from('cc_recipes').insert(row);
   if(error){
-    const raw=String(error.message||'');
-    const duplicate=/cc_recipes_no_duplicate_names|duplicate key value violates unique constraint/i.test(raw);
-    const friendly=duplicate
-      ? 'One or more of the selected recipes is already in your collection. No duplicate recipe was created. Please use Edit on the existing recipe if you want to change it.'
-      : raw;
-    return window.ccShowError?.(friendly,duplicate?'Recipe already saved':'Could not save recipes')||alert(friendly);
+   const raw=String(error.message||'');
+   if(/cc_recipes_no_duplicate_names|duplicate key value violates unique constraint/i.test(raw)){lateDuplicates.push(r);continue;}
+   return window.ccShowError?.(`Saved ${savedNames.length} recipe(s), but stopped on "${clean(r.name)}": ${raw}. Please reopen the import to continue.`,'Some recipes could not be saved')||alert(raw);
   }
-
-  // Keep the complete extracted upload intact. Only the selected/reviewed
-  // recipes are written to the recipe collection; the original multi-recipe
-  // extraction must remain available for later review.
-  let allRecipes=selectedRecipes;
-  try{
-    const cached=typeof x.extracted_text==='string'?JSON.parse(x.extracted_text||'{}'):x.extracted_text;
-    if(cached?.multiple&&Array.isArray(cached.recipes)&&cached.recipes.length)allRecipes=cached.recipes.map(r=>{
-      const saved=selectedRecipes.find(s=>String(s.name).trim().toLowerCase()===String(r.name).trim().toLowerCase());
-      return saved?{...r,...saved,_reviewed:true}:r;
-    });
-  }catch(_){}
-  const allReviewed=allRecipes.length>0&&allRecipes.every(r=>r._reviewed);
-  const{error:ie}=await sb.from('cc_import_items').update({
-    review_status:allReviewed?'approved':'pending',
-    extraction_status:'ready',
-    source_title:`${selectedRecipes.length} reviewed from ${x.file_name||'import'}`,
-    extracted_text:JSON.stringify({version:6,multiple:true,recipes:allRecipes})
-  }).eq('id',id);
-  if(ie)return window.ccShowError?.(ie.message,'Could not update import')||alert(ie.message);
-  dialog.close();
-  await window.ccReloadRecipes?.();
-  if(window.ccReloadImportInbox)await window.ccReloadImportInbox();
+  savedNames.push(clean(r.name).toLocaleLowerCase());
+  savedRecipes.push(r);
+ }
+ let complete=allRecipes.map(r=>savedRecipes.includes(r)?{...r,_reviewed:true,_saved:true,_duplicate:false}:r);
+ const allDone=complete.length>0&&complete.every(r=>r._saved);
+ const{error:ie}=await sb.from('cc_import_items').update({review_status:allDone?'approved':'pending',extraction_status:'ready',source_title:`${savedNames.length} saved from ${x.file_name||'import'}`,extracted_text:JSON.stringify({version:8,multiple:true,recipes:complete})}).eq('id',id);
+ if(ie)return window.ccShowError?.(ie.message,'Could not update import')||alert(ie.message);
+ const skippedCount=duplicates.length+lateDuplicates.length;
+ const summary=`${savedNames.length} recipe(s) saved; ${skippedCount} duplicate(s) skipped and retained for editing.`;
+ if(allDone){dialog.close();await window.ccReloadRecipes?.();if(window.ccReloadImportInbox)await window.ccReloadImportInbox();return window.ccShowSuccess?.(summary,'Import complete')||alert(summary);}
+ await window.ccReloadRecipes?.();
+ await render(id,x,complete,summary);
+ if(window.ccReloadImportInbox)await window.ccReloadImportInbox();
 }
 window.ccMultiReview=extract;
 

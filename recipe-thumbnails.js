@@ -12,7 +12,7 @@ const IMAGE_POOL=[
 const DEFAULT_IMAGE='https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=max&w=900&q=80';
 let recipes=[];
 function textOf(r){return[r?.name,r?.cuisine,r?.course,r?.recipe_type].join(' ').toLowerCase()}
-function candidates(r){const chosen=String(r?.image_url||'').trim();const t=textOf(r);const match=IMAGE_POOL.find(x=>x.keys.test(t));const fallback={url:DEFAULT_IMAGE,alt:'Default food photograph'};if(chosen)return[{url:chosen,alt:'Recipe image'},...(match?[match]:[]),fallback];return match?[match,fallback]:[fallback]}
+function candidates(r){const chosen=String(r?.image_url||'').trim();const invalid=/\b(pdf|catalogue|catalog|nurser|book|cover|archive|document|brochure|advert|poster|label|packaging)\b/i.test(chosen)||/\.pdf(?:[/?#]|$)/i.test(chosen);const t=textOf(r);const match=IMAGE_POOL.find(x=>x.keys.test(t));const fallback={url:DEFAULT_IMAGE,alt:'Default food photograph'};if(chosen&&!invalid)return[{url:chosen,alt:'Recipe image'},...(match?[match]:[]),fallback];return match?[match,fallback]:[fallback]}
 function svgFallback(r){const t=textOf(r);let accent='#9b3f2f',secondary='#d7b56d';if(/salad|green|vegetable|spinach/.test(t)){accent='#6d8b4d';secondary='#b8c98c'}else if(/pasta|noodle|rice/.test(t)){accent='#c76b3f';secondary='#e2c06e'}else if(/soup|curry|sauce|masala/.test(t)){accent='#c65b35';secondary='#e6b34f'}else if(/cake|dessert|sweet/.test(t)){accent='#9b5b65';secondary='#e2b6bd'}const svg=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 500"><rect width="900" height="500" fill="#ddd2bd"/><ellipse cx="450" cy="275" rx="285" ry="145" fill="#f9f6ef"/><ellipse cx="450" cy="275" rx="220" ry="105" fill="#eee7d8"/><ellipse cx="450" cy="270" rx="170" ry="78" fill="${secondary}" opacity=".85"/><circle cx="385" cy="255" r="34" fill="${accent}"/><circle cx="470" cy="285" r="42" fill="${accent}"/><circle cx="535" cy="245" r="28" fill="${accent}"/><path d="M330 340 Q450 385 570 340" fill="none" stroke="#b7a88f" stroke-width="12" stroke-linecap="round"/><text x="450" y="95" text-anchor="middle" font-family="Georgia,serif" font-size="34" fill="#5e584f">Cooking Confidential</text></svg>`;return 'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent(svg)}
 function setImage(box,r,list,index=0){
   const chosen=list[index];
@@ -31,7 +31,7 @@ function setImage(box,r,list,index=0){
   image.style.cssText='width:auto!important;height:auto!important;max-width:100%!important;max-height:100%!important;display:block!important;object-fit:contain!important;object-position:center!important;position:static!important;margin:0 auto!important';
   image.onload=()=>box.replaceChildren(image);
   image.onerror=()=>setImage(box,r,list,index+1);
-  image.src=String(chosen.url||'').replace(/^https:\/\/thumb\.wikimedia\.org\/wikipedia\/commons\/thumb\/([^/]+\/[^/]+)\/([^/]+)\/[^?]+(?:\?[^]*)?$/,(_,hash,file)=>'https://upload.wikimedia.org/wikipedia/commons/'+hash+'/'+file);
+  image.src=String(chosen.url||'');
   box.replaceChildren(image);
 }
 let imageObserver=null;
