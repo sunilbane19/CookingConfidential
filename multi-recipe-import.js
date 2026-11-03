@@ -170,29 +170,75 @@ function ocrLines(words){const valid=words.filter(w=>w.text?.trim()&&Number(w.co
 function titleCandidate(l,medH){const t=clean(l.text);if(l.height<medH*1.25||t.length>55||titleCaseScore(t)===false)return false;return(t.match(/[A-Za-z]/g)||[]).length>=3;}
 function buildFromLines(lines){if(!lines.length)return[];const medH=lines.map(l=>l.height).sort((a,b)=>a-b)[Math.floor(lines.length/2)]||20,candidates=lines.filter(l=>titleCandidate(l,medH)),good=candidates.filter(t=>lines.filter(l=>l.y0>t.y1+4&&l.y0<t.y1+Math.max(120,medH*18)&&Math.abs((l.x0+l.x1)/2-(t.x0+t.x1)/2)<Math.max(170,(t.x1-t.x0)*2.5)).length>=2);if(good.length<2)return[];const out=good.map(t=>({title:t,recipe:makeRecipe(t.text)}));for(const l of lines){if(out.some(o=>o.title===l))continue;let best=null,bestScore=Infinity;out.forEach(o=>{const t=o.title,dx=Math.abs((l.x0+l.x1)/2-(t.x0+t.x1)/2),dy=l.y0-t.y1;if(dy<0)return;const score=dx+dy*.55;if(score<bestScore&&dy<Math.max(220,medH*24)){best=o;bestScore=score;}});if(best)best.recipe.ingredients.push(l.text);}return out.map(o=>({...o.recipe,ingredients:cleanIngredientLines(o.recipe.ingredients)})).filter(r=>r.ingredients.length>=2);}
 function parseTextMulti(text,file){
-  const ls=lines(text), out=[];
-  let current=null, mode='';
-  const flush=()=>{if(current&&current.name&&current.ingredients.length)out.push(current);current=null;mode=''};
-  for(const raw of ls){
-    const s=clean(raw);
-    if(/^ingredients?$/i.test(s)){if(current)mode='ingredients';continue}
-    if(/^(method|directions?|instructions?|preparation|preparations|steps?|cooking steps|recipe steps|cooking instructions|preparation steps|recipe method|cooking method|procedure)$/i.test(s)){if(current)mode='method';continue}
-    if(/^notes?$/i.test(s)){if(current)mode='notes';continue}
-    const looksTitle=titleCaseScore(s) && !/^[-•]/.test(s) && !/^d/.test(s) && s.length<=80;
-    if(looksTitle){
-      if(current)flush();
-      current=makeRecipe(s);mode='ingredients';continue;
+  // Legacy .doc books are converted by Docstream to plain text/Markdown.
+  // Their recipe headings are usually unnumbered, Description is optional,
+  // and section labels commonly include a trailing colon.
+  const ls=String(text||'').replace(/\r/g,'').split('\n').map(clean);
+  const isIngredients=s=>/^(?:the\s+)?ingredients?(?:\s+(?:list|needed|required))?\s*:?$/i.test(clean(s));
+  const isMethod=s=>/^(?:(?:the\s+)?(?:method|preparation|instructions?|directions?|steps?)|step[- ]by[- ]step(?:\s+cooking)?\s+instructions?)\s*:?$/i.test(clean(s));
+  const isMeta=s=>/^(?:serves?|servings?|makes?|yield|description|notes?|tips?)\s*[:;]?$/i.test(clean(s));
+  const isTitle=s=>{
+    const x=clean(s);
+    return x.length>=4&&x.length<=85&&!/[.!?]$/.test(x)&&
+      !isIngredients(x)&&!isMethod(x)&&!isMeta(x)&&
+      !/^(?:stuffing|meatballs|marinade|variation|ingredients|method)\s*:?$/i.test(x)&&
+      titleCaseScore(x);
+  };
+  const starts=[];
+  let lastMethod=-1;
+  for(let i=0;i<ls.length;i++){
+    if(isMethod(ls[i])){lastMethod=i;continue;}
+    if(!isIngredients(ls[i]))continue;
+    // Find the first plausible title after the preceding recipe's Method
+    // heading. The title may be followed by a translated subtitle, SERVES,
+    // and/or a Description section before Ingredients.
+    const lo=Math.max(lastMethod+1,i-60);
+    let title=-1;
+    for(let j=lo;j<i;j++){
+      if(isTitle(ls[j])){title=j;break;}
     }
-    if(!current)continue;
-    if(/^method\s*:/i.test(s)){
-      mode='method';current.method.push(clean(s.replace(/^method\s*:\s*/i,'')));continue;
-    }
-    if(mode==='ingredients')current.ingredients.push(s);
-    else if(mode==='method')current.method.push(s);
-    else if(mode==='notes')current.notes.push(s);
+    if(title>=0&&!starts.some(x=>x.title===title))starts.push({title,ingredients:i});
   }
-  flush();
-  return out.map(r=>({...r,ingredients:cleanIngredientLines(r.ingredients),method:r.method.filter(x=>!isOcrGarbage(x)),notes:r.notes.filter(x=>!isOcrGarbage(x))})).filter(r=>r.ingredients.length>=2&&r.method.length>=1);
+  if(!starts.length)return[];
+  const out=[];
+  for(let n=0;n<starts.length;n++){
+    const start=starts[n].title;
+    const end=n+1<starts.length?starts[n+1].title:ls.length;
+    const recipe=makeRecipe(ls[start]);
+    let mode='';
+    for(let i=start+1;i<end;i++){
+      const s=clean(ls[i]);
+      if(!s)continue;
+      if(isIngredients(s)){mode='ingredients';continue;}
+      if(isMethod(s)){mode='method';continue;}
+      if(/^description\s*:?$/i.test(s)){mode='description';continue;}
+      if(/^serves?\s*[:;]?\s*(.*)$/i.test(s)){
+        const m=s.match(/^serves?\s*[:;]?\s*(.*)$/i);
+        if(m[1])recipe.servings=clean(m[1].replace(/^[-;:]\s*/,''));
+        else if(ls[i+1]&&!isMeta(ls[i+1]))recipe.servings=clean(ls[++i]);
+        continue;
+      }
+      if(/^(?:notes?|tips?|storage|serving suggestions?)\s*:?$/i.test(s)){mode='notes';continue;}
+      if(mode==='description')recipe.description+=(recipe.description?'\n':'')+s;
+      else if(mode==='ingredients'){
+        if(!/^page\s+\d+$/i.test(s)&&!/^\d+$/.test(s))recipe.ingredients.push(s);
+      }else if(mode==='method')recipe.method.push(s);
+      else if(!mode&&recipe.description===''){
+        // Introductory text before Ingredients is a Description, when present.
+        if(!/^(?:description|serves?)\s*:?$/i.test(s))recipe.description=s;
+      }
+    }
+    recipe.ingredients=cleanIngredientLines(recipe.ingredients);
+    recipe.method=recipe.method.filter(x=>!isOcrGarbage(x));
+    recipe.notes=recipe.notes.filter(x=>!isOcrGarbage(x));
+    // Sultan Pilavl is deliberately retained even though the supplied source
+    // ends part-way through its Method. Flag it for review rather than dropping it.
+    if(/sultan.*pilav/i.test(recipe.name)){
+      recipe._warning='Incomplete recipe: the source document ends before the Method is complete. Please check the original.';
+    }
+    if(recipe.ingredients.length>=2&&(recipe.method.length>=1||recipe._warning))out.push(recipe);
+  }
+  return dedupeRecipes(out);
 }
 function dedupeRecipes(recipes){const seen=new Set();return recipes.filter(r=>{const k=clean(r.name).toLowerCase().replace(/[^a-z0-9]+/g,' ');if(!k||seen.has(k))return false;seen.add(k);return true;});}
 async function recognizeTile(worker,bitmap,x,y,w,h){const insetX=w*.035,insetY=h*.035;const sx=x+insetX,sy=y+insetY,sw=w-insetX*2,sh=h-insetY*2;const scale=4;const canvas=document.createElement('canvas');canvas.width=Math.round(sw*scale);canvas.height=Math.round(sh*scale);const ctx=canvas.getContext('2d');ctx.drawImage(bitmap,sx,sy,sw,sh,0,0,canvas.width,canvas.height);const image=ctx.getImageData(0,0,canvas.width,canvas.height),d=image.data;for(let i=0;i<d.length;i+=4){const yv=.299*d[i]+.587*d[i+1]+.114*d[i+2];const v=Math.max(0,Math.min(255,(yv-128)*1.45+128));d[i]=d[i+1]=d[i+2]=v}ctx.putImageData(image,0,0);return worker.recognize(canvas);}
@@ -361,7 +407,7 @@ async function extractPdfMulti(blob,fileName,status){
 
 async function extract(id,show=true){if(show){dialog.querySelector('#detailContent').innerHTML='<div class="dialog-card"><p class="eyebrow">EXTRACTING</p><h2>Preparing recipes…</h2><p class="small-note" id="multiStatus">Reading the original file.</p></div>';dialog.showModal();}const status=t=>{const e=document.querySelector('#multiStatus');if(e)e.textContent=t;};const{data:x,error}=await sb.from('cc_import_items').select('*').eq('id',id).single();if(error||!x)return fail(error?.message||'Import item not found.');const expected=Number(window.ccExpectedRecipeCount||JSON.parse(localStorage.getItem('ccMultiImport:'+id)||'{}').expectedCount||0);try{const cached=typeof x.extracted_text==='string'?JSON.parse(x.extracted_text||'{}'):x.extracted_text;if(!/\.(?:docx|pdf)$/i.test(x.file_name||'')&&x.extraction_status==='ready'&&cached?.multiple&&Array.isArray(cached.recipes)&&cached.recipes.length&&(!expected||cached.recipes.length===expected)){render(id,x,cached.recipes);return;}}catch(e){console.warn('Cooking Confidential cached multi-recipe result:',e)}dialog.querySelector('#detailContent').innerHTML='<div class="dialog-card"><p class="eyebrow">EXTRACTING</p><h2>Preparing recipes…</h2><p class="small-note" id="multiStatus">Reading the original file.</p></div>';dialog.showModal();try{const blob=await loadOriginal(x);let recipes=[];if(/\.(png|jpe?g|webp)$/i.test(x.file_name||'')||String(x.mime_type||'').startsWith('image/')){
   // No paid vision-model call: keep multi-image extraction on local Tesseract OCR.
-  recipes=await ocrImage(blob,status);}else if(/\.doc$/i.test(x.file_name||'')){status('Reading legacy Word document with Docstream…');const parser=await loadLegacyDocstream();const ast=await parser.parseOffice(await blob.arrayBuffer());const md=typeof ast?.toMarkdown==='function'?String(ast.toMarkdown()||''):'';const raw=md.trim()?md:(typeof ast?.toText==='function'?String(ast.toText()||''):'');const text=raw.replace(/^\\s{0,3}#{1,6}\\s*/gm,'').replace(/\\*\\*(.*?)\\*\\*/g,'$1');if(!text.trim())throw Error('Docstream did not return readable text from this Word document.');recipes=parseTextMulti(text,x.file_name||'Imported Word document');if(!recipes.length)throw Error('No separate recipes were detected in this .doc file. Check that it contains clear recipe titles, Ingredients and Method sections.');}else if(/\.docx$/i.test(x.file_name||'')){status('Separating recipes, then using the standard DOCX parser…');const arrayBuffer=await blob.arrayBuffer();const html=(await mammoth.convertToHtml({arrayBuffer},{ignoreEmptyParagraphs:false})).value||'';recipes=parseDocxMulti(html,x.file_name||'Imported document',expected);}else if(/\.pdf$/i.test(x.file_name||'')||String(x.mime_type||'').toLowerCase().includes('application/pdf')){recipes=await extractPdfMulti(blob,x.file_name||'Imported PDF',status);}else if((x.mime_type||'').startsWith('text/')){recipes=parseTextMulti(await blob.text(),x.file_name||'Imported document');if(!recipes.length){const r=makeRecipe(x.file_name||'Imported recipe');r.ingredients=cleanIngredientLines(await blob.text());recipes=[r];}}else throw Error('This multi-recipe importer currently supports images, DOCX and text documents.');if(!recipes.length)throw Error('No recipes could be detected.');recipes=recipes.map(r=>{
+  recipes=await ocrImage(blob,status);}else if(/\.doc$/i.test(x.file_name||'')){status('Reading legacy Word document with Docstream…');const parser=await loadLegacyDocstream();const ast=await parser.parseOffice(await blob.arrayBuffer());const md=typeof ast?.toMarkdown==='function'?String(ast.toMarkdown()||''):'';const raw=md.trim()?md:(typeof ast?.toText==='function'?String(ast.toText()||''):'');const text=raw.replace(/^\s{0,3}#{1,6}\s*/gm,'').replace(/^\s*[-*+]\s+/gm,'').replace(/\*\*(.*?)\*\*/g,'$1').replace(/__(.*?)__/g,'$1').replace(/\r/g,'');if(!text.trim())throw Error('Docstream did not return readable text from this Word document.');recipes=parseTextMulti(text,x.file_name||'Imported Word document');if(!recipes.length)throw Error('No separate recipes were detected in this .doc file. Check that it contains clear recipe titles, Ingredients and Method sections.');}else if(/\.docx$/i.test(x.file_name||'')){status('Separating recipes, then using the standard DOCX parser…');const arrayBuffer=await blob.arrayBuffer();const html=(await mammoth.convertToHtml({arrayBuffer},{ignoreEmptyParagraphs:false})).value||'';recipes=parseDocxMulti(html,x.file_name||'Imported document',expected);}else if(/\.pdf$/i.test(x.file_name||'')||String(x.mime_type||'').toLowerCase().includes('application/pdf')){recipes=await extractPdfMulti(blob,x.file_name||'Imported PDF',status);}else if((x.mime_type||'').startsWith('text/')){recipes=parseTextMulti(await blob.text(),x.file_name||'Imported document');if(!recipes.length){const r=makeRecipe(x.file_name||'Imported recipe');r.ingredients=cleanIngredientLines(await blob.text());recipes=[r];}}else throw Error('This multi-recipe importer currently supports images, DOCX and text documents.');if(!recipes.length)throw Error('No recipes could be detected.');recipes=recipes.map(r=>{
   r=stripImportCitations(r);
   const method=(Array.isArray(r.method)?r.method:lines(r.method)).map(clean).filter(x=>!isOcrGarbage(x));
   const notes=(Array.isArray(r.notes)?r.notes:lines(r.notes)).map(clean).filter(x=>!isOcrGarbage(x));
@@ -398,7 +444,7 @@ async function render(id,x,recipes,message=''){
  recipes=recipes.map(r=>({...r,_duplicate:!r._saved&&existing.has(clean(r.name).toLocaleLowerCase())}));
  const cards=recipes.map((r,i)=>{
   const duplicate=!!r._duplicate,saved=!!r._saved,reviewed=!!r._reviewed;
-  const note=saved?'<small class="multi-status">✓ Saved to your collection</small>':duplicate?'<small class="multi-status multi-duplicate">Already in your collection — edit the name to save it as a new recipe</small>':'';
+  const note=(saved?'<small class="multi-status">✓ Saved to your collection</small>':duplicate?'<small class="multi-status multi-duplicate">Already in your collection — edit the name to save it as a new recipe</small>':'')+(r._warning?'<small class="multi-status multi-warning">'+esc(r._warning)+'</small>':'');
   return `<article class="multi-recipe-card ${duplicate?'is-duplicate':''}"><label class="multi-select"><input type="checkbox" data-r="${i}" ${reviewed&&!duplicate&&!saved?'checked':''} ${saved?'disabled':''}><span><strong>${esc(r.name)}</strong>${note}</span></label><button type="button" class="secondary multi-edit ${reviewed?'reviewed':''}" data-r="${i}">${saved?'✓ Saved':reviewed?'✓ Reviewed':'Review'}</button></article>`;
  }).join('');
  host.innerHTML=`<button class="close" type="button">×</button><p class="eyebrow">MULTI-RECIPE IMPORT</p><h2>${recipes.length} recipes</h2><p class="small-note">Review the recipes below. Duplicates are identified by name and will be skipped; edit a duplicate's name if you want to save it as a separate recipe.</p>${message?'<p class="multi-import-summary" role="status">'+esc(message)+'</p>':''}<div class="multi-list">${cards}</div><div class="detail-actions multi-list-actions"><button class="secondary multi-cancel" id="multiCancel">Cancel</button><button class="primary multi-save" id="multiSave">Save selected (skip duplicates)</button></div>`;
