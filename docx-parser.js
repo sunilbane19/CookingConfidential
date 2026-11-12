@@ -141,6 +141,7 @@ export function parseDocx(html,fileName='Imported document'){
       section=/^ingredients?$/.test(label)?'ingredients':/^notes?$/.test(label)?'notes':'method';
       continue;
     }
+    if(/^description\\s*:?$/i.test(t)){section='description';continue;}
     if(SECTION.ingredients.test(t)){section='ingredients';continue;}
     if(SECTION.method.test(t)){section='method';continue;}
     if(SECTION.notes.test(t)){section='notes';continue;}
@@ -204,6 +205,7 @@ export function parseDocx(html,fileName='Imported document'){
         else {r.notes.push(t);rich.notes.push(inlineNode);}
         continue;
       }
+      if(/^description\\s*:?$/i.test(t)){current='description';continue;}
       if(SECTION.ingredients.test(t)){current='ingredients';continue;}
       if(SECTION.method.test(t)){current='method';continue;}
       if(SECTION.notes.test(t)){current='notes';continue;}
@@ -239,6 +241,7 @@ export function parseDocx(html,fileName='Imported document'){
         continue;
       }
 
+      if(current==='description'){description.push(t);continue;}
       if(!current){description.push(t);continue;}
       if(current==='ingredients'){
         if(COMPONENT.test(t)){r.ingredients.push(t);rich.ingredients.push(n);continue;}
