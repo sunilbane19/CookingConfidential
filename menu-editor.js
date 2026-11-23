@@ -12,9 +12,10 @@ const formatMenuDate=v=>{
 const parseMenuDate=v=>{
  const s=String(v??'').trim();
  if(!s)return null;
- const m=/^(\d{1,2})-(\d{1,2})-(\d{4})$/.exec(s);
- if(!m)return null;
- const d=Number(m[1]),mo=Number(m[2]),y=Number(m[3]);
+ let m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+ let y,d,mo;
+ if(m){y=Number(m[1]);mo=Number(m[2]);d=Number(m[3]);}
+ else{m=/^(\d{1,2})-(\d{1,2})-(\d{4})$/.exec(s);if(!m)return null;d=Number(m[1]);mo=Number(m[2]);y=Number(m[3]);}
  const dt=new Date(Date.UTC(y,mo-1,d));
  if(dt.getUTCFullYear()!==y||dt.getUTCMonth()!==mo-1||dt.getUTCDate()!==d)return null;
  return y.toString().padStart(4,'0')+'-'+String(mo).padStart(2,'0')+'-'+String(d).padStart(2,'0');
@@ -61,19 +62,20 @@ function styles(){
  .cc-menu-toolrow button{cursor:pointer;font-weight:600}.cc-menu-align{min-width:42px}.cc-menu-align.active{background:var(--accent);color:#fff;border-color:var(--accent)}
  .cc-menu-toolrow .cc-tool-primary{background:var(--paper)}
  .cc-menu-document{background:#fff;border:1px solid var(--line);border-radius:14px;padding:24px;min-height:520px;box-shadow:0 4px 18px rgba(40,30,20,.05)}
- .cc-menu-document[contenteditable="true"] .cc-menu-block{position:relative;min-height:38px;padding:9px 118px 9px 10px;margin:5px 0;border:1px dashed #d5c6b8;border-radius:7px;outline:none;line-height:1.45;font-family:Georgia,"Times New Roman",serif;transition:border-color .12s,background .12s}
- .cc-menu-block:focus{border:1px solid var(--accent);background:#fffdf9;box-shadow:inset 0 0 0 1px rgba(155,63,47,.12)} .cc-menu-block:hover{border-color:#b79b88;background:#fffdf9} .cc-menu-document[contenteditable="true"] .cc-menu-block:has(> br:first-child){min-height:46px} .cc-menu-block h1,.cc-menu-block h2,.cc-menu-block h3,.cc-menu-block h4,.cc-menu-block h5,.cc-menu-block h6{margin:0 0 8px}.cc-menu-block table{border-collapse:collapse;width:100%;margin:6px 0;table-layout:auto}.cc-menu-block th,.cc-menu-block td{border:1px solid var(--line);padding:5px 7px;vertical-align:top;text-align:inherit}
+ .cc-menu-document .cc-menu-block[contenteditable="true"]{position:relative;min-height:38px;padding:9px 118px 9px 10px;margin:5px 0;border:1px dashed #d5c6b8;border-radius:7px;outline:none;line-height:1.45;font-family:Georgia,"Times New Roman",serif;transition:border-color .12s,background .12s}
+ .cc-menu-block:focus{border:1px solid var(--accent);background:#fffdf9;box-shadow:inset 0 0 0 1px rgba(155,63,47,.12)} .cc-menu-block:hover{border-color:#b79b88;background:#fffdf9} .cc-menu-document .cc-menu-block[contenteditable="true"]:has(> br:first-child){min-height:46px} .cc-menu-block h1,.cc-menu-block h2,.cc-menu-block h3,.cc-menu-block h4,.cc-menu-block h5,.cc-menu-block h6{margin:0 0 8px}.cc-menu-block table{border-collapse:collapse;width:100%;margin:6px 0;table-layout:auto}.cc-menu-block th,.cc-menu-block td{border:1px solid var(--line);padding:5px 7px;vertical-align:top;text-align:inherit}
  .cc-menu-block.cc-divider{border-top:1px solid var(--line);height:1px;min-height:1px;padding:0;margin:16px 4px}
  .cc-menu-block .cc-block-controls{position:absolute;right:6px;top:50%;transform:translateY(-50%);display:flex;gap:4px;opacity:.9;z-index:4;align-items:center;white-space:nowrap;background:rgba(255,255,255,.94);padding:2px;border-radius:7px;border:1px solid var(--line)}
- .cc-menu-block:has(> br:first-child)::before{content:'Click here to type a menu line';display:block;color:#8b8177;font:italic 14px Arial,sans-serif;pointer-events:none;padding:3px 0 5px;border:1px dashed #d5c6b8;border-radius:5px;margin:-2px 0 0;padding-left:8px;min-height:28px}
- .cc-menu-block:has(> br:first-child):focus-within::before{display:none} .cc-menu-document[contenteditable="true"] .cc-menu-block::selection,.cc-menu-document[contenteditable="true"] .cc-menu-block *::selection{background:#f1c9bd;color:#241b17} .cc-menu-editor-hint{font:12px/1.4 Arial,sans-serif;color:var(--muted);margin:0 0 8px;padding:8px 10px;border-left:3px solid var(--accent);background:#f8f3eb}
+ .cc-menu-block.cc-menu-empty .cc-block-controls{top:calc(50% - 10px)}
+ .cc-menu-block.cc-menu-empty::before{content:'Click here to type a menu line';display:block;color:#8b8177;font:italic 14px Arial,sans-serif;pointer-events:none;padding:3px 0 5px;border:1px dashed #d5c6b8;border-radius:5px;margin:-2px 0 0;padding-left:8px;min-height:28px}
+ .cc-menu-block.cc-menu-empty:focus-within::before{display:none} .cc-menu-document .cc-menu-block[contenteditable="true"]::selection,.cc-menu-document .cc-menu-block[contenteditable="true"] *::selection{background:#f1c9bd;color:#241b17} .cc-menu-editor-hint{font:12px/1.4 Arial,sans-serif;color:var(--muted);margin:0 0 8px;padding:8px 10px;border-left:3px solid var(--accent);background:#f8f3eb}
  .cc-menu-block:hover .cc-block-controls,.cc-menu-block:focus-within .cc-block-controls{opacity:1}
  .cc-block-controls button{border:1px solid #c9bdb0;background:#f8f3eb;color:#352b25;border-radius:5px;width:30px;height:30px;padding:0;font:600 14px Arial;cursor:pointer;box-shadow:0 1px 2px #0001}
  .cc-menu-meta{display:grid;grid-template-columns:2fr 1fr 1fr;gap:12px}
  .cc-menu-meta label{margin:8px 0}
- .cc-menu-meta input{display:block;width:100%;margin-top:6px;padding:10px;border:1px solid var(--line);border-radius:9px;background:#fff;font:14px Arial}
+ .cc-menu-meta input{display:block;width:100%;margin-top:6px;padding:10px;border:1px solid var(--line);border-radius:9px;background:#fff;font:14px Arial}\n #ccMenuDate{cursor:pointer;color-scheme:light} #ccMenuDate::-webkit-calendar-picker-indicator{cursor:pointer;opacity:.8}
  .cc-menu-original-note{padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#f8f5ee;font:13px/1.4 Arial;color:var(--muted);margin:10px 0}
- .cc-menu-linkrow{margin-top:8px;display:flex;flex-wrap:nowrap;gap:7px;align-items:center;overflow-x:auto;overflow-y:hidden;padding-bottom:4px;scrollbar-width:thin;position:relative}.cc-menu-linkrow select{flex:0 0 390px}.cc-menu-linkrow input{flex:0 0 310px}
+ .cc-menu-linkrow{margin-top:8px;display:flex;flex-wrap:nowrap;gap:7px;align-items:center;overflow-x:auto;overflow-y:hidden;padding-bottom:4px;scrollbar-width:thin;position:relative}.cc-menu-linkrow select{flex:0 0 390px}#ccMenuCuisineFilter{flex:0 0 180px!important}#ccMenuRecipeLink{flex:0 0 300px!important}.cc-menu-linkrow input{flex:0 0 310px}
  .cc-menu-linkrow select,.cc-menu-linkrow input{min-height:38px;width:auto;min-width:0;border:1px solid var(--line);border-radius:8px;background:#fff;padding:7px 10px;font:13px Arial;color:var(--ink)} .cc-menu-linkrow button{min-height:38px;border:1px solid var(--accent);border-radius:8px;background:var(--accent);color:#fff;padding:7px 13px;font:600 13px Arial;cursor:pointer;white-space:nowrap} .cc-menu-upload-list{display:grid;gap:10px;margin-top:14px}.cc-menu-upload-item{border:1px solid var(--line);border-radius:10px;padding:12px;background:#fff;display:flex;align-items:center;justify-content:space-between;gap:12px}.cc-menu-upload-item .meta{font:13px/1.4 Arial;color:var(--muted)}.cc-menu-upload-actions{display:flex;gap:7px;flex-wrap:wrap}.cc-menu-upload-actions button{min-height:36px;border:1px solid var(--line);border-radius:8px;background:var(--paper);padding:7px 12px;font:600 13px Arial;cursor:pointer}.cc-menu-upload-actions .primary-action{background:var(--accent);border-color:var(--accent);color:#fff}
  .cc-menu-actions-grid{display:grid;grid-template-columns:repeat(4,minmax(120px,1fr));gap:8px;margin:18px auto 0;max-width:720px}.cc-menu-actions-grid button{white-space:nowrap}
  #ccMenuConfirmDialog{border:0;border-radius:16px;padding:0;width:min(430px,92vw);background:transparent;box-shadow:0 18px 60px rgba(30,20,10,.22)}
@@ -100,7 +102,7 @@ function styles(){
    #ccMenuEditorDialog .dialog-card{padding:18px 14px;overflow-x:hidden}
    .cc-menu-dialog-title{display:block;margin-bottom:14px}.cc-menu-dialog-title .eyebrow{display:block;margin-bottom:4px}.cc-menu-dialog-title h2{font-size:28px;line-height:1.08;max-width:100%;overflow-wrap:anywhere}
    .cc-menu-linkrow{width:100%;box-sizing:border-box;padding-right:34px;scroll-snap-type:x proximity}.cc-menu-linkrow select{flex-basis:390px}.cc-menu-linkrow input{flex-basis:310px}.cc-menu-linkrow button{flex:0 0 auto}.cc-menu-linkrow-wrap{position:relative}.cc-menu-linkrow-wrap::after{content:'↔ swipe';position:absolute;right:8px;bottom:2px;background:var(--card);padding:0 4px;font:10px Arial;color:var(--muted);pointer-events:none}
-   .cc-menu-document[contenteditable="true"] .cc-menu-block{padding-right:112px}
+   .cc-menu-document .cc-menu-block[contenteditable="true"]{padding-right:112px}
    .cc-menu-block .cc-block-controls{right:5px;top:7px;transform:none;opacity:.55;align-items:center;white-space:nowrap}
    .cc-menu-actions-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}.cc-menu-actions-grid button{min-width:0;padding:8px 4px;font-size:11px}
    .cc-menu-original-viewer{overflow:hidden;padding:8px}.cc-menu-original-viewer .docx-wrapper{width:100%!important;min-width:0!important;margin:0!important}.cc-menu-original-viewer .docx-wrapper .docx{width:100%!important;min-width:0!important;box-sizing:border-box!important;margin:0!important}.cc-menu-original-viewer .docx-wrapper .docx *{max-width:100%!important;box-sizing:border-box!important}
@@ -132,8 +134,22 @@ function styles(){
  .cc-menu-clear-selection{margin-left:auto}
  body.cc-menu-printing #ccMenuPrintPage{display:block!important}
  #ccMenuPrintPage{display:none}
+ .cc-menu-view-dialog{width:min(900px,94vw);max-width:900px;height:min(92vh,900px);max-height:92vh;padding:0;border:1px solid var(--line);border-radius:16px;background:var(--card);color:var(--ink);box-shadow:0 20px 70px #0003;overflow:hidden;display:flex;flex-direction:column}
+ .cc-menu-view-dialog::backdrop{background:rgba(30,25,20,.58)}
+ .cc-menu-view-head{padding:28px 34px 20px;border-bottom:1px solid var(--line);position:relative}
+ .cc-menu-view-head .eyebrow{font:10px Arial,sans-serif;letter-spacing:2px;color:var(--accent);margin:0 0 8px}
+ .cc-menu-view-head h2{font:normal 32px/1.15 Georgia,serif;margin:0 40px 8px 0;color:var(--ink)}
+ .cc-menu-view-meta{font:13px/1.5 Georgia,serif;color:var(--muted)}
+ .cc-menu-view-body{padding:28px 34px;flex:1 1 auto;min-height:0;max-height:none;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;font:16px/1.6 Georgia,"Times New Roman",serif}
+ .cc-menu-view-line{margin:0 0 12px;min-height:0;padding:0;border:0;line-height:1.55}
+ .cc-menu-view-line h1,.cc-menu-view-line h2,.cc-menu-view-line h3,.cc-menu-view-line h4{font-family:Georgia,serif;line-height:1.2;margin:12px 0 7px}
+ .cc-menu-view-line ul,.cc-menu-view-line ol{padding-left:24px;margin:5px 0 12px}
+ .cc-menu-view-divider{border:0;border-top:1px solid var(--line);margin:18px 0}
+ .cc-menu-view-actions{display:flex;flex:0 0 auto;justify-content:flex-end;flex-wrap:wrap;gap:9px;padding:14px 34px 22px;border-top:1px solid var(--line);background:var(--card)}
+ .cc-menu-view-close{position:absolute;right:20px;top:18px;border:1px solid var(--line);background:var(--paper);border-radius:8px;width:34px;height:34px;font-size:20px;cursor:pointer}
+ @media(max-width:650px){.cc-menu-view-dialog{height:92vh}.cc-menu-view-head{padding:22px 20px 16px}.cc-menu-view-head h2{font-size:26px}.cc-menu-view-body{padding:20px;max-height:none}.cc-menu-view-actions{padding:12px 20px 18px;justify-content:flex-start}}
  @media print{
-   @page{size:A4 portrait;margin:15mm 17mm 17mm}
+   @page{size:A4 portrait;margin:15mm 17mm 25mm}
    body.cc-menu-printing{padding:0!important;margin:0!important;background:#fff!important}
    body.cc-menu-printing>*:not(#ccMenuPrintPage){display:none!important}
    body.cc-menu-printing #ccMenuPrintPage{display:block!important;width:176mm;margin:0 auto;background:#fff;color:#24231f}
@@ -155,8 +171,9 @@ function styles(){
    #ccMenuPrintPage .cc-print-document ul,#ccMenuPrintPage .cc-print-document ol{margin:0 0 3mm;padding-left:7mm}
    #ccMenuPrintPage .cc-print-document li{padding-left:1mm;margin:0 0 1mm}
    #ccMenuPrintPage .cc-print-document .cc-menu-block{padding:0!important;margin:0 0 3mm!important;min-height:0!important;break-inside:avoid}
+   #ccMenuPrintPage .cc-print-document .cc-menu-block::before{content:none!important;display:none!important}
    #ccMenuPrintPage .cc-print-document .cc-divider{border:0;border-top:.3mm solid #ddd6ca;height:1px;padding:0!important;margin:4mm 0!important}
-   #ccMenuPrintPage .cc-print-footer{display:flex;justify-content:space-between;gap:8mm;margin-top:10mm;padding-top:3mm;border-top:.25mm solid #ddd6ca;font:8pt Arial,sans-serif;color:#77736a}
+   #ccMenuPrintPage .cc-menu-print-footer{position:fixed;left:17mm;right:17mm;bottom:6mm;display:flex;justify-content:center;gap:2mm;margin:0;padding-top:3mm;border-top:.25mm solid #ddd6ca;font:8pt Arial,sans-serif;color:#77736a;background:#fff}
    #ccMenuPrintPage a{color:#9b3f2f;text-decoration:none}
  }
  @media print{
@@ -212,10 +229,22 @@ function rememberSelection(){const s=getSelection();if(!s?.rangeCount)return;con
 function clearSelection(){try{getSelection()?.removeAllRanges()}catch{}lastEditorBlock=null;lastRange=null}
 function restoreSelection(){if(!lastRange)return;const s=getSelection();s.removeAllRanges();s.addRange(lastRange)}
 function exec(cmd,value=null){restoreSelection();document.execCommand('styleWithCSS',false,true);document.execCommand(cmd,false,value);rememberSelection()}
+function sanitizeBlockContent(ed,preferredHref=null){
+ if(!ed)return;
+ const controls=ed.querySelector('.cc-block-controls');
+ if(controls)controls.remove();
+ ed.innerHTML=cleanHtml(ed.innerHTML);
+ if(controls)ed.appendChild(controls);
+ if(preferredHref){
+   const anchors=[...ed.querySelectorAll('a')].filter(a=>a.getAttribute('href')===preferredHref);
+   const anchor=anchors[anchors.length-1];
+   if(anchor){const range=document.createRange();range.setStartAfter(anchor);range.collapse(true);const sel=getSelection();sel.removeAllRanges();sel.addRange(range)}
+ }
+}
 function fontSize(value){
  const map={'12px':1,'14px':2,'16px':3,'18px':4,'22px':5,'26px':6,'30px':7};
  exec('fontSize',map[value]||3);
- const ed=getSelectionEditor();if(ed)ed.innerHTML=cleanHtml(ed.innerHTML)
+ const ed=getSelectionEditor();if(ed)sanitizeBlockContent(ed)
 }
 function addLink(href,recipeId=null,linkText=''){
  const ed=getSelectionEditor();if(!ed)return window.ccShowError('Place the cursor in a menu line first.','Select menu line');
@@ -240,7 +269,7 @@ function addLink(href,recipeId=null,linkText=''){
      if(a.getAttribute('href')===('#recipe-'+recipeId)||a.getAttribute('href')?.endsWith('#recipe-'+recipeId))a.dataset.recipeId=String(recipeId)
    })
  }
- if(ed)ed.innerHTML=cleanHtml(ed.innerHTML);
+ if(ed)sanitizeBlockContent(ed,href);
  rememberSelection();
 }
 async function collectDocument(){
@@ -259,7 +288,7 @@ async function printMenuDocument(contentOrMenu){
  const previous=document.querySelector('#ccMenuPrintPage');if(previous)previous.remove();
  const sheet=document.createElement('div');sheet.id='ccMenuPrintPage';
  const page=document.createElement('div');page.className='cc-print-page';
- const clone=doc.cloneNode(true);clone.removeAttribute('contenteditable');clone.classList.add('cc-print-document');clone.querySelectorAll('.cc-block-controls,[contenteditable="false"]').forEach(x=>{if(x.classList.contains('cc-block-controls'))x.remove()});
+ const clone=doc.cloneNode(true);clone.removeAttribute('contenteditable');clone.classList.add('cc-print-document');clone.querySelectorAll('.cc-block-controls,[contenteditable="false"]').forEach(x=>{if(x.classList.contains('cc-block-controls'))x.remove()});clone.querySelectorAll('.cc-menu-block').forEach(el=>{el.classList.remove('cc-menu-empty');const blank=!el.textContent.trim()&&!el.querySelector('img,table');if(blank)el.remove()});
  const header=document.createElement('header');header.className='cc-menu-print-header';
  header.innerHTML='<div class="cc-menu-print-brand"><span class="cc-menu-print-logo">CC</span><span>Cooking Confidential</span><span class="cc-menu-print-rule"></span><span class="cc-menu-print-label">MENU</span></div><h1>'+title+'</h1>'+(occasion?'<p class="cc-menu-print-occasion">'+occasion+'</p>':'')+(date?'<p class="cc-menu-print-date">'+date+'</p>':'');
  const footer=document.createElement('footer');footer.className='cc-menu-print-footer';footer.innerHTML='<span>Cooking Confidential</span><span class="cc-menu-print-separator">|</span><span>Good Food Well Remembered</span>';
@@ -290,12 +319,12 @@ async function applyDocxParagraphAlignment(html,arrayBuffer){
 }
 function blockMarkup(b,i){
  if(b.type==='divider')return '<div class="cc-menu-block cc-divider" data-index="'+i+'" contenteditable="false"><div class="cc-block-controls" contenteditable="false"><button type="button" data-move="-1" title="Move up">↑</button><button type="button" data-move="1" title="Move down">↓</button><button type="button" data-delete="1" title="Delete">×</button></div></div>';
- const blockHtml=cleanHtml(String(b.html||'')).replace(/↑\s*↓\s*×/g,''); return '<div class="cc-menu-block" data-index="'+i+'">'+blockHtml+'<div class="cc-block-controls"><button type="button" data-move="-1" title="Move up">↑</button><button type="button" data-move="1" title="Move down">↓</button><button type="button" data-delete="1" title="Delete">×</button></div></div>'
+ const cleanedHtml=cleanHtml(String(b.html||'')).replace(/↑\s*↓\s*×/g,''); const empty=!cleanedHtml.trim()||/^<br\s*\/?\s*>$/i.test(cleanedHtml.trim()); const blockHtml=empty?'<br>':cleanedHtml; return '<div class="cc-menu-block'+(empty?' cc-menu-empty':'')+'" data-index="'+i+'" contenteditable="true">'+blockHtml+'<div class="cc-block-controls" contenteditable="false"><button type="button" data-move="-1" title="Move up">↑</button><button type="button" data-move="1" title="Move down">↓</button><button type="button" data-delete="1" title="Delete">×</button></div></div>'
 }
 async function openEditor(menu,{blocks=null,sourceLabel='',newMenu=false}={}){
  styles();const d=ensureDialog();let source=blocks?{version:1,blocks}:docFromMenu(menu);if(!blocks&&menu.id&&!(source.blocks||[]).length){const legacy=await supabase.from('cc_menu_items').select('sort_order,custom_label,section,recipe_id,cc_recipes(id,name)').eq('menu_id',menu.id).order('sort_order');if(!legacy.error&&legacy.data?.length){source={version:1,blocks:legacy.data.map(x=>({type:'line',html:'<a href=\"#recipe-'+x.recipe_id+'\" data-recipe-id=\"'+x.recipe_id+'\">'+esc(x.custom_label||x.cc_recipes?.name||'Recipe')+'</a>'}))}}}const initial=normalizeBlocks(source.blocks||[]);if(!initial.length)initial.push({type:'line',html:'<br>'});
  const recipes=await recipesForLinks();
- d.querySelector('#ccMenuEditorContent').innerHTML='<button class="close" type="button" id="ccMenuEditorClose">×</button><div class="cc-menu-dialog-title"><p class="eyebrow">'+(newMenu?'NEW MENU':'MENU EDITOR')+'</p><h2>'+(newMenu?'Create a menu':esc(menu.name||'Edit menu'))+'</h2></div><div class="cc-menu-meta"><label style="font-weight:700">Menu name<input id="ccMenuName" value="'+esc(menu.name||'')+'" required></label><label style="font-weight:700">Date<input id="ccMenuDate" type="text" inputmode="numeric" maxlength="10" placeholder="DD-MM-YYYY" value="'+esc(formatMenuDate(menu.menu_date||''))+'"></label><label style="font-weight:700">Guests<input id="ccMenuGuests" type="number" min="1" value="'+esc(menu.guest_count??'')+'"></label></div><label class="cc-menu-occasion-label" style="font-weight:700">Occasion<input id="ccMenuOccasion" value="'+esc(menu.occasion||'')+'"></label><div class="cc-menu-toolbar"><div class="cc-menu-toolrow"><button type="button" data-cmd="bold"><b>B</b></button><button type="button" data-cmd="italic"><i>I</i></button><button type="button" data-cmd="underline"><u>U</u></button><select id="ccMenuFont" title="Font"><option value="Georgia">Georgia</option><option value="Arial">Arial</option><option value="Times New Roman">Times New Roman</option><option value="Verdana">Verdana</option></select><select id="ccMenuSize" title="Font size"><option value="12px">Small</option><option value="14px">14</option><option value="16px" selected>Normal</option><option value="18px">Large</option><option value="22px">Extra large</option><option value="30px">Title</option></select><button type="button" data-block-style="normal">Normal</button><button type="button" data-block-style="heading">Heading</button><button type="button" data-block-style="subheading">Subheading</button><button type="button" class="cc-menu-align" data-align="left" title="Align left">L</button><button type="button" class="cc-menu-align" data-align="center" title="Align center">C</button><button type="button" class="cc-menu-align" data-align="right" title="Align right">R</button><button type="button" id="ccMenuBullet">• List</button><button type="button" id="ccMenuNumber">1. List</button><button type="button" id="ccMenuDivider">Divider</button><button type="button" id="ccMenuAddLine">＋ Line</button></div><div class="cc-menu-linkrow-wrap"><div class="cc-menu-linkrow"><select id="ccMenuRecipeLink"><option value="">Link selected text to a recipe…</option>'+recipes.map(r=>'<option value="'+r.id+'">'+esc(r.name)+'</option>').join('')+'</select><button type="button" id="ccMenuApplyRecipeLink">Link recipe</button><input id="ccMenuUrl" type="url" placeholder="https:// external link"><button type="button" id="ccMenuApplyUrl">Link URL</button><button type="button" class="secondary cc-menu-clear-selection" id="ccMenuClearSelection">Clear selection</button></div></div></div><p class="cc-menu-editor-hint">Click inside a bordered line to type. Use <strong>＋ Line</strong> to add another line after the current line. Select text, then use the formatting or link controls above; your selection is retained while you use the toolbar.</p><div id="ccMenuDocument" class="cc-menu-document" contenteditable="true" spellcheck="true">'+initial.map(blockMarkup).join('')+'</div><div class="cc-menu-actions-grid"><button class="secondary" type="button" id="ccMenuShowOriginal">Original</button><button class="secondary" type="button" id="ccMenuSaveAs">Save As</button><button class="secondary danger" type="button" id="ccMenuDelete" '+(newMenu?'disabled':'')+'>Delete</button><button class="primary" type="button" id="ccMenuSave">Save</button></div>';
+ d.querySelector('#ccMenuEditorContent').innerHTML='<button class="close" type="button" id="ccMenuEditorClose">×</button><div class="cc-menu-dialog-title"><p class="eyebrow">'+(newMenu?'NEW MENU':'MENU EDITOR')+'</p><h2>'+(newMenu?'Create a menu':esc(menu.name||'Edit menu'))+'</h2></div><div class="cc-menu-meta"><label style="font-weight:700">Menu name<input id="ccMenuName" value="'+esc(menu.name||'')+'" required></label><label style="font-weight:700">Date<input id="ccMenuDate" type="date" autocomplete="off" value="'+esc(parseMenuDate(formatMenuDate(menu.menu_date||''))||'')+'"></label><label style="font-weight:700">Guests<input id="ccMenuGuests" type="number" min="1" value="'+esc(menu.guest_count??'')+'"></label></div><label class="cc-menu-occasion-label" style="font-weight:700">Occasion<input id="ccMenuOccasion" value="'+esc(menu.occasion||'')+'"></label><div class="cc-menu-toolbar"><div class="cc-menu-toolrow"><button type="button" data-cmd="bold"><b>B</b></button><button type="button" data-cmd="italic"><i>I</i></button><button type="button" data-cmd="underline"><u>U</u></button><select id="ccMenuFont" title="Font"><option value="Georgia">Georgia</option><option value="Arial">Arial</option><option value="Times New Roman">Times New Roman</option><option value="Verdana">Verdana</option></select><select id="ccMenuSize" title="Font size"><option value="12px">Small</option><option value="14px">14</option><option value="16px" selected>Normal</option><option value="18px">Large</option><option value="22px">Extra large</option><option value="30px">Title</option></select><button type="button" data-block-style="normal">Normal</button><button type="button" data-block-style="heading">Heading</button><button type="button" data-block-style="subheading">Subheading</button><button type="button" class="cc-menu-align" data-align="left" title="Align left">L</button><button type="button" class="cc-menu-align" data-align="center" title="Align center">C</button><button type="button" class="cc-menu-align" data-align="right" title="Align right">R</button><button type="button" id="ccMenuBullet">• List</button><button type="button" id="ccMenuNumber">1. List</button><button type="button" id="ccMenuDivider">Divider</button><button type="button" id="ccMenuAddLine">＋ Line</button></div><div class="cc-menu-linkrow-wrap"><div class="cc-menu-linkrow"><select id="ccMenuCuisineFilter" title="Filter recipes by cuisine"><option value="">All cuisines</option>'+[...new Set(recipes.map(r=>String(r.cuisine||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:'base'})).map(c=>'<option value="'+esc(c)+'">'+esc(c)+'</option>').join('')+(recipes.some(r=>!String(r.cuisine||'').trim())?'<option value="__uncategorised">No cuisine recorded</option>':'')+'</select><select id="ccMenuRecipeLink"><option value="">Link selected text to a recipe…</option>'+recipes.map(r=>'<option value="'+r.id+'">'+esc(r.name)+'</option>').join('')+'</select><button type="button" id="ccMenuApplyRecipeLink">Link recipe</button><input id="ccMenuUrl" type="url" placeholder="https:// external link"><button type="button" id="ccMenuApplyUrl">Link URL</button><button type="button" class="secondary cc-menu-clear-selection" id="ccMenuClearSelection">Clear selection</button></div></div></div><p class="cc-menu-editor-hint">Click inside a bordered line to type. Use <strong>＋ Line</strong> to add another line after the current line. Select text, then use the formatting or link controls above; your selection is retained while you use the toolbar.</p><div id="ccMenuDocument" class="cc-menu-document" contenteditable="true" spellcheck="true">'+initial.map(blockMarkup).join('')+'</div><div class="cc-menu-actions-grid"><button class="secondary" type="button" id="ccMenuShowOriginal">Original</button><button class="secondary" type="button" id="ccMenuSaveAs">Save As</button><button class="secondary danger" type="button" id="ccMenuDelete" '+(newMenu?'disabled':'')+'>Delete</button><button class="primary" type="button" id="ccMenuSave">Save</button></div>';
  d.showModal();
  const content=d.querySelector('#ccMenuEditorContent');
  requestAnimationFrame(()=>{d.scrollTop=0;content.scrollTop=0;});
@@ -305,10 +334,34 @@ async function openEditor(menu,{blocks=null,sourceLabel='',newMenu=false}={}){
  content.querySelector('#ccMenuDocument').addEventListener('focusin',e=>{const b=e.target.closest('.cc-menu-block');if(b)lastEditorBlock=b;});
  const selectionListener=()=>rememberSelection();document.addEventListener('selectionchange',selectionListener);d.addEventListener('close',()=>document.removeEventListener('selectionchange',selectionListener),{once:true});
  const dateInput=content.querySelector('#ccMenuDate');
-dateInput.addEventListener('input',e=>{const digits=Array.from(e.target.value).filter(ch=>ch>='0'&&ch<='9').slice(0,8).join('');e.target.value=digits.length<=2?digits:digits.length<=4?digits.slice(0,2)+'-'+digits.slice(2):digits.slice(0,2)+'-'+digits.slice(2,4)+'-'+digits.slice(4)});
+dateInput.addEventListener('change',()=>{if(dateInput.value)dateInput.setCustomValidity('');});
+const cuisineFilter=content.querySelector('#ccMenuCuisineFilter'),recipeSelect=content.querySelector('#ccMenuRecipeLink');
+const refreshRecipeOptions=()=>{
+ const cuisine=cuisineFilter.value,previous=recipeSelect.value;
+ const filtered=recipes.filter(r=>cuisine===''||(cuisine==='__uncategorised'?!String(r.cuisine||'').trim():String(r.cuisine||'').trim()===cuisine));
+ recipeSelect.innerHTML='<option value="">Link selected text to a recipe…</option>'+filtered.map(r=>'<option value="'+r.id+'">'+esc(r.name)+'</option>').join('');
+ if(filtered.some(r=>String(r.id)===previous))recipeSelect.value=previous;
+};
+cuisineFilter.onchange=refreshRecipeOptions;
 content.querySelector('#ccMenuClearSelection').onclick=()=>clearSelection();
+content.querySelector('#ccMenuDocument').addEventListener('input',e=>{const block=e.target.closest?.('.cc-menu-block');if(!block)return;const clone=block.cloneNode(true);clone.querySelectorAll('.cc-block-controls').forEach(x=>x.remove());const empty=!clone.textContent.trim()&&!clone.querySelector('img,table');block.classList.toggle('cc-menu-empty',empty)});
 content.querySelector('#ccMenuDocument').addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();clearSelection()}});
 content.querySelector('#ccMenuDocument').addEventListener('click',e=>{if(e.target===e.currentTarget)clearSelection()});
+content.querySelector('#ccMenuDocument').addEventListener('click',e=>{
+ const block=e.target.closest('.cc-menu-block[contenteditable="true"]');
+ if(!block||e.target.closest('.cc-block-controls'))return;
+ if(block.textContent.trim())return;
+ block.focus();
+ const sel=getSelection();
+ if(!sel)return;
+ const range=document.createRange();
+ range.selectNodeContents(block);
+ range.collapse(true);
+ sel.removeAllRanges();
+ sel.addRange(range);
+ lastEditorBlock=block;
+ lastRange=range.cloneRange();
+});
 content.querySelector('#ccMenuEditorClose').onclick=()=>d.close();
  const reviewOriginal=content.querySelector('#ccMenuReviewOriginal');if(reviewOriginal)reviewOriginal.onclick=e=>{e.preventDefault();showOriginal(menu)};
  content.querySelectorAll('[data-cmd]').forEach(b=>{b.onmousedown=e=>e.preventDefault();b.onclick=()=>{const ed=getSelectionEditor();if(!ed)return;ed.focus();exec(b.dataset.cmd)}});
@@ -328,14 +381,14 @@ content.querySelector('#ccMenuEditorClose').onclick=()=>d.close();
 content.querySelectorAll('[data-align]').forEach(b=>{b.onmousedown=e=>e.preventDefault();b.onclick=()=>{const ed=getSelectionEditor();if(!ed)return;ed.focus();exec(b.dataset.align==='center'?'justifyCenter':b.dataset.align==='right'?'justifyRight':'justifyLeft')}});
  content.querySelector('#ccMenuBullet').onmousedown=e=>e.preventDefault();content.querySelector('#ccMenuBullet').onclick=()=>exec('insertUnorderedList');
  content.querySelector('#ccMenuNumber').onmousedown=e=>e.preventDefault();content.querySelector('#ccMenuNumber').onclick=()=>exec('insertOrderedList');
- content.querySelector('#ccMenuDivider').onclick=()=>{const doc=d.querySelector('#ccMenuDocument');doc.insertAdjacentHTML('beforeend','<div class="cc-menu-block cc-divider" contenteditable="false"><div class="cc-block-controls"><button type="button" data-move="-1">↑</button><button type="button" data-move="1">↓</button><button type="button" data-delete="1">×</button></div></div>')};
+ content.querySelector('#ccMenuDivider').onclick=()=>{const doc=d.querySelector('#ccMenuDocument');doc.insertAdjacentHTML('beforeend','<div class="cc-menu-block cc-divider" contenteditable="false"><div class="cc-block-controls" contenteditable="false"><button type="button" data-move="-1">↑</button><button type="button" data-move="1">↓</button><button type="button" data-delete="1">×</button></div></div>')};
  content.querySelector('#ccMenuAddLine').onclick=()=>{
  const doc=d.querySelector('#ccMenuDocument');if(!doc)return;
  restoreSelection();
  const s=getSelection(),range=s?.rangeCount?s.getRangeAt(0):null;
  const current=range?.commonAncestorContainer?.nodeType===1?range.commonAncestorContainer:range?.commonAncestorContainer?.parentElement;
  const block=current?.closest?.('.cc-menu-block')||lastEditorBlock||doc.lastElementChild;
- const line=document.createElement('div');line.className='cc-menu-block';line.innerHTML='<br><div class="cc-block-controls"><button type="button" data-move="-1">↑</button><button type="button" data-move="1">↓</button><button type="button" data-delete="1">×</button></div>';
+ const line=document.createElement('div');line.className='cc-menu-block';line.setAttribute('contenteditable','true');line.innerHTML='<br><div class="cc-block-controls" contenteditable="false"><button type="button" data-move="-1">↑</button><button type="button" data-move="1">↓</button><button type="button" data-delete="1">×</button></div>';
  if(block&&block.parentNode===doc)block.after(line);else doc.appendChild(line);
  const editRange=document.createRange();editRange.selectNodeContents(line);editRange.collapse(true);s?.removeAllRanges();s?.addRange(editRange);lastEditorBlock=line;lastRange=editRange.cloneRange();line.focus();
 };
@@ -535,12 +588,53 @@ async function uploadExisting(){
  renderUploadLibrary();
 }
 function newBlank(){openEditor({name:'',menu_date:'',guest_count:null,occasion:'',document:{version:1,blocks:[{type:'line',html:''}]},is_favourite:false},{newMenu:true})}
+async function showMenu(menu){
+ const d=document.querySelector('#ccMenuViewDialog')||document.createElement('dialog');
+ d.id='ccMenuViewDialog';d.className='cc-menu-view-dialog';
+ const source=docFromMenu(menu);let blocks=Array.isArray(source.blocks)?source.blocks:[];
+ if(!blocks.length&&menu.id){
+   const legacy=await supabase.from('cc_menu_items').select('sort_order,custom_label,section,recipe_id,cc_recipes(id,name)').eq('menu_id',menu.id).order('sort_order');
+   if(!legacy.error&&legacy.data?.length)blocks=legacy.data.map(x=>({type:'line',html:'<a href="#recipe-'+x.recipe_id+'" data-recipe-id="'+x.recipe_id+'">'+esc(x.custom_label||x.cc_recipes?.name||'Recipe')+'</a>'}));
+ }
+ const body=blocks.map(b=>{
+   if(b.type==='divider')return '<hr class="cc-menu-view-divider">';
+   const html=cleanHtml(String(b.html||'')).replace(/↑\s*↓\s*×/g,'').trim();
+   if(!html||/^<br\s*\/?\s*>$/i.test(html))return '';
+   return '<div class="cc-menu-view-line">'+html+'</div>';
+ }).join('');
+ const date=formatMenuDate(menu.menu_date||'');
+ d.innerHTML='<header class="cc-menu-view-head"><button type="button" class="cc-menu-view-close" aria-label="Close">×</button><p class="eyebrow">COOKING CONFIDENTIAL · MENU</p><h2>'+esc(menu.name||'Menu')+'</h2><div class="cc-menu-view-meta">'+(menu.occasion?esc(menu.occasion):'')+(menu.occasion&&date?' · ':'')+esc(date)+'</div></header><main class="cc-menu-view-body">'+(body||'<p class="small-note">This menu has no saved menu lines.</p>')+'</main><footer class="cc-menu-view-actions"><button type="button" class="secondary" data-view-fav>'+(menu.is_favourite?'★ Remove favourite':'☆ Add to favourites')+'</button><button type="button" class="secondary" data-view-share>Share</button><button type="button" class="secondary" data-view-print>Print</button><button type="button" class="primary" data-view-edit>Edit menu</button></footer>';
+ if(!d.isConnected)document.body.appendChild(d);
+ d.querySelector('.cc-menu-view-close').onclick=()=>d.close();
+ d.querySelector('[data-view-fav]').onclick=async()=>{
+   const next=!menu.is_favourite;
+   const result=await supabase.from('cc_menus').update({is_favourite:next}).eq('id',menu.id).select('id,is_favourite').single();
+   if(result.error)return window.ccShowError?.(result.error.message,'Could not update favourite');
+   menu.is_favourite=Boolean(result.data?.is_favourite);
+   const cached=(window.ccMenus||[]).find(x=>Number(x.id)===Number(menu.id));
+   if(cached)cached.is_favourite=menu.is_favourite;
+   d.querySelector('[data-view-fav]').textContent=menu.is_favourite?'★ Remove favourite':'☆ Add to favourites';
+   window.ccRenderMenus?.();
+ };
+ d.querySelector('[data-view-share]').onclick=()=>shareMenu(menu);
+ d.querySelector('[data-view-print]').onclick=()=>printMenuDocument(menu);
+ d.querySelector('[data-view-edit]').onclick=()=>{d.close();openEditor(menu)};
+ d.querySelector('.cc-menu-view-body').querySelectorAll('a[data-recipe-id]').forEach(link=>link.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();const id=Number(link.dataset.recipeId);const recipeTab=window.open('about:blank','_blank');if(!recipeTab){window.ccShowError?.('Please allow pop-ups for Cooking Confidential to open a linked recipe in a new tab.','Pop-up blocked');return}if(window.ccOpenRecipePrintWindow)window.ccOpenRecipePrintWindow(id,recipeTab);else{recipeTab.close();window.ccShowError?.('The recipe viewer is still loading. Please try again.','Recipe viewer unavailable')}}));
+ if(!d.open)d.showModal();
+}
 function menuActions(){
+ document.querySelectorAll('.menu-card').forEach(card=>{
+   if(card.dataset.ccViewBound)return;
+   card.dataset.ccViewBound='1';card.tabIndex=0;card.setAttribute('role','button');card.setAttribute('aria-label','View menu '+(card.querySelector('h3')?.textContent||''));
+   const open=()=>{const id=Number(card.querySelector('[data-menu-action]')?.dataset.id);const menu=(window.ccMenus||[]).find(x=>Number(x.id)===id);if(menu)showMenu(menu)};
+   card.addEventListener('click',e=>{if(e.target.closest('button,a,input,select'))return;open()});
+   card.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target===card){e.preventDefault();open()}});
+ });
  document.querySelectorAll('[data-menu-action]').forEach(b=>{if(b.dataset.ccBound)return;b.dataset.ccBound='1';b.onclick=async e=>{e.preventDefault();e.stopPropagation();const id=Number(b.dataset.id);const m=(window.ccMenus||[]).find(x=>Number(x.id)===id);if(!m)return;if(b.dataset.menuAction==='open'||b.dataset.menuAction==='edit')return openEditor(m);if(b.dataset.menuAction==='original')return showOriginal(m);if(b.dataset.menuAction==='print')return window.ccMenuEditor?.printMenu?.(m);if(b.dataset.menuAction==='share')return window.ccMenuEditor?.shareMenu?.(m);if(b.dataset.menuAction==='saveas')return openEditor(m).then(()=>setTimeout(()=>document.querySelector('#ccMenuSaveAs')?.click(),100));if(b.dataset.menuAction==='fav'){const next=!m.is_favourite;const q=await supabase.from('cc_menus').update({is_favourite:next}).eq('id',m.id).select('id,is_favourite').single();if(q.error)return window.ccShowError(q.error.message,'Could not update favourite');m.is_favourite=Boolean(q.data?.is_favourite);window.ccRenderMenus?.();}if(b.dataset.menuAction==='delete'){if(!confirm('Delete this menu permanently?'))return;const q=await supabase.from('cc_menus').delete().eq('id',m.id);if(q.error)return window.ccShowError(q.error.message,'Could not delete menu');await window.ccReloadMenus?.()}}})
 }
 function enhance(){
  styles();
  menuActions()
 }
-window.ccMenuEditor={openEditor,uploadExisting,newBlank,showOriginal,printMenu:async menu=>printMenuDocument(menu),shareMenu:async menu=>shareMenu(menu)};
+window.ccMenuEditor={openEditor,uploadExisting,newBlank,showOriginal,showMenu,printMenu:async menu=>printMenuDocument(menu),shareMenu:async menu=>shareMenu(menu)};
 const obs=new MutationObserver(()=>enhance());obs.observe(document.body,{subtree:true,childList:true});enhance();
