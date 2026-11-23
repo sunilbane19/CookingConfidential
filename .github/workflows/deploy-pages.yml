@@ -1,4 +1,5 @@
 name: Deploy Cooking Confidential to GitHub Pages
+run-name: Deploy Cooking Confidential to GitHub Pages (fresh deployment)
 
 on:
   push:
