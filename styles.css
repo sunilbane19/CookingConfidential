@@ -277,3 +277,33 @@ dialog .dialog-card{box-sizing:border-box;max-width:100%;min-width:0;overflow-x:
 #detailContent #ccGenericEditorForm .two-col > .cc-import-dietary-field > .cc-multi-field-label {
   margin-bottom: 7px !important;
 }
+
+
+/* Compact dietary suitability badges shared across recipe cards, detail, print and share views. */
+.cc-dietary-badges{display:flex;flex-wrap:wrap;align-items:center;gap:3px;margin:7px 0 10px;line-height:1}
+.cc-dietary-icon{display:inline-flex;flex:0 0 20px;width:20px;height:20px;align-items:center;justify-content:center;box-sizing:border-box;border-radius:4px;color:#fff;font:700 11px/1 Arial,sans-serif;letter-spacing:-.25px;text-decoration:none;white-space:nowrap}
+.cc-card-dietary{flex-wrap:nowrap!important;gap:3px;max-width:100%;overflow-x:auto!important;overflow-y:hidden;scrollbar-width:none;padding:1px 0}
+.cc-card-dietary::-webkit-scrollbar{display:none}
+#detailContent .detail-section .cc-dietary-badges{margin:4px 0 0}
+@media print{.cc-dietary-icon{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+
+/* Add/Edit recipe: the three approved classification multiselects share one compact row. */
+#detailContent #ccGenericEditorForm .two-col:has(.cc-classification-field){grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:8px!important;align-items:start!important;}
+#detailContent #ccGenericEditorForm .cc-classification-field{min-width:0!important;width:100%!important;}
+#detailContent #ccGenericEditorForm .cc-classification-field .cc-multi-trigger{white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;padding:10px 8px!important;font-size:12px!important;}
+#detailContent #ccGenericEditorForm .cc-classification-field .cc-multi-field-label{white-space:nowrap!important;font-size:12px!important;}
+#detailContent #ccGenericEditorForm .cc-classification-field .cc-multi-panel{min-width:0!important;max-width:calc(100vw - 40px)!important;}
+
+/* Cuisine, Course and Recipe Type: one desktop row, responsive on mobile. */
+#detailContent #ccGenericEditorForm .cc-recipe-meta-grid{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:14px!important;align-items:start!important;width:100%!important;margin:0 0 12px!important;}
+#detailContent #ccGenericEditorForm .cc-recipe-meta-grid>label{min-width:0!important;width:100%!important;margin:0!important;}
+#detailContent #ccGenericEditorForm .cc-recipe-meta-grid select,#detailContent #ccGenericEditorForm .cc-recipe-meta-grid input{width:100%!important;min-width:0!important;}
+@media(max-width:760px){#detailContent #ccGenericEditorForm .cc-recipe-meta-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:10px!important;}}
+@media(max-width:480px){#detailContent #ccGenericEditorForm .cc-recipe-meta-grid{grid-template-columns:minmax(0,1fr)!important;gap:8px!important;}}
+
+/* Consistent editor typography for Source and classification multiselects. */
+#detailContent .cc-source-section,#detailContent .cc-source-section h4,#detailContent .cc-source-section p,#detailContent .cc-source-section small,#detailContent .cc-source-section button,#detailContent .cc-source-section label,#detailContent .cc-source-section input,#detailContent .cc-source-section select{font-family:Arial,Helvetica,sans-serif!important;}
+#detailContent .cc-source-section h4{font-size:12px!important;font-weight:600!important;line-height:1.3!important;}
+#detailContent .cc-source-section p,#detailContent .cc-source-section small{font-size:13px!important;line-height:1.45!important;}
+#detailContent .cc-classification-field .cc-multi-trigger,#detailContent .cc-classification-field .cc-multi-panel,#detailContent .cc-classification-field .cc-multi-option,#detailContent .cc-classification-field .cc-multi-option label,#detailContent .cc-classification-field .cc-multi-option label span{font-family:Arial,Helvetica,sans-serif!important;font-size:12px!important;font-weight:400!important;line-height:1.3!important;}
+#detailContent .cc-classification-field .cc-multi-trigger{font-weight:500!important;}
