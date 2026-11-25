@@ -1,3 +1,4 @@
+import { getDietaryIconData, renderDietaryBadges } from './dietary-icons.js?v=1.0.1';
 import { supabase, APP_URL } from './auth-client.js?v=1.0.2';
 const content=document.querySelector('#content'),search=document.querySelector('#searchInput'),loginPanel=document.querySelector('#loginPanel'),appPanel=document.querySelector('#appPanel'),userBadge=document.querySelector('#userBadge'),loginForm=document.querySelector('#loginForm'),loginMessage=document.querySelector('#loginMessage'),recipeDialog=document.querySelector('#recipeDialog'),menuDialog=document.querySelector('#menuDialog'),detailDialog=document.querySelector('#detailDialog'),importDialog=document.querySelector('#importDialog'),importQueue=document.querySelector('#importQueue');
 let importItems=[],recipes=[],menus=[],view='all';
@@ -5,7 +6,7 @@ try{const returnView=sessionStorage.getItem('ccRecipeReturnView');if(['all','rec
 document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.view===view));
 const RECIPE_PAGE_SIZE=12;
 const RECIPE_CARD_FIELDS='id,name,cuisine,country,region,course,recipe_type,rating,is_favourite,image_url,updated_at';
-const RECIPE_DETAIL_FIELDS='id,name,description,cuisine,country,region,course,recipe_type,ingredients,method,personal_notes,rating,source_url,source_title,is_favourite,image_url,updated_at,servings,original_file_path,original_file_name,original_mime_type,source_type,created_by,dietary_tags';
+const RECIPE_DETAIL_FIELDS='id,name,description,cuisine,country,region,course,recipe_type,ingredients,method,personal_notes,rating,source_url,source_title,is_favourite,image_url,updated_at,servings,original_file_path,original_file_name,original_mime_type,source_type,created_by,dietary_tags,diet,free_from,lifestyle';
 // Full recipe cache: fetch a recipe once when it is first opened during this session.
 const recipeDetailCache=new Map(),creatorNameCache=new Map();
 let recipeOffset=0,recipeTotalCount=0,recipeLoading=false,recipeRequestId=0,searchTimer=null;
@@ -131,7 +132,8 @@ async function loadData(){
 window.ccReloadRecipes=()=>loadRecipePage({offset:recipeOffset,refreshCount:true});window.ccRecipePageOffset=()=>recipeOffset;
 window.ccSetLibraryFilter=(field,value)=>{libraryFilter={field:String(field||''),value:String(value||'')};try{sessionStorage.setItem('ccLibraryFilterState',JSON.stringify(libraryFilter))}catch{}loadRecipePage({offset:0,refreshCount:true}).catch(e=>showUiError(e.message,'Could not filter recipes'));};
 window.addEventListener('cc:library-filter-change',e=>window.ccSetLibraryFilter(e.detail?.field,e.detail?.value));
-function recipeCard(r){const tags=Array.isArray(r.dietary_tags)?r.dietary_tags:[];return `<article class="card" data-id="${r.id}"><div class="card-image" aria-hidden="true"></div><div class="card-body"><span class="tag">${esc(r.cuisine||'Uncategorised')}</span><h3>${esc(r.name)}</h3><div class="meta">${esc([r.course||'Recipe',r.recipe_type].filter(Boolean).join(' · '))} · ${stars(r.rating)}</div>${tags.length?`<div class="meta">${esc(tags.join(' · '))}</div>`:''}<div class="created-by">Added by: <strong>${esc(r.creator_name||'')}</strong></div></div></article>`}
+function classificationTags(r){const groups=['diet','free_from','lifestyle'];const values=groups.flatMap(key=>Array.isArray(r?.[key])?r[key]:[]);return values.length?values:(Array.isArray(r?.dietary_tags)?r.dietary_tags:[])}
+function recipeCard(r){const tags=classificationTags(r);return `<article class="card" data-id="${r.id}"><div class="card-image" aria-hidden="true"></div><div class="card-body"><span class="tag">${esc(r.cuisine||'Uncategorised')}</span><h3>${esc(r.name)}</h3><div class="meta">${esc([r.course||'Recipe',r.recipe_type].filter(Boolean).join(' · '))} · ${stars(r.rating)}</div>${renderDietaryBadges(tags,'cc-dietary-badges cc-card-dietary')}<div class="created-by">Added by: <strong>${esc(r.creator_name||'')}</strong></div></div></article>`}
 function recipePager(){
   const totalPages=Math.max(1,Math.ceil(recipeTotalCount/RECIPE_PAGE_SIZE));
   const page=Math.floor(recipeOffset/RECIPE_PAGE_SIZE)+1;
@@ -223,8 +225,8 @@ async function showRecipe(id){
   r={...r,creator_name:creatorName};
   recipeDetailCache.set(recipeId,r);
   window.ccCurrentRecipe=r;
-  const dietaryTags=Array.isArray(r.dietary_tags)?r.dietary_tags.map(tag=>typeof tag==='string'?tag:String(tag?.label||tag?.name||'')).map(tag=>tag.trim()).filter(Boolean):[];
-  const dietarySection=dietaryTags.length?'<div class="detail-section"><h4>Dietary / suitability</h4><div>'+dietaryTags.map(tag=>'<span class="tag">'+esc(tag)+'</span>').join(' ')+'</div></div>':'';
+  const dietaryTags=classificationTags(r).map(tag=>typeof tag==='string'?tag:String(tag?.label||tag?.name||'')).map(tag=>tag.trim()).filter(Boolean);
+  const dietarySection=dietaryTags.length?'<div class="detail-section"><h4>Dietary / suitability</h4>'+renderDietaryBadges(dietaryTags)+'</div>':'';
   detailDialog.querySelector('#detailContent').innerHTML=`<button class="close" onclick="detailDialog.close()">×</button><span class="tag">${esc(r.cuisine||'')} · ${esc(r.course||'Recipe')}</span><h2 class="detail-title">${esc(r.name)}</h2><div class="meta">${stars(r.rating)}</div><div class="created-by">Added by: <strong>${esc(r.creator_name||'')}</strong></div>${dietarySection}${r.description?'<div class="detail-section"><h4>Description</h4><div class="rich-display">'+safeRichHtml(r.description)+'</div></div>':''}<div class="detail-section"><h4>Ingredients</h4><div class="rich-display">${ingredientsHtml(r)||'—'}</div></div><div class="detail-section"><h4>Method</h4><div class="rich-display">${safeRichHtml(r.method||'')||'—'}</div></div>${r.personal_notes?'<div class="detail-section"><h4>My notes</h4><div class="rich-display">'+safeRichHtml(r.personal_notes)+'</div></div>':''}${r.source_url?'<div class="detail-section"><h4>Source</h4><p><a href="'+esc(r.source_url)+'" target="_blank" rel="noopener">'+esc(r.source_title||r.source_url)+'</a></p></div>':''}<div class="detail-actions"><button class="secondary" id="favBtn">${r.is_favourite?'★ Remove favourite':'☆ Add to favourites'}</button></div>`;
   detailDialog.querySelector('#detailContent').querySelectorAll('a[data-recipe-id]').forEach(link=>link.addEventListener('click',event=>{event.preventDefault();showRecipe(Number(link.dataset.recipeId))}));
   window.ccOpenRecipe=showRecipe;
