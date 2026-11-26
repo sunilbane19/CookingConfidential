@@ -4,8 +4,8 @@ const content=document.querySelector('#content'),search=document.querySelector('
 let importItems=[],recipes=[],menus=[],view='all';
 let saladRecipes=[],saladOffset=0,saladTotalCount=0,saladCuisine='',saladType='all',saladLoading=false,saladRequestId=0;
 let starterRecipes=[],starterOffset=0,starterTotalCount=0,starterCuisine='',starterLoading=false,starterRequestId=0;
-const categoryPageState={chutney:{recipes:[],offset:0,total:0,cuisine:'',loading:false,requestId:0,title:'Chutney/Dips',aria:'Chutney and Dips',filter:'recipe_type.ilike.%Chutney%,recipe_type.ilike.%Condiment%,recipe_type.ilike.%Dip%,course.ilike.%Chutney%,course.ilike.%Condiment%,course.ilike.%Dip%'},marinade:{recipes:[],offset:0,total:0,cuisine:'',loading:false,requestId:0,title:'Marinade/Rub',aria:'Marinade and Rub',filter:'recipe_type.ilike.%Marinade%,recipe_type.ilike.%Paste%,recipe_type.ilike.%Pickle%,recipe_type.ilike.%Rub%,recipe_type.ilike.%Spice Blend%,course.ilike.%Marinade%,course.ilike.%Paste%,course.ilike.%Pickle%,course.ilike.%Rub%,course.ilike.%Spice Blend%'}};
-try{const returnView=sessionStorage.getItem('ccRecipeReturnView');if(['all','recipes','salads','starters','chutney','marinade','menus','favourites'].includes(returnView)){view=returnView;sessionStorage.removeItem('ccRecipeReturnView');}}catch{}
+const categoryPageState={chutney:{recipes:[],offset:0,total:0,cuisine:'',loading:false,requestId:0,title:'Chutney/Dips',aria:'Chutney and Dips',filter:'recipe_type.ilike.%Chutney%,recipe_type.ilike.%Condiment%,recipe_type.ilike.%Dip%,course.ilike.%Chutney%,course.ilike.%Condiment%,course.ilike.%Dip%'},marinade:{recipes:[],offset:0,total:0,cuisine:'',loading:false,requestId:0,title:'Marinade/Rub',aria:'Marinade and Rub',filter:'recipe_type.ilike.%Marinade%,recipe_type.ilike.%Paste%,recipe_type.ilike.%Pickle%,recipe_type.ilike.%Rub%,recipe_type.ilike.%Spice Blend%,course.ilike.%Marinade%,course.ilike.%Paste%,course.ilike.%Pickle%,course.ilike.%Rub%,course.ilike.%Spice Blend%'},sauces:{recipes:[],offset:0,total:0,cuisine:'',loading:false,requestId:0,title:'Sauces',aria:'Sauces',filter:'recipe_type.ilike.%Sauce%,course.ilike.%Sauce%'}};
+try{const returnView=sessionStorage.getItem('ccRecipeReturnView');if(['all','recipes','salads','starters','chutney','marinade','sauces','menus','favourites'].includes(returnView)){view=returnView;sessionStorage.removeItem('ccRecipeReturnView');}}catch{}
 document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.view===view));
 const RECIPE_PAGE_SIZE=12;
 const RECIPE_CARD_FIELDS='id,name,cuisine,country,region,course,recipe_type,rating,is_favourite,image_url,updated_at';
@@ -243,7 +243,7 @@ async function loadMenus(){
 
 async function loadData(){
   if(view==='salads'){window.ccSaladCuisineOptions=await loadSaladCuisineOptions();await loadSaladPage({offset:0});await loadMenus();return}
-  if(view==='chutney'||view==='marinade'){window['cc'+view[0].toUpperCase()+view.slice(1)+'CuisineOptions']=await loadCategoryCuisineOptions(view);await loadCategoryPage(view,{offset:0});await loadMenus();return}
+  if(view==='chutney'||view==='marinade'||view==='sauces'){window['cc'+view[0].toUpperCase()+view.slice(1)+'CuisineOptions']=await loadCategoryCuisineOptions(view);await loadCategoryPage(view,{offset:0});await loadMenus();return}
   if(view==='starters'){window.ccStarterCuisineOptions=await loadStarterCuisineOptions();await loadStarterPage({offset:0});await loadMenus();return}
   if(view==='menus'||view==='favourites')content.innerHTML='<div class="empty">Loading your library…</div>';
   else {const savedOffset=Number(sessionStorage.getItem('ccRecipeReturnOffset'));sessionStorage.removeItem('ccRecipeReturnOffset');await loadRecipePage({offset:Number.isFinite(savedOffset)&&savedOffset>=0?savedOffset:0,refreshCount:true});}
@@ -291,7 +291,7 @@ function wireRecipePager(){
 }
 function render(){
   if(view==='salads')return renderSalads();
-  if(view==='chutney'||view==='marinade')return renderCategoryPage(view);
+  if(view==='chutney'||view==='marinade'||view==='sauces')return renderCategoryPage(view);
   if(view==='menus')return renderMenus(search.value.trim().toLowerCase());
   if(view==='all')return renderAll(search.value.trim().toLowerCase());
   if(view==='favourites')return renderFavourites(search.value.trim().toLowerCase());
@@ -437,7 +437,7 @@ function queueFiles(files){
 search.oninput=()=>{
   if(view==='salads'){clearTimeout(searchTimer);searchTimer=setTimeout(()=>loadSaladPage({offset:0}).catch(e=>showUiError(e.message,'Could not search soups and salads')),350);return}
   if(view==='starters'){clearTimeout(searchTimer);searchTimer=setTimeout(()=>loadStarterPage({offset:0}).catch(e=>showUiError(e.message,'Could not search starters')),350);return}
-  if(view==='chutney'||view==='marinade'){clearTimeout(searchTimer);searchTimer=setTimeout(()=>loadCategoryPage(view,{offset:0}).catch(e=>showUiError(e.message,'Could not search recipes')),350);return}
+  if(view==='chutney'||view==='marinade'||view==='sauces'){clearTimeout(searchTimer);searchTimer=setTimeout(()=>loadCategoryPage(view,{offset:0}).catch(e=>showUiError(e.message,'Could not search recipes')),350);return}
   if(view==='menus'||view==='favourites'){
     if(view==='menus')renderMenus(search.value.trim().toLowerCase());
     else loadRecipePage({offset:0,refreshCount:true}).catch(e=>showUiError(e.message,'Could not search favourites'));
@@ -451,7 +451,7 @@ document.querySelectorAll('.tab').forEach(t=>t.onclick=async()=>{
   document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===t));
   if(view==='salads'){try{window.ccSaladCuisineOptions=await loadSaladCuisineOptions();await loadSaladPage({offset:0})}catch(e){showUiError(e.message,'Could not load soups and salads')}return}
   if(view==='starters'){try{window.ccStarterCuisineOptions=await loadStarterCuisineOptions();await loadStarterPage({offset:0})}catch(e){showUiError(e.message,'Could not load starters')}return}
-  if(view==='chutney'||view==='marinade'){try{window['cc'+view[0].toUpperCase()+view.slice(1)+'CuisineOptions']=await loadCategoryCuisineOptions(view);await loadCategoryPage(view,{offset:0})}catch(e){showUiError(e.message,'Could not load '+categoryPageState[view].title)}return}
+  if(view==='chutney'||view==='marinade'||view==='sauces'){try{window['cc'+view[0].toUpperCase()+view.slice(1)+'CuisineOptions']=await loadCategoryCuisineOptions(view);await loadCategoryPage(view,{offset:0})}catch(e){showUiError(e.message,'Could not load '+categoryPageState[view].title)}return}
   if(view==='menus'){renderMenus(search.value.trim().toLowerCase());return}
   if(view==='favourites'){
     try{await Promise.all([loadRecipePage({offset:0,refreshCount:true,silent:true}),loadMenus()]);renderFavourites(search.value.trim().toLowerCase())}
