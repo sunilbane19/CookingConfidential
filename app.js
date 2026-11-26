@@ -119,10 +119,10 @@ async function loadSaladPage({offset=0}={}) {
   const q=String(search.value||'').trim();
   const safeOffset=Math.max(0,Math.floor(Number(offset)||0));
   saladOffset=safeOffset;saladLoading=true;
-  content.innerHTML='<div class="empty">Loading salads and dressings…</div>';
+  content.innerHTML='<div class="empty">Loading soups, salads and dressings…</div>';
   try{
     let base=supabase.from('cc_recipes').select(SALAD_CARD_FIELDS,{count:'exact'})
-      .or('course.ilike.Salad,recipe_type.ilike.Dressing');
+      .or('course.ilike.Salad,recipe_type.ilike.Dressing,course.ilike.Soup,recipe_type.ilike.Soup');
     if(saladCuisine)base=base.eq('cuisine',saladCuisine);
     if(q)base=base.ilike('name','%'+q.replace(/[,%()]/g,' ')+'%');
     const pageResult=await base.order('created_at',{ascending:false,nullsFirst:false}).order('id',{ascending:false}).range(safeOffset,safeOffset+RECIPE_PAGE_SIZE-1);
@@ -140,7 +140,7 @@ async function loadSaladPage({offset=0}={}) {
 }
 async function loadSaladCuisineOptions(){
   const result=await supabase.from('cc_recipes').select('cuisine').not('cuisine','is',null)
-    .or('course.ilike.Salad,recipe_type.ilike.Dressing').limit(1000);
+    .or('course.ilike.Salad,recipe_type.ilike.Dressing,course.ilike.Soup,recipe_type.ilike.Soup').limit(1000);
   if(result.error)throw new Error(result.error.message);
   const values=[...new Set((result.data||[]).map(r=>String(r.cuisine||'').trim()).filter(Boolean))]
     .sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:'base'}));
@@ -149,11 +149,11 @@ async function loadSaladCuisineOptions(){
 function saladPager(){
   const pages=Math.max(1,Math.ceil(saladTotalCount/RECIPE_PAGE_SIZE)),page=Math.floor(saladOffset/RECIPE_PAGE_SIZE)+1;
   const prev=Math.max(0,(page-2)*RECIPE_PAGE_SIZE),next=Math.min((pages-1)*RECIPE_PAGE_SIZE,saladOffset+RECIPE_PAGE_SIZE),last=Math.max(0,(pages-1)*RECIPE_PAGE_SIZE);
-  return `<nav class="recipe-pager" aria-label="Salads pages"><div class="pager-actions"><button class="pager-btn pager-edge" data-salad-offset="0"${page===1?' disabled':''}>« First</button><button class="pager-btn" data-salad-offset="${prev}"${page===1?' disabled':''}>‹ Previous</button></div><div class="pager-info"><span class="pager-count">${saladTotalCount} <small>recipes</small></span><span class="pager-page">Page ${page} <small>of ${pages}</small></span></div><div class="pager-actions"><button class="pager-btn" data-salad-offset="${next}"${page===pages?' disabled':''}>Next ›</button><button class="pager-btn pager-edge" data-salad-offset="${last}"${page===pages?' disabled':''}>Last »</button></div></nav>`;
+  return `<nav class="recipe-pager" aria-label="Soups and Salads pages"><div class="pager-actions"><button class="pager-btn pager-edge" data-salad-offset="0"${page===1?' disabled':''}>« First</button><button class="pager-btn" data-salad-offset="${prev}"${page===1?' disabled':''}>‹ Previous</button></div><div class="pager-info"><span class="pager-count">${saladTotalCount} <small>recipes</small></span><span class="pager-page">Page ${page} <small>of ${pages}</small></span></div><div class="pager-actions"><button class="pager-btn" data-salad-offset="${next}"${page===pages?' disabled':''}>Next ›</button><button class="pager-btn pager-edge" data-salad-offset="${last}"${page===pages?' disabled':''}>Last »</button></div></nav>`;
 }
 function renderSalads(){
   const options=window.ccSaladCuisineOptions||[];
-  content.innerHTML=`<div class="cc-salad-toolbar"><label for="ccSaladCuisine">Filter by Cuisine<select id="ccSaladCuisine"><option value="">All cuisines</option>${options.map(v=>'<option value="'+esc(v)+'"'+(v===saladCuisine?' selected':'')+'>'+esc(v)+'</option>').join('')}</select></label></div>${saladPager()}<div class="section-head"><h2>Salads &amp; Dressings</h2><span class="count">${saladRecipes.length?saladOffset+1+'–'+(saladOffset+saladRecipes.length):'0'} of ${saladTotalCount}</span></div>${saladRecipes.length?'<div class="grid">'+saladRecipes.map(recipeCard).join('')+'</div>':'<div class="empty">No salads or dressings found for this cuisine.</div>'}${saladPager()}`;
+  content.innerHTML=`<div class="cc-salad-toolbar"><label for="ccSaladCuisine">Filter by Cuisine<select id="ccSaladCuisine"><option value="">All cuisines</option>${options.map(v=>'<option value="'+esc(v)+'"'+(v===saladCuisine?' selected':'')+'>'+esc(v)+'</option>').join('')}</select></label></div>${saladPager()}<div class="section-head"><h2>Soups &amp; Salads</h2><span class="count">${saladRecipes.length?saladOffset+1+'–'+(saladOffset+saladRecipes.length):'0'} of ${saladTotalCount}</span></div>${saladRecipes.length?'<div class="grid">'+saladRecipes.map(recipeCard).join('')+'</div>':'<div class="empty">No soups, salads or dressings found for this cuisine.</div>'}${saladPager()}`;
   const select=content.querySelector('#ccSaladCuisine');if(select)select.onchange=()=>{saladCuisine=select.value;loadSaladPage({offset:0}).catch(e=>showUiError(e.message,'Could not filter salads'))};
   content.querySelectorAll('.card').forEach(c=>c.onclick=()=>showRecipe(+c.dataset.id));
   content.querySelectorAll('[data-salad-offset]').forEach(btn=>btn.onclick=()=>{if(!btn.disabled&&!saladLoading)loadSaladPage({offset:Number(btn.dataset.saladOffset)||0}).catch(e=>showUiError(e.message,'Could not change salads page'))});
