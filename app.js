@@ -243,7 +243,7 @@ async function loadMenus(){
 
 async function loadData(){
   if(view==='salads'){window.ccSaladCuisineOptions=await loadSaladCuisineOptions();await loadSaladPage({offset:0});await loadMenus();return}
-  if(view==='chutney'||view==='marinade'){await loadCategoryPage(view,{offset:0});await loadMenus();return}
+  if(view==='chutney'||view==='marinade'){window['cc'+view[0].toUpperCase()+view.slice(1)+'CuisineOptions']=await loadCategoryCuisineOptions(view);await loadCategoryPage(view,{offset:0});await loadMenus();return}
   if(view==='starters'){window.ccStarterCuisineOptions=await loadStarterCuisineOptions();await loadStarterPage({offset:0});await loadMenus();return}
   if(view==='menus'||view==='favourites')content.innerHTML='<div class="empty">Loading your library…</div>';
   else {const savedOffset=Number(sessionStorage.getItem('ccRecipeReturnOffset'));sessionStorage.removeItem('ccRecipeReturnOffset');await loadRecipePage({offset:Number.isFinite(savedOffset)&&savedOffset>=0?savedOffset:0,refreshCount:true});}
@@ -451,7 +451,7 @@ document.querySelectorAll('.tab').forEach(t=>t.onclick=async()=>{
   document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===t));
   if(view==='salads'){try{window.ccSaladCuisineOptions=await loadSaladCuisineOptions();await loadSaladPage({offset:0})}catch(e){showUiError(e.message,'Could not load soups and salads')}return}
   if(view==='starters'){try{window.ccStarterCuisineOptions=await loadStarterCuisineOptions();await loadStarterPage({offset:0})}catch(e){showUiError(e.message,'Could not load starters')}return}
-  if(view==='chutney'||view==='marinade'){try{await loadCategoryPage(view,{offset:0})}catch(e){showUiError(e.message,'Could not load '+categoryPageState[view].title)}return}
+  if(view==='chutney'||view==='marinade'){try{window['cc'+view[0].toUpperCase()+view.slice(1)+'CuisineOptions']=await loadCategoryCuisineOptions(view);await loadCategoryPage(view,{offset:0})}catch(e){showUiError(e.message,'Could not load '+categoryPageState[view].title)}return}
   if(view==='menus'){renderMenus(search.value.trim().toLowerCase());return}
   if(view==='favourites'){
     try{await Promise.all([loadRecipePage({offset:0,refreshCount:true,silent:true}),loadMenus()]);renderFavourites(search.value.trim().toLowerCase())}
