@@ -124,7 +124,7 @@ async function loadSaladPage({offset=0}={}) {
   content.innerHTML='<div class="empty">Loading Soup/Salad…</div>';
   try{
     let base=supabase.from('cc_recipes').select(SALAD_CARD_FIELDS,{count:'exact'});
-    if(saladType==='soups')base=base.or('course.ilike.Soup,recipe_type.ilike.Soup');
+    if(saladType==='soups')base=base.or('course.ilike.%Soup%,recipe_type.ilike.%Soup%');
     else if(saladType==='salads')base=base.ilike('course','%Salad%');
     else if(saladType==='dressings')base=base.ilike('recipe_type','%Dressing%');
     else base=base.or('course.ilike.Salad,recipe_type.ilike.Dressing,course.ilike.Soup,recipe_type.ilike.Soup');
