@@ -7,7 +7,13 @@ let starterRecipes=[],starterOffset=0,starterTotalCount=0,starterCuisine='',star
 let mainRecipes=[],mainOffset=0,mainTotalCount=0,mainCuisine='',mainLoading=false,mainRequestId=0;
 const categoryPageState={chutney:{recipes:[],offset:0,total:0,cuisine:'',loading:false,requestId:0,title:'Chutney/Dips',aria:'Chutney and Dips',filter:'recipe_type.ilike.%Chutney%,recipe_type.ilike.%Condiment%,recipe_type.ilike.%Dip%,course.ilike.%Chutney%,course.ilike.%Condiment%,course.ilike.%Dip%'},marinade:{recipes:[],offset:0,total:0,cuisine:'',loading:false,requestId:0,title:'Marinade/Rub',aria:'Marinade and Rub',filter:'recipe_type.ilike.%Marinade%,recipe_type.ilike.%Paste%,recipe_type.ilike.%Pickle%,recipe_type.ilike.%Rub%,recipe_type.ilike.%Spice Blend%,course.ilike.%Marinade%,course.ilike.%Paste%,course.ilike.%Pickle%,course.ilike.%Rub%,course.ilike.%Spice Blend%'},sauces:{recipes:[],offset:0,total:0,cuisine:'',loading:false,requestId:0,title:'Sauces',aria:'Sauces',filter:'recipe_type.ilike.%Sauce%,course.ilike.%Sauce%'}};
 try{const returnView=sessionStorage.getItem('ccRecipeReturnView');if(['all','recipes','salads','starters','mains','chutney','marinade','sauces','menus','favourites'].includes(returnView)){view=returnView;sessionStorage.removeItem('ccRecipeReturnView');}}catch{}
-document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.view===view));
+const categoryViews=['salads','starters','mains','chutney','marinade','sauces'];
+function syncNavigation(){
+ document.querySelectorAll('.primary-tabs .tab').forEach(t=>t.classList.toggle('active',t.dataset.view===view||(t.dataset.view==='recipes'&&categoryViews.includes(view))));
+ document.querySelectorAll('.recipe-tabs .tab').forEach(t=>t.classList.toggle('active',t.dataset.view===view));
+ appPanel.classList.toggle('cc-show-recipe-tabs',view==='recipes'||categoryViews.includes(view));
+}
+syncNavigation();
 const RECIPE_PAGE_SIZE=12;
 const RECIPE_CARD_FIELDS='id,name,cuisine,country,region,course,recipe_type,rating,is_favourite,image_url,updated_at';
 const SALAD_CARD_FIELDS='id,name,cuisine,country,region,course,recipe_type,rating,is_favourite,image_url,updated_at,created_at,created_by,dietary_tags,diet,free_from,lifestyle';
@@ -485,7 +491,7 @@ search.oninput=()=>{
 };
 document.querySelectorAll('.tab').forEach(t=>t.onclick=async()=>{
   view=t.dataset.view;
-  document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===t));
+  syncNavigation();
   if(view==='salads'){try{window.ccSaladCuisineOptions=await loadSaladCuisineOptions();await loadSaladPage({offset:0})}catch(e){showUiError(e.message,'Could not load soups and salads')}return}
   if(view==='starters'){try{window.ccStarterCuisineOptions=await loadStarterCuisineOptions();await loadStarterPage({offset:0})}catch(e){showUiError(e.message,'Could not load starters')}return}
   if(view==='mains'){try{window.ccMainCuisineOptions=await loadMainCuisineOptions();await loadMainPage({offset:0})}catch(e){showUiError(e.message,'Could not load Mains')}return}
