@@ -37,13 +37,17 @@ function applyServerFilter(kind,value=''){
 }
 function ensure(){
   const content=document.querySelector('#content'); if(!content||content.hidden)return;
-  const active=document.querySelector('.tab.active')?.dataset.view||'recipes';
+  const active=document.querySelector('.primary-tabs .tab.active')?.dataset.view||'recipes';
   document.querySelector('#ccLibraryTools')?.remove();
+  // Category pages have their own category-specific filters and pagination.
+  if(active==='recipes' && document.querySelector('.recipe-tabs .tab.active')) return;
   const head=content.querySelector('.section-head'); if(!head)return;
   const tools=document.createElement('div'); tools.id='ccLibraryTools';
   if(active==='recipes'){
     tools.innerHTML=`<div class="cc-library-toolbar"><div class="cc-library-actions"><button class="secondary cc-library-icon" id="ccImportRecipes" type="button" aria-label="Import recipes" title="Import recipes">⇅</button><button class="primary cc-library-icon" id="ccNewRecipe" type="button" aria-label="New recipe" title="New recipe">＋</button></div><div class="cc-library-filter"><label>Filter by<select id="ccRecipeFilterKind" aria-label="Filter by">${filterFields().map(([v,l])=>`<option value="${esc(v)}">${esc(l)}</option>`).join('')}</select></label><label>Value<select id="ccRecipeFilterValue" aria-label="Filter value"></select></label></div></div>`;
-    head.parentNode.insertBefore(tools,head);
+    const firstPager=content.querySelector('.recipe-pager');
+    const insertionPoint=firstPager||head;
+    insertionPoint.parentNode.insertBefore(tools,insertionPoint);
     tools.querySelector('#ccImportRecipes').onclick=()=>document.querySelector('#importBtn')?.click();
     tools.querySelector('#ccNewRecipe').onclick=()=>window.ccOpenNewRecipeEditor?.();
     const kindSelect=tools.querySelector('#ccRecipeFilterKind'),valueSelect=tools.querySelector('#ccRecipeFilterValue');
